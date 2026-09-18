@@ -120,3 +120,12 @@ posted, url, apply_url, snippet, description, skills, first_seen, last_seen)` ·
 Public listings only, rate-limited, personal job search. Respect Naukri's ToS
 and `robots.txt`; never share/sell scraped data or run concurrent workers. On
 a block page: back off, retry later.
+
+## 8. Knowledge graph (Graphify)
+
+This repo ships a queryable map of itself ([details](GRAPHIFY.md),
+[upstream](https://github.com/Graphify-Labs/graphify)): `graphify-out/`
+(`graph.html`, `GRAPH_REPORT.md`, `graph.json`; 364 nodes, 12 communities).
+Query before grepping: `graphify query "<question>"`. Rebuild after code
+changes: `graphify update .` (free). Excludes: `vendor/`, `docs/evidence/`
+(see `.graphifyignore`).

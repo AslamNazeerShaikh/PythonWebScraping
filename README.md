@@ -54,9 +54,10 @@ pytest
 .venv/bin/python scripts/practice_ecommerce.py
 ```
 
-## 2b. Docs & testing phase
+## 2b. Docs, knowledge graph & testing phase
 
 - `docs/PROJECT.md` — detailed project document (pipeline, modules, config, data model)
+- `docs/GRAPHIFY.md` — queryable knowledge graph ([Graphify-Labs/graphify](https://github.com/Graphify-Labs/graphify)): `graphify query "<q>"`, `graphify path "<A>" "<B>"`, open `graphify-out/graph.html`
 - `docs/TESTING.md` — practice progression (Books → Quotes → … → Naukri), failure taxonomy, suite guide
 - `docs/BOT_DETECTION.md` — Test A/B/C signal matrix (measure exposure, never spoof)
 

@@ -1,0 +1,5 @@
+# Keep the knowledge graph about OUR code: the vendored uBOL tree
+# (~1000 third-party files) would drown out project communities.
+vendor/
+# Test/probe evidence images are binary noise for AST parsing.
+docs/evidence/
