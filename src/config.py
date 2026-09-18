@@ -75,8 +75,8 @@ class Settings:
     max_jobs_total: int = _get_int("MAX_JOBS_TOTAL", 60)
     enrich_details: bool = _get_bool("ENRICH_DETAILS", True)
 
-    # -- Browser engine ------------------------------------------------------
-    browser: str = _get("BROWSER", "firefox")  # firefox (preferred) | chromium
+    # -- Browser engine (Chrome-only stack) --------------------------------
+    browser: str = _get("BROWSER", "chromium")
     headless: bool = _get_bool("HEADLESS", False)
     slow_mo_ms: int = _get_int("SLOW_MO_MS", 80)  # ms between actions
     user_data_dir: Path = field(
@@ -88,8 +88,9 @@ class Settings:
     viewport_h: int = _get_int("VIEWPORT_H", 768)
 
     # -- Ad/tracker blocking -------------------------------------------------
-    ublock_xpi_path: str = _get("UBLOCK_XPI_PATH", "")  # Firefox .xpi file
-    ublock_unpacked_dir: str = _get("UBLOCK_UNPACKED_DIR", "")  # Chromium dir
+    # uBlock Origin Lite, unpacked dir (vendor/download-ubol.sh fetches it).
+    # Loaded headed-only; headless-shell can't load extensions (fallback covers).
+    ublock_unpacked_dir: str = _get("UBLOCK_UNPACKED_DIR", "vendor/ubol-chrome")
     adblock_fallback: bool = _get_bool("ADBLOCK_FALLBACK", True)
 
     # -- Politeness (anti-ban): random pause range between page visits ------

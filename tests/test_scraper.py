@@ -116,6 +116,16 @@ def test_safe_goto_success():
     assert page.goto_urls == ["https://example.test"]
 
 
+def test_safe_goto_retries_playwright_timeout_error():
+    # Regression: page.goto raises playwright's TimeoutError (not builtin);
+    # tenacity must catch it or live retries silently never fire.
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+    page = FakePage()
+    page.goto_plan = [PlaywrightTimeoutError("slow"), None]
+    ns._safe_goto(page, "https://example.test")
+    assert len(page.goto_urls) == 2
+
+
 def test_safe_goto_retries_then_reraises():
     page = FakePage()
     page.goto_plan = [TimeoutError("t1"), TimeoutError("t2"), TimeoutError("t3")]

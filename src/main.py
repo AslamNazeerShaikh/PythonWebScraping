@@ -105,7 +105,7 @@ def scrape(
     max_jobs: int = typer.Option(SETTINGS.max_jobs_total),
     enrich: bool = typer.Option(True, "--enrich/--no-enrich",
                                 help="Visit each job page for details"),
-    browser: str = typer.Option(SETTINGS.browser, help="firefox or chromium"),
+    browser: str = typer.Option(SETTINGS.browser, help="browser engine (chromium)"),
     headless: bool = typer.Option(False, "--headless", help="Background run"),
 ) -> None:
     """Run the full scrape pipeline (browser -> Pydantic -> SQLite + files)."""

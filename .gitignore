@@ -10,6 +10,11 @@ venv/
 .pw-profile/
 .pw-profile-chromium/
 .ms-playwright/
+.tmp/
+
+# Vendored binaries (re-fetch via vendor/download-ubol.sh)
+vendor/*
+!vendor/download-ubol.sh
 
 # App data (local DB + exports are regenerable)
 jobs.db

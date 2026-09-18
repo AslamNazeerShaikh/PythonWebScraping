@@ -87,7 +87,7 @@ Two self-inflicted inconsistencies, both fixed as *consistency* (not spoofing):
 2. Stubbed `navigator.languages` vs Worker scope → BrowserScan worker mismatch.
    **Fix:** override removed; Playwright `locale` (`en-IN`) is the single source.
 Result: BrowserScan 44 → 100; Veil unchanged at 23/23. DeviceAndBrowserInfo
-unchanged (CDP-inherent). Suite still 98 tests / 100% coverage.
+unchanged (CDP-inherent). Suite: 93 tests / 100% coverage.
 
 ## 4. Reading the results
 

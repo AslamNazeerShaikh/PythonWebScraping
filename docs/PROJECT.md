@@ -5,7 +5,7 @@
 > collect job apply links into a local database on a schedule, review a short
 > list, apply fast.
 >
-> **Stack.** Python + Playwright + Firefox (+ uBlock Origin) for collection;
+> **Stack.** Python + Playwright + Chrome (+ uBlock Origin Lite) for collection;
 > BeautifulSoup + lxml for offline parsing; Pydantic for validation;
 > SQLAlchemy + SQLite for storage; Pandas + openpyxl for export; APScheduler
 > for scheduling; tenacity for transient retries; Typer + Rich for the CLI;
@@ -23,7 +23,7 @@
 Scheduler (APScheduler, `schedule --hours 8,20`)
         │  one polite pass per trigger, max_instances=1
         ▼
-Browser (Playwright → Firefox → Naukri)          stealth_browser.py
+Browser (Playwright → Chrome + uBO Lite)            stealth_browser.py
         │  persistent profile · stealth init JS · uBlock + fallback blocker
         │  human pauses/scrolls · manual-solve bot-wall handling
         ▼
@@ -57,7 +57,7 @@ CLI (Typer) · output (Rich) · retries (tenacity, transient-only) · logging
 | Module | Responsibility | Key functions |
 |---|---|---|
 | `config.py` | `.env`-driven `SETTINGS` singleton | `_get*` readers, `Settings`, `SETTINGS` |
-| `stealth_browser.py` | Firefox-first launcher, Chromium auto-fallback | `launch_context`, `_launch_firefox`, `_launch_chromium`, `human_pause`, `install_ublock_into_profile` |
+| `stealth_browser.py` | Chrome-only launcher + uBO Lite wiring | `launch_context`, `_launch_chromium`, `_extension_args`, `human_pause` |
 | `naukri_scraper.py` | Search URLs, extractors, pipeline | `build_search_url`, `scrape_search_page`, `enrich_job`, `run_scrape`, `save_results`, `coerce_job`, `normalize_raw` |
 | `parser.py` | Offline BS4+lxml twin of the JS extractors | `parse_search_html`, `parse_detail_html` |
 | `models.py` | Pydantic `Job` + ORM `JobRow`/`ScrapeRun` | `Job.skill_text`, `JobRow.from_job/to_job` |
@@ -76,10 +76,10 @@ CLI (Typer) · output (Rich) · retries (tenacity, transient-only) · logging
 | `EXPERIENCE` / `DATE_FILTER` | `6` / `7` | Years exp · posted last N days |
 | `MAX_PAGES_PER_SEARCH` / `MAX_JOBS_TOTAL` | `3` / `60` | Politeness caps |
 | `ENRICH_DETAILS` | `true` | Visit each job page (`--no-enrich` skips) |
-| `BROWSER` / `HEADLESS` | `firefox` / `false` | Engine (auto-fallback) · background |
+| `BROWSER` / `HEADLESS` | `chromium` / `false` | Engine (chromium-only) · background |
 | `USER_DATA_DIR` | `.pw-profile` | Persistent profile (cookies, uBO) |
 | `TIMEZONE` / `LOCALE` | `Asia/Kolkata` / `en-IN` | Fingerprint consistency |
-| `UBLOCK_XPI_PATH` / `UBLOCK_UNPACKED_DIR` | empty | Real uBO (Firefox .xpi / Chromium dir) |
+| `UBLOCK_UNPACKED_DIR` | `vendor/ubol-chrome` | uBO Lite dir (fetch via `vendor/download-ubol.sh`; headed-only) |
 | `ADBLOCK_FALLBACK` | `true` | Built-in tracker-blocker |
 | `MIN_DELAY_S` / `MAX_DELAY_S` / `NAV_TIMEOUT_MS` | `2.0` / `5.0` / `45000` | Polite timing |
 | `OUTPUT_DIR` / `DATABASE_URL` / `LOG_LEVEL` | `output` / `sqlite:///jobs.db` / `INFO` | Outputs |
@@ -94,7 +94,7 @@ python -m src.main stats                                  # DB overview
 python -m src.main export --format excel --location pune # filtered snapshot
 python -m src.main parse output/debug_last_search.html   # offline re-parse
 python -m src.main schedule --hours 8,20                 # daily 08:05 + 20:05
-pytest                                                    # 98 tests, 100% coverage gate
+pytest                                                    # 93 tests, 100% coverage gate
 ```
 
 ## 5. Data model
@@ -105,12 +105,15 @@ posted, url, apply_url, snippet, description, skills, first_seen, last_seen)` ·
 
 ## 6. Known environment notes (verified)
 
-- Playwright's Firefox Nightly can be broken on newer macOS (“Could not find
-  profile folder”); the launcher auto-falls-back to Chromium with identical
-  stealth. Prefer Firefox where it launches.
+- Chrome-only by decision: no Firefox engine (stable 155, Nightly 1543)
+  starts in this environment — both die spawning the profile/content
+  process (`Operation not permitted` on helper exec). Chromium works.
+- uBO Lite loads headed-only (headless-shell can't load extensions);
+  headless runs use the fallback blocker. Verified functionally live.
+- Retries catch BOTH `TimeoutError` classes: Playwright raises its own, not
+  the builtin — catching only the builtin silently disables retries
+  (found by the live practice suite, regression-tested).
 - Naukri blocks headless browsers: first run must be headful.
-- Detail enrichment is the slowest phase (one polite visit per job); use
-  `--no-enrich` for quick sweeps.
 
 ## 7. Fair use
 

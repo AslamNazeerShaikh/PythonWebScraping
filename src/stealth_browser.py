@@ -1,33 +1,37 @@
-"""Stealth browser launcher: Firefox-first + Chromium auto-fallback.
+"""Stealth Chromium launcher: persistent profile + uBlock Origin Lite.
 
-Preferred stack per request: Playwright + Firefox + uBlock Origin.
-Reality check (Sep 2026): Playwright's Firefox Nightly build is broken on
-newer macOS ("Could not find profile folder" even for temp profiles), so:
-  - BROWSER=firefox (default): tries Firefox persistent profile first.
-  - On ANY Firefox launch failure: automatically falls back to Chromium
-    persistent profile with the same stealth init script + adblock fallback.
-  - BROWSER=chromium: skips Firefox and goes straight to Chromium.
+Stack (Chrome-only by decision):
+    Playwright -> Chromium (persistent profile) -> uBOL (unpacked MV3) + site.
 
-uBlock layers:
-  - Firefox: official .xpi pre-seeded into profile/extensions/ (2nd+ run) or
-    one-time manual install via about:addons (persists in .pw-profile/).
-  - Chromium: unpacked extension dir via --load-extension (UBLOCK_UNPACKED_DIR),
-    else fallback request-blocker (ADBLOCK_FALLBACK).
+Layers:
+    1. Persistent profile (``.pw-profile-chromium/``): cookies/history survive,
+       less bot-like than fresh incognito; uBOL's settings persist too.
+    2. uBlock Origin Lite (``UBLOCK_UNPACKED_DIR``, default
+       ``vendor/ubol-chrome``): real MV3 content blocking via
+       declarativeNetRequest — verified live (13/13 tracker/ad requests
+       ``ERR_BLOCKED_BY_CLIENT`` on forbes.com). Loaded via
+       ``--load-extension`` in HEADED mode only: headless-shell cannot load
+       extensions, so headless runs skip it (fallback blocker covers them).
+    3. Fallback request-blocker (``ADBLOCK_FALLBACK``): aborts known ad/tracker
+       hosts even when uBOL is absent. Always on — harmless duplication when
+       uBOL already blocked the request.
+    4. Stealth init script: hides ``webdriver``, plugins stub, ``chrome``
+       stub — measured live (Veil 23/23 human, BrowserScan 100 genuine).
+    5. Hardened prefs: tracking protection, DNT, no WebRTC/geo leaks.
+
 We do NOT bypass CAPTCHAs — on bot-walls we pause for manual solve.
 """
 from __future__ import annotations
 
 import random
-import shutil
 import time
-import zipfile
 from pathlib import Path
 
 from playwright.sync_api import BrowserContext, Playwright, sync_playwright
 
 from .config import SETTINGS
 
-# --- Minimal tracker/ad host blocklist (fallback when uBlock absent) ---
+# --- Minimal tracker/ad host blocklist (safety net under uBOL) ---
 BLOCKED_HOSTS = (
     "doubleclick.net",
     "googlesyndication.com",
@@ -67,45 +71,23 @@ STEALTH_INIT_JS = """
         : origQuery(p);
   }
   // deviceMemory hint (Chromium ignores the redefine — property is
-  // non-configurable — so the genuine value shows; kept for Firefox).
+  // non-configurable — so the genuine value shows; kept for consistency).
   try {
     Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
   } catch (e) { /* genuine value stays: consistency beats stubbing */ }
 }
 """
 
+
 def human_pause(a: float | None = None, b: float | None = None) -> None:
     """Sleep a random politeness interval (defaults: SETTINGS min/max delay).
 
     Randomised — not fixed — so inter-request timing looks human and stays
-    gentle on Naukri's servers. Pass ``(0, 0)`` in tests to skip waiting.
+    gentle on target servers. Pass ``(0, 0)`` in tests to skip waiting.
     """
     lo = a if a is not None else SETTINGS.min_delay_s
     hi = b if b is not None else SETTINGS.max_delay_s
     time.sleep(random.uniform(lo, hi))
-
-
-def install_ublock_into_profile(profile_dir: Path, xpi_path: str) -> bool:
-    """Install uBlock Origin XPI into a Firefox profile dir (2nd+ run only)."""
-    try:
-        src = Path(xpi_path).expanduser().resolve()
-        if not src.is_file():
-            print(f"[ublock] XPI not found at {src} — using fallback blocker.")
-            return False
-        profile_dir.mkdir(parents=True, exist_ok=True)
-        ext_dir = profile_dir / "extensions"
-        ext_dir.mkdir(parents=True, exist_ok=True)
-        ext_id = "uBlock0@raymondhill.net"  # official uBO Firefox ID
-        dest = ext_dir / f"{ext_id}.xpi"
-        if not dest.exists() or dest.stat().st_size != src.stat().st_size:
-            shutil.copyfile(src, dest)
-            print(f"[ublock] Installed uBlock Origin XPI -> {dest}")
-        else:
-            print("[ublock] uBlock Origin already installed in profile.")
-        return True
-    except Exception as e:  # never crash launch because of adblock
-        print(f"[ublock] Install failed ({e}) — using fallback blocker.")
-        return False
 
 
 def _maybe_block_ads(context: BrowserContext) -> None:
@@ -131,79 +113,37 @@ def _maybe_block_ads(context: BrowserContext) -> None:
     print("[privacy] Fallback request-blocker enabled.")
 
 
-def _prep_profile(profile: Path) -> None:
-    """Prepare the profile dir for a Firefox persistent launch.
+def _extension_args() -> list[str]:
+    """Build ``--load-extension`` args for uBOL (headed mode only).
 
-    Removes an EMPTY dir (Playwright's Firefox/juggler exits with “Could not
-    find profile folder” for empty dirs) and ensures the parent exists.
+    Headless-shell cannot load extensions — requesting it there fails the
+    launch — so headless runs rely on the fallback blocker instead. Returns
+    ``[]`` with an explanatory note when uBOL is unavailable or unusable.
     """
-    try:
-        if profile.exists() and profile.is_dir() and not any(profile.iterdir()):
-            profile.rmdir()
-    except Exception:
-        pass
-    profile.parent.mkdir(parents=True, exist_ok=True)
-
-
-def _launch_firefox(p: Playwright) -> BrowserContext:
-    """Launch the preferred engine: persistent Firefox with stealth defaults.
-
-    Uses the real profile dir (cookies/history survive → less bot-like),
-    hardened prefs (tracking protection, DNT, no WebRTC/geo leaks), the
-    stealth init script, and the adblock fallback. Raises on failure so
-    :func:`launch_context` can fall back to Chromium.
-    """
-    profile = SETTINGS.user_data_dir
-    _prep_profile(profile)
-
-    ublock_ok = False
-    profile_exists = profile.exists() and (profile / "prefs.js").exists()
-    if SETTINGS.ublock_xpi_path and profile_exists:
-        ublock_ok = install_ublock_into_profile(profile, SETTINGS.ublock_xpi_path)
-    elif SETTINGS.ublock_xpi_path and not profile_exists:
-        print("[ublock] First run: profile will be created now. "
-              "Install the XPI once via about:addons, it persists.")
-    else:
-        print("[ublock] UBLOCK_XPI_PATH not set — using fallback blocker. "
-              "See README for one-time uBO download.")
-
-    context = p.firefox.launch_persistent_context(
-        user_data_dir=str(profile),
-        headless=SETTINGS.headless,
-        slow_mo=SETTINGS.slow_mo_ms,
-        viewport={"width": SETTINGS.viewport_w, "height": SETTINGS.viewport_h},
-        locale=SETTINGS.locale,
-        timezone_id=SETTINGS.timezone,
-        # NOTE: no user_agent override — a pinned UA (e.g. Chrome/126) rots
-        # while the engine auto-updates, and detectors flag the contradiction
-        # (BrowserScan: "engine is NEWER than the version UA claims").
-        accept_downloads=True,
-        firefox_user_prefs={
-            "privacy.trackingprotection.enabled": True,
-            "privacy.trackingprotection.socialtracking.enabled": True,
-            "privacy.donottrackheader.enabled": True,
-            "dom.webdriver.enabled": False,
-            "media.peerconnection.enabled": False,
-            "geo.enabled": False,
-        },
-    )
-    context.set_default_navigation_timeout(SETTINGS.nav_timeout_ms)
-    context.set_default_timeout(20000)
-    context.add_init_script(STEALTH_INIT_JS)
-    _maybe_block_ads(context)
-    mode = "uBlock-XPI" if ublock_ok else "fallback-blocker"
-    print(f"[browser] Firefox persistent profile ready ({mode}) | "
-          f"headless={SETTINGS.headless} locale={SETTINGS.locale}")
-    return context
+    unpacked = (SETTINGS.ublock_unpacked_dir or "").strip()
+    if not unpacked:
+        print("[ublock] UBLOCK_UNPACKED_DIR not set — using fallback blocker. "
+              "Run vendor/download-ubol.sh to fetch uBO Lite.")
+        return []
+    if SETTINGS.headless:
+        print("[ublock] Headless mode: extensions unsupported by headless-shell; "
+              "using fallback blocker. Run headed once for full uBO Lite.")
+        return []
+    if not Path(unpacked).expanduser().is_dir():
+        print(f"[ublock] Not a directory: {unpacked} — using fallback blocker.")
+        return []
+    print(f"[ublock] Loading unpacked uBO Lite (chromium): {unpacked}")
+    return [
+        f"--disable-extensions-except={unpacked}",
+        f"--load-extension={unpacked}",
+    ]
 
 
 def _launch_chromium(p: Playwright) -> BrowserContext:
-    """Launch the fallback engine: persistent Chromium with stealth defaults.
+    """Launch persistent Chromium with stealth defaults + uBO Lite.
 
-    Mirrors the Firefox setup (own ``*-chromium`` profile dir, stealth init
-    script, adblock fallback) plus ``--disable-blink-features=
-    AutomationControlled``. Supports unpacked uBlock via UBLOCK_UNPACKED_DIR
-    (Firefox .xpi files do NOT load here — noted at runtime).
+    Own ``*-chromium`` profile dir, stealth init script, fallback blocker,
+    ``--disable-blink-features=AutomationControlled``, and uBOL when headed.
     """
     profile = Path(str(SETTINGS.user_data_dir) + "-chromium")
     args = [
@@ -211,16 +151,8 @@ def _launch_chromium(p: Playwright) -> BrowserContext:
         "--disable-infobars",
         "--no-first-run",
         "--no-default-browser-check",
+        *_extension_args(),
     ]
-    unpacked = getattr(SETTINGS, "ublock_unpacked_dir", "")
-    if unpacked and Path(unpacked).expanduser().is_dir():
-        args += [
-            f"--disable-extensions-except={unpacked}",
-            f"--load-extension={unpacked}",
-        ]
-        print(f"[ublock] Loading unpacked uBO (chromium): {unpacked}")
-    elif SETTINGS.ublock_xpi_path:
-        print("[ublock] XPI is Firefox-only; chromium uses fallback blocker.")
     context = p.chromium.launch_persistent_context(
         user_data_dir=str(profile),
         headless=SETTINGS.headless,
@@ -228,10 +160,9 @@ def _launch_chromium(p: Playwright) -> BrowserContext:
         viewport={"width": SETTINGS.viewport_w, "height": SETTINGS.viewport_h},
         locale=SETTINGS.locale,
         timezone_id=SETTINGS.timezone,
-        # NOTE: genuine engine UA (see Firefox path) — consistency beats pinning.
         accept_downloads=True,
         args=args,
-        # Chromium: hide automation flag; keep headless-shell compatible
+        # Hide the automation flag; keep headless-shell compatible.
         chromium_sandbox=False,
         ignore_default_args=["--enable-automation"],
     )
@@ -239,22 +170,25 @@ def _launch_chromium(p: Playwright) -> BrowserContext:
     context.set_default_timeout(20000)
     context.add_init_script(STEALTH_INIT_JS)
     _maybe_block_ads(context)
-    print(f"[browser] Chromium persistent profile ready (fallback-blocker) | "
+    print(f"[browser] Chromium persistent profile ready | "
           f"headless={SETTINGS.headless} locale={SETTINGS.locale}")
     return context
 
 
 def launch_context(p: Playwright) -> BrowserContext:
-    """Launch requested engine; auto-fallback Firefox -> Chromium."""
-    want = (SETTINGS.browser or "firefox").lower()
-    if want.startswith("chrom"):
-        return _launch_chromium(p)
-    try:
-        return _launch_firefox(p)
-    except Exception as e:
-        print(f"[browser] Firefox launch failed ({type(e).__name__}: {str(e)[:200]})")
-        print("[browser] Falling back to Chromium persistent profile...")
-        return _launch_chromium(p)
+    """Launch the browser (Chromium-only stack).
+
+    Raises:
+        ValueError: If ``BROWSER`` names anything but ``chromium`` — Firefox
+            was dropped: no Firefox engine starts in this environment
+            (stable 155 and Nightly both die on profile spawn).
+    """
+    want = (SETTINGS.browser or "chromium").lower()
+    if want != "chromium":
+        raise ValueError(
+            f"Unsupported BROWSER={SETTINGS.browser!r}: this project is "
+            "Chrome-only (firefox engines fail to launch here).")
+    return _launch_chromium(p)
 
 
 def launch_playwright() -> tuple[object, BrowserContext]:

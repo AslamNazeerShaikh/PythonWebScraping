@@ -1,5 +1,5 @@
 # Secure Naukri.com Jobs Collector
-### Playwright + Firefox + uBlock | Pydantic + SQLite | Typer + Rich | personal use
+### Playwright + Chrome + uBlock Origin Lite | Pydantic + SQLite | Typer + Rich | personal use
 
 Built for you: **.NET 6+ yrs, ASP.NET Core / C# / Fullstack, Pune + Hyderabad** — collects job **apply links** into a local DB so a busy schedule only needs minutes.
 
@@ -9,14 +9,18 @@ Built for you: **.NET 6+ yrs, ASP.NET Core / C# / Fullstack, Pune + Hyderabad** 
 cd /Users/aslamshaikh/Projects/PythonWebScraping
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-playwright install firefox chromium   # firefox preferred; chromium = fallback
+playwright install chromium   # Chrome-only stack (Firefox engines don't start here)
 cp .env.example .env
+bash vendor/download-ubol.sh  # fetch uBlock Origin Lite (unpacked, gitignored)
 ```
 
-### uBlock Origin (recommended, one time)
-- **Firefox**: download the `.xpi` from https://addons.mozilla.org/en-US/firefox/addon/ublock-origin/, set `UBLOCK_XPI_PATH=/abs/path/to.xpi` in `.env`. Pre-seeded into the profile on 2nd+ run (or install once via `about:addons`, it persists).
-- **Chromium fallback**: unpacked dir via `UBLOCK_UNPACKED_DIR=` (optional).
-- Without either, the built-in fallback tracker-blocker still runs.
+### uBlock Origin Lite (real MV3 blocking, verified live)
+`vendor/download-ubol.sh` downloads the official build from Mozilla AMO and
+patches its manifest for Chromium (`service_worker`). Set
+`UBLOCK_UNPACKED_DIR=vendor/ubol-chrome` (default). Verified: 13/13
+tracker/ad requests `ERR_BLOCKED_BY_CLIENT` on forbes.com — incl. DataDome's
+fingerprinting tag. Loaded headed-only (headless-shell can't load
+extensions); headless runs fall back to the built-in tracker-blocker.
 
 ## 2. Usage
 
@@ -40,8 +44,11 @@ python -m src.main parse output/debug_last_search.html
 # Daily runs at 08:05 + 20:05 (blocking; or use cron/launchd)
 python -m src.main schedule --hours 8,20
 
-# Tests: 98 tests, 100% coverage gate (no browser/network needed)
+# Tests: 93 tests, 100% coverage gate (no browser/network needed)
 pytest
+
+# Live practice suite: TESTING.md Tests 1-7 on real sandboxes (Chrome + uBOL)
+.venv/bin/python scripts/practice_tests.py
 ```
 
 ## 2b. Docs & testing phase
@@ -52,15 +59,15 @@ pytest
 
 > **Heads-up (verified on this Mac):** Naukri blocks **headless** browsers — always do the
 > **first run headful** (default) so you can solve the CAPTCHA / log in once. The persistent
-> profile keeps cookies; later runs succeed. If Playwright's Firefox Nightly is broken on your
-> macOS it auto-falls-back to Chromium (same stealth + adblock).
+> profile keeps cookies; later runs succeed. Chrome-only by decision: no Firefox
+> engine starts in this environment (stable 155 and Nightly both die on profile spawn).
 
 ## 3. Architecture (your proposed stack, as built)
 ```
 Scheduler (APScheduler) ── schedule --hours 8,20
         │
         ▼
-Browser (Playwright → Firefox → Naukri)      src/stealth_browser.py
+Browser (Playwright → Chrome + uBO Lite)        src/stealth_browser.py
         │  persistent profile, stealth init JS, uBlock + fallback blocker,
         │  human pauses/scrolls, manual-solve bot-wall handling
         ▼
@@ -84,7 +91,7 @@ SQLite is the source of truth — set `DATABASE_URL` to Postgres later with no c
 
 ```
 src/config.py            env-driven settings (your defaults pre-filled)
-src/stealth_browser.py   Firefox-first launcher, Chromium auto-fallback
+src/stealth_browser.py   Chrome-only launcher + uBO Lite wiring
 src/naukri_scraper.py    search URLs, JS extractors, tenacity goto, Pydantic coercion
 src/parser.py            BS4+lxml offline parser (debug without re-hitting Naukri)
 src/models.py            Pydantic Job + SQLAlchemy JobRow / ScrapeRun

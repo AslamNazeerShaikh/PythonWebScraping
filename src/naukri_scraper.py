@@ -22,6 +22,7 @@ from datetime import datetime
 from pathlib import Path
 
 from playwright.sync_api import BrowserContext, Page
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 from pydantic import ValidationError
 from tenacity import (
     retry,
@@ -275,11 +276,12 @@ def coerce_job(raw: dict, search_location: str = "") -> Job | None:
 
 
 # --- Tenacity: transient navigation failures only ---------------------------
-# Playwright raises TimeoutError on slow loads. That is safe to retry with
-# backoff. HTTP 403/429/CAPTCHA walls are NOT retried here — the bot-wall
-# handler pauses for manual solve instead of hammering.
+# Playwright raises its OWN TimeoutError (not the builtin) on slow loads.
+# Both are safe to retry with backoff. HTTP 403/429/CAPTCHA walls are NOT
+# retried here — the bot-wall handler pauses for manual solve instead.
+_TRANSIENT = (TimeoutError, PlaywrightTimeoutError)
 _safe_goto = retry(
-    retry=retry_if_exception_type(TimeoutError),
+    retry=retry_if_exception_type(_TRANSIENT),
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=2, min=2, max=15),
     reraise=True,
@@ -341,7 +343,7 @@ def enrich_job(page: Page, job: Job) -> Job:
         if not merged.get("apply_url"):
             merged["apply_url"] = job.url
         return Job(**merged)
-    except (ValidationError, TimeoutError) as e:
+    except (ValidationError, TimeoutError, PlaywrightTimeoutError) as e:
         log.warning("Detail fetch failed for %s: %s", job.url, e)
         return job
     except Exception as e:

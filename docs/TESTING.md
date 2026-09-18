@@ -43,7 +43,6 @@ Books to Scrape ──► Quotes to Scrape ──► Scrape This Site ──► 
 | 500/502, timeout | transient | controlled retry (max 3, exponential), then abort page |
 
 ## 2. Automated suite (this repo)
-
 ```bash
 source .venv/bin/activate
 pytest                  # full suite; fails below 100% coverage by design
@@ -51,7 +50,33 @@ pytest --no-cov -q      # fast run without the coverage gate
 pytest tests/test_parser.py --no-cov -q   # one module
 ```
 
-- **98 tests, 100% statement + branch coverage** (`pyproject.toml` enforces
+## 3. Live practice runs (this repo, Chrome-only stack)
+
+```bash
+.venv/bin/python scripts/practice_tests.py          # full Tests 1-7 live
+.venv/bin/python scripts/practice_tests.py --quick  # 3-page smoke
+```
+
+Measured 2026-09-19, Chromium + uBO Lite, headed — **ALL GREEN 7/7**
+(`output/practice/report.json`, gitignored):
+
+| Test | Result |
+|---|---|
+| T1 extraction | 20/20 books p1 with title+price |
+| T2 pagination | **1000/1000** books, 50 pages |
+| T3 dedupe | run1 +1000, run2 **+0** |
+| T4 JS rendering | 10/10 quotes (`/js/`) with authors |
+| T5 infinite scroll | settled at 100 quotes, clean termination |
+| T6 login/session | `admin/admin` → Logout, session held |
+| T7 failures | 200 process · 404 skip · 500 retried-x3-abort · timeout 3-attempts-abort · 429 observed-stop |
+
+Live testing caught one REAL bug: Playwright raises its **own**
+`TimeoutError`, not the builtin — tenacity caught the wrong class, so
+retries silently never fired. Fixed in `src/naukri_scraper.py`
+(`_TRANSIENT` tuple) + regression test. This is exactly why the numbered
+tests run against live sandboxes, not just fakes.
+
+- **93 tests, 100% statement + branch coverage** (`pyproject.toml` enforces
   `--cov-fail-under=100`).
 - No real browser or network: `tests/conftest.py` provides `FakePage`,
   `FakeContext`, fake browser types, and a `fresh_db` fixture (isolated tmp
@@ -60,7 +85,7 @@ pytest tests/test_parser.py --no-cov -q   # one module
 - Conventions: one test module per source module; fakes live only in
   `conftest.py`; `monkeypatch` (auto-reverted) for `SETTINGS`/time/network.
 
-## 3. Test matrix (automated ↔ manual)
+## 4. Test matrix (automated ↔ manual)
 
 | Scenario | Automated test | Manual sandbox |
 |---|---|---|
@@ -75,5 +100,5 @@ pytest tests/test_parser.py --no-cov -q   # one module
 | HTTP errors / retry | `_safe_goto` 3-attempt | HTTPBin |
 | Rate limiting | politeness delays, caps | TestingURL |
 | Bot-wall pause | `handle_possible_block` ×3 paths | Bot-detection suite |
-| Engine fallback | firefox-fail → chromium | `BOT_DETECTION.md` matrix |
+| Engine guard | non-chromium BROWSER rejected | `test_stealth.py` |
 | Export | csv/xlsx + location filter | `stats`/`export` cmds |
