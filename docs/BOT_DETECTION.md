@@ -13,6 +13,8 @@
 | [Fingerprint Bot Firewall demo](https://demo.fingerprint.com/bot-firewall) | Playwright-vs-demo detection + IP block demo | Closest to production anti-bot |
 | [DeviceAndBrowserInfo](https://deviceandbrowserinfo.com/are_you_a_bot) | UA, `webdriver` (+in iframe), headers, mouse/typing, CDP | Per-signal drill-down |
 | [BrowserScan](https://browserscan.in/) | 200+ checks: fingerprint vs IP/timezone/network, WebRTC | Consistency (browser vs network identity) |
+| [BrowserScan.net bot-detection](https://www.browserscan.net/bot-detection) | Webdriver/UA/CDP/Navigator matrix + native-function checks | Second opinion, CDP focus |
+| [Sannysoft bot test](https://bot.sannysoft.com/) | Phantom/Headless/Selenium/WebDriver flags, canvas, fp-collect | Classic flag table |
 | [Veil bot-check](https://veilbrowser.cc/bot-check) | Automation, headless, consistency, leaks | Secondary opinion |
 | [Sendwin](https://send.win/tools/bot-detection-test/) | webdriver, driver globals, headless markers | Quick lightweight check |
 | DataDome / Akamai demos | Commercial device-check concepts | Background reading, not playgrounds |
@@ -64,7 +66,11 @@ Site verdicts: **Veil** headed 23/23 human (twice) → headless "Automated"
 fix ("looks genuine", 1 residual: main-vs-worker language). **DeviceAndBrowserInfo**
 headed "bot" on CDP/timing/worker flags only — every classic flag
 (webdriver, Playwright, headless, UA) false; inherent to any CDP-driven
-browser, accepted.
+browser, accepted. **BrowserScan.net** headed: **Normal** — all four
+categories green (Webdriver, User-Agent, CDP, Navigator), incl. genuine
+`Chrome/153` UA, `MacIntel`, `en-IN`, real plugins. **Sannysoft** headed:
+**all rows green** (Phantom/Headless/Selenium/WebDriver flags, canvas,
+fp-collect). Probe: `scripts/bot_probe.py --only browserscan-net,sannysoft`.
 
 Test A (real Firefox baseline) could NOT run in this sandbox: no Firefox
 engine starts here (stable 155 + Nightly both fail with “Could not find

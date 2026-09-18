@@ -31,6 +31,8 @@ TARGETS = [
      "https://deviceandbrowserinfo.com/are_you_a_bot"),
     ("browserscan", "https://browserscan.in/"),
     ("veil", "https://veilbrowser.cc/bot-check"),
+    ("browserscan-net", "https://www.browserscan.net/bot-detection"),
+    ("sannysoft", "https://bot.sannysoft.com/"),
 ]
 
 #: Client-side signal dump — answers "what does this browser expose?"
@@ -65,7 +67,8 @@ SIGNAL_JS = """
 """
 
 
-def probe(mode: str, out_dir: Path, wait_s: int = 10) -> dict:
+def probe(mode: str, out_dir: Path, wait_s: int = 10,
+          only: list[str] | None = None) -> dict:
     """Run the full probe; returns the results dict (also saved as JSON)."""
     out_dir.mkdir(parents=True, exist_ok=True)
     results: dict = {"mode": mode, "started": datetime.now().isoformat(),
@@ -73,7 +76,8 @@ def probe(mode: str, out_dir: Path, wait_s: int = 10) -> dict:
     with sync_playwright() as p:
         context = launch_context(p)
         try:
-            for name, url in TARGETS:
+            targets = [t for t in TARGETS if not only or t[0] in only]
+            for name, url in targets:
                 print(f"[{mode}] visiting {name}: {url}")
                 page = context.new_page()
                 try:
@@ -107,8 +111,11 @@ def main() -> int:
                     help="seconds to let client-side checks finish per site")
     ap.add_argument("--out", default="output/botcheck",
                     help="results dir; mode becomes a subdir")
+    ap.add_argument("--only", default="",
+                    help="comma-separated target names to run (default: all)")
     args = ap.parse_args()
-    probe(args.mode, Path(args.out) / args.mode, wait_s=args.wait)
+    only = [s.strip() for s in args.only.split(",") if s.strip()] or None
+    probe(args.mode, Path(args.out) / args.mode, wait_s=args.wait, only=only)
     return 0
 
 
