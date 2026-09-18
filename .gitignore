@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Playwright browsers/profiles
+.pw-profile/
+.pw-profile-chromium/
+.ms-playwright/
+
+# App data (local DB + exports are regenerable)
+jobs.db
+jobs.db-journal
+output/
+*.xlsx
+
+# Test / coverage artifacts
+.coverage
+coverage.xml
+htmlcov/
+.pytest_cache/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
