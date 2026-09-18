@@ -49,6 +49,9 @@ pytest
 
 # Live practice suite: TESTING.md Tests 1-7 on real sandboxes (Chrome + uBOL)
 .venv/bin/python scripts/practice_tests.py
+
+# E-commerce spot test: few products from Amazon.in + Flipkart (validated)
+.venv/bin/python scripts/practice_ecommerce.py
 ```
 
 ## 2b. Docs & testing phase

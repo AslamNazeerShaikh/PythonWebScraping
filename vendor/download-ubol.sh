@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Download + prepare uBlock Origin Lite for Chromium (unpacked dir).
-# Why AMO and not the Chrome Web Store? The store's CRX endpoint is
-# unreliable outside a real Chrome session; Mozilla serves the identical
-# official MV3 build as a plain .xpi (a zip). We convert its Firefox-style
-# manifest to Chrome-style (service_worker) in the unpacked copy.
+# Source of truth: https://github.com/uBlockOrigin/uBOL-home
+# (Chrome Web Store item ddkjiahejlhfcafbddmgiahcphecmpfh ships this build;
+#  the release publishes only the signed .xpi, which is the same MV3 package
+#  — we convert its Firefox-style manifest to Chrome-style service_worker).
 set -euo pipefail
 cd "$(dirname "$0")"
 
-XPI_URL="https://addons.mozilla.org/firefox/downloads/latest/ublock-origin-lite/"
-curl -sL --max-time 180 "$XPI_URL" -o ubol.xpi
+UBOL_TAG="2026.914.1325"
+XPI_URL="https://github.com/uBlockOrigin/uBOL-home/releases/download/${UBOL_TAG}/uBOLite_${UBOL_TAG}.firefox.signed.xpi"
+curl -sL --max-time 180 -A "Mozilla/5.0" "$XPI_URL" -o ubol.xpi
 python3 - <<'EOF'
 import json, shutil, zipfile
 from pathlib import Path

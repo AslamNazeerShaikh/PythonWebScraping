@@ -76,6 +76,21 @@ retries silently never fired. Fixed in `src/naukri_scraper.py`
 (`_TRANSIENT` tuple) + regression test. This is exactly why the numbered
 tests run against live sandboxes, not just fakes.
 
+## 4. Live e-commerce test (Amazon.in + Flipkart)
+
+```bash
+.venv/bin/python scripts/practice_ecommerce.py [--query "wireless mouse"]
+```
+
+Measured 2026-09-19, Chromium + uBO Lite headed — **2/2 OK** (one search
+page each, top 5 cards, Pydantic-validated → `output/practice/ecommerce.json`):
+Amazon 5/5 (title+₹+rating), Flipkart 5/5. Markup lessons recorded in the
+script: Amazon titles live in `a.s-link-style` (h2 holds a bare span; ad
+cards have no anchor at all); Flipkart needs text-regex parsing
+(`div[data-id]` + `/p/` links) because price/title classes rotate
+(`Nx9bqj` → `QiMO5r`) and fields glue onto one line. Captcha/robot walls are
+screenshotted and recorded, never retried.
+
 - **93 tests, 100% statement + branch coverage** (`pyproject.toml` enforces
   `--cov-fail-under=100`).
 - No real browser or network: `tests/conftest.py` provides `FakePage`,
@@ -85,7 +100,7 @@ tests run against live sandboxes, not just fakes.
 - Conventions: one test module per source module; fakes live only in
   `conftest.py`; `monkeypatch` (auto-reverted) for `SETTINGS`/time/network.
 
-## 4. Test matrix (automated ↔ manual)
+## 5. Test matrix (automated ↔ manual)
 
 | Scenario | Automated test | Manual sandbox |
 |---|---|---|
@@ -102,3 +117,4 @@ tests run against live sandboxes, not just fakes.
 | Bot-wall pause | `handle_possible_block` ×3 paths | Bot-detection suite |
 | Engine guard | non-chromium BROWSER rejected | `test_stealth.py` |
 | Export | csv/xlsx + location filter | `stats`/`export` cmds |
+| E-commerce | Amazon.in + Flipkart 5+5 products | `practice_ecommerce.py` |
