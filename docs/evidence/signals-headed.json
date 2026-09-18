@@ -1,0 +1,93 @@
+{
+  "mode": "headed",
+  "started": "2026-09-19T00:51:45.287172",
+  "pages": {
+    "deviceandbrowserinfo": {
+      "url": "https://deviceandbrowserinfo.com/are_you_a_bot",
+      "screenshot": "output/botcheck2/headed/deviceandbrowserinfo.png",
+      "signals": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "webdriver": false,
+        "webdriverInIframe": false,
+        "plugins": 5,
+        "languages": [
+          "en-IN"
+        ],
+        "hardwareConcurrency": 10,
+        "deviceMemory": 32,
+        "timezone": "Asia/Calcutta",
+        "timezoneOffsetMin": -330,
+        "screen": [
+          1366,
+          768
+        ],
+        "viewport": [
+          1366,
+          768
+        ],
+        "maxTouchPoints": 0,
+        "hasChrome": true,
+        "cookieEnabled": true,
+        "doNotTrack": null
+      }
+    },
+    "browserscan": {
+      "url": "https://browserscan.in/",
+      "screenshot": "output/botcheck2/headed/browserscan.png",
+      "signals": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "webdriver": false,
+        "webdriverInIframe": false,
+        "plugins": 5,
+        "languages": [
+          "en-IN"
+        ],
+        "hardwareConcurrency": 10,
+        "deviceMemory": 32,
+        "timezone": "Asia/Calcutta",
+        "timezoneOffsetMin": -330,
+        "screen": [
+          1366,
+          768
+        ],
+        "viewport": [
+          1366,
+          768
+        ],
+        "maxTouchPoints": 0,
+        "hasChrome": true,
+        "cookieEnabled": true,
+        "doNotTrack": null
+      }
+    },
+    "veil": {
+      "url": "https://veilbrowser.cc/bot-check",
+      "screenshot": "output/botcheck2/headed/veil.png",
+      "signals": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+        "webdriver": false,
+        "webdriverInIframe": false,
+        "plugins": 5,
+        "languages": [
+          "en-IN"
+        ],
+        "hardwareConcurrency": 10,
+        "deviceMemory": 32,
+        "timezone": "Asia/Calcutta",
+        "timezoneOffsetMin": -330,
+        "screen": [
+          1366,
+          768
+        ],
+        "viewport": [
+          1366,
+          768
+        ],
+        "maxTouchPoints": 0,
+        "hasChrome": true,
+        "cookieEnabled": true,
+        "doNotTrack": null
+      }
+    }
+  }
+}

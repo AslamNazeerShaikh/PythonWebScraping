@@ -15,6 +15,16 @@
 | [BrowserScan](https://browserscan.in/) | 200+ checks: fingerprint vs IP/timezone/network, WebRTC | Consistency (browser vs network identity) |
 | [BrowserScan.net bot-detection](https://www.browserscan.net/bot-detection) | Webdriver/UA/CDP/Navigator matrix + native-function checks | Second opinion, CDP focus |
 | [Sannysoft bot test](https://bot.sannysoft.com/) | Phantom/Headless/Selenium/WebDriver flags, canvas, fp-collect | Classic flag table |
+| [CreepJS checker](https://creepjs.org/checker) | Trust score, lies detection, collector coverage, IP risk | Strictest open tester |
+| [Pixelscan](https://pixelscan.net/) | Proxy/automation/behavior, consistency, WebGL | Green/red verdict badges |
+| [Iphey](https://iphey.com/) | hasCDP/hasWebdriver/hasNavigator flags, MX score | Names the exact tripwire |
+| [BrowserLeaks](https://browserleaks.com/) | IP/WebRTC/canvas/WebGL/TLS/font leak tools (hub) | Manual sub-page checks |
+| [Fingerprint-scan](https://fingerprint-scan.com/) | Bot score 0-100 by category (Browser vs HW/OS) | Where the points come off |
+| [BotD live demo](https://botd.fingerprint.com/) | — retired (DNS NXDOMAIN) | Use bot-firewall demo manually |
+| [Fingerprint bot-firewall](https://demo.fingerprint.com/bot-firewall) | Playwright-vs-demo + IP block demo | Manual (interactive) |
+
+Verdict evidence: [`evidence/`](evidence/) (screenshots + `signals-headed.json`).
+Probe: `scripts/bot_probe.py [--only site,...]` (11 targets).
 | [Veil bot-check](https://veilbrowser.cc/bot-check) | Automation, headless, consistency, leaks | Secondary opinion |
 | [Sendwin](https://send.win/tools/bot-detection-test/) | webdriver, driver globals, headless markers | Quick lightweight check |
 | DataDome / Akamai demos | Commercial device-check concepts | Background reading, not playgrounds |
@@ -70,7 +80,17 @@ browser, accepted. **BrowserScan.net** headed: **Normal** — all four
 categories green (Webdriver, User-Agent, CDP, Navigator), incl. genuine
 `Chrome/153` UA, `MacIntel`, `en-IN`, real plugins. **Sannysoft** headed:
 **all rows green** (Phantom/Headless/Selenium/WebDriver flags, canvas,
-fp-collect). Probe: `scripts/bot_probe.py --only browserscan-net,sannysoft`.
+fp-collect). **CreepJS checker** headed: **Trust 93/100, Level I** —
+"No automation indicator observed", collector 100% (53/53), IP risk perfect
+(residential Airtel IN). **Pixelscan** headed: all green ("No proxy
+detected", "No automated behavior detected", consistent Asia/Calcutta).
+**Iphey** headed: "Unreliable", MX 90 — exactly ONE tripwire named:
+`hasCDP: true`; hasWebdriver/hasUserAgent/hasNavigator all false.
+**BrowserLeaks** hub loads clean (sub-tools are manual spot-checks).
+**Fingerprint-scan** headed: **Bot 80/100** — Browser: HIGH, Hardware/OS:
+LOW (same CDP-only story, priced at 20 points). **BotD demo domain is
+retired** (`botd.fingerprint.com` NXDOMAIN); the interactive bot-firewall
+demo remains a manual exercise. Probe: `scripts/bot_probe.py --only browserscan-net,sannysoft`.
 
 Test A (real Firefox baseline) could NOT run in this sandbox: no Firefox
 engine starts here (stable 155 + Nightly both fail with “Could not find

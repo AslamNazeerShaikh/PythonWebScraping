@@ -33,6 +33,12 @@ TARGETS = [
     ("veil", "https://veilbrowser.cc/bot-check"),
     ("browserscan-net", "https://www.browserscan.net/bot-detection"),
     ("sannysoft", "https://bot.sannysoft.com/"),
+    ("botd", "https://botd.fingerprint.com/"),
+    ("creepjs", "https://creepjs.org/checker"),
+    ("pixelscan", "https://pixelscan.net/"),
+    ("iphey", "https://iphey.com/"),
+    ("browserleaks", "https://browserleaks.com/"),
+    ("fingerprint-scan", "https://fingerprint-scan.com/"),
 ]
 
 #: Client-side signal dump — answers "what does this browser expose?"
@@ -86,7 +92,12 @@ def probe(mode: str, out_dir: Path, wait_s: int = 10,
                     print(f"[{mode}] nav warning on {name}: {e}")
                 page.wait_for_timeout(wait_s * 1000)  # client-side checks finish
                 shot = out_dir / f"{name}.png"
-                page.screenshot(path=str(shot), full_page=True)
+                try:
+                    page.screenshot(path=str(shot), full_page=True, timeout=20000)
+                except Exception as e:  # heavy/animated pages can stall stitching
+                    print(f"[{mode}] {name}: full-page shot failed ({e}); "
+                          f"viewport fallback")
+                    page.screenshot(path=str(shot), full_page=False)
                 try:
                     signals = page.evaluate(SIGNAL_JS)
                 except Exception as e:
