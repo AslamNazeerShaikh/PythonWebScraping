@@ -10,6 +10,17 @@ from tests.conftest import FakeContext, FakeMouse, FakePage, raw_card
 
 
 # -- pure helpers -------------------------------------------------------------
+# -- in-page JS hygiene ---------------------------------------------------------
+def test_listing_js_has_no_location_shadowing():
+    # Regression (found live): a `const location` in the extractor scope puts
+    # `location.origin` in the temporal dead zone -> ReferenceError per card,
+    # swallowed by the inner try/catch -> every result silently dropped.
+    # The field var must be named `loc`; origin must use window.location.
+    assert "const location" not in ns.LISTING_EXTRACT_JS
+    assert "window.location.origin" in ns.LISTING_EXTRACT_JS
+    assert "location: loc" in ns.LISTING_EXTRACT_JS
+
+
 def test_build_search_url_encodes_params():
     url = ns.build_search_url("asp.net core c#", "pune", 6, 7, 2)
     assert url.startswith("https://www.naukri.com/jobs?")

@@ -97,7 +97,10 @@ LISTING_EXTRACT_JS = """
       const m = href.match(/\\/job-listings-[\\w\\-]+-(\\d+)/);
       if (!m) continue;
       const jobId = m[1];
-      const absUrl = new URL(href, location.origin).toString().split('?')[0];
+      // NOTE: window.location explicitly — a same-scope const ALSO named
+      // location would shadow it into the temporal dead zone (this exact bug
+      // once zeroed every result: ReferenceError per card, swallowed below).
+      const absUrl = new URL(href, window.location.origin).toString().split('?')[0];
 
       // Walk up to card container (article / div with jobTuple-ish class)
       let card = a.closest('article, div[class*="jobTuple"], div[class*="srp-job"], div[class*="cust-job"], li[class*="job"]');
@@ -118,7 +121,7 @@ LISTING_EXTRACT_JS = """
         return '';
       };
       const company = pick(['a[class*="comp"], a[class*="Comp"], div[class*="comp"] a, span[class*="comp"]']);
-      const location = pick(['span[class*="loc"], div[class*="loc"] span, li[class*="location"]']);
+      const loc = pick(['span[class*="loc"], div[class*="loc"] span, li[class*="location"]']);
       const exp = pick(['span[class*="exp"], li[class*="experience"], span[class*="experience"]']);
       const salary = pick(['span[class*="sal"], li[class*="salary"], span[class*="salary"]']);
       const posted = pick(['span[class*="date"], span[class*="posted"], div[class*="posted"], li[class*="date"]']);
@@ -128,7 +131,7 @@ LISTING_EXTRACT_JS = """
       if (card && !isVisible(card)) continue;
       if (!title || title.length < 4) continue;
 
-      out.push({ jobId, title, company, location, experience: exp, salary, posted, snippet, url: absUrl });
+      out.push({ jobId, title, company, location: loc, experience: exp, salary, posted, snippet, url: absUrl });
     } catch (e) { /* skip one bad card */ }
   }
   // Dedupe by jobId, keep first
