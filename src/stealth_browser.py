@@ -53,8 +53,9 @@ STEALTH_INIT_JS = """
   Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
   // plugins
   Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
-  // languages
-  Object.defineProperty(navigator, 'languages', { get: () => ['en-IN', 'en-US', 'en'] });
+  // NOTE: navigator.languages is intentionally NOT overridden — Playwright's
+  // `locale` already sets it, and a stub here contradicts the Worker scope
+  // (BrowserScan flagged exactly this inconsistency).
   // chrome stub (many detectors check window.chrome)
   if (!window.chrome) { window.chrome = { runtime: {} }; }
   // permissions
@@ -65,20 +66,13 @@ STEALTH_INIT_JS = """
         ? Promise.resolve({ state: Notification.permission })
         : origQuery(p);
   }
-  // screen size consistency handled by viewport; add realistic deviceMemory
-  Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+  // deviceMemory hint (Chromium ignores the redefine — property is
+  // non-configurable — so the genuine value shows; kept for Firefox).
+  try {
+    Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
+  } catch (e) { /* genuine value stays: consistency beats stubbing */ }
 }
 """
-
-FIREFOX_UA = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:126.0) "
-    "Gecko/20100101 Firefox/126.0"
-)
-CHROMIUM_UA = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
-)
-
 
 def human_pause(a: float | None = None, b: float | None = None) -> None:
     """Sleep a random politeness interval (defaults: SETTINGS min/max delay).
@@ -180,7 +174,9 @@ def _launch_firefox(p: Playwright) -> BrowserContext:
         viewport={"width": SETTINGS.viewport_w, "height": SETTINGS.viewport_h},
         locale=SETTINGS.locale,
         timezone_id=SETTINGS.timezone,
-        user_agent=FIREFOX_UA,
+        # NOTE: no user_agent override — a pinned UA (e.g. Chrome/126) rots
+        # while the engine auto-updates, and detectors flag the contradiction
+        # (BrowserScan: "engine is NEWER than the version UA claims").
         accept_downloads=True,
         firefox_user_prefs={
             "privacy.trackingprotection.enabled": True,
@@ -232,7 +228,7 @@ def _launch_chromium(p: Playwright) -> BrowserContext:
         viewport={"width": SETTINGS.viewport_w, "height": SETTINGS.viewport_h},
         locale=SETTINGS.locale,
         timezone_id=SETTINGS.timezone,
-        user_agent=CHROMIUM_UA,
+        # NOTE: genuine engine UA (see Firefox path) — consistency beats pinning.
         accept_downloads=True,
         args=args,
         # Chromium: hide automation flag; keep headless-shell compatible

@@ -113,7 +113,8 @@ def test_launch_firefox_defaults(monkeypatch, tmp_path):
     ctx = sb._launch_firefox(p)
     assert isinstance(ctx, FakeContext)
     sent = p.firefox.kwargs[0]
-    assert "Firefox" in sent["user_agent"] and sent["locale"] == SETTINGS.locale
+    assert sent["locale"] == SETTINGS.locale
+    assert "user_agent" not in sent  # genuine engine UA (no pinning -> no rot)
     assert sent["firefox_user_prefs"]["dom.webdriver.enabled"] is False
 
 
@@ -158,7 +159,7 @@ def test_launch_chromium_plain(monkeypatch, tmp_path):
     p = fake_playwright(chromium_ctxs=[FakeContext()])
     ctx = sb._launch_chromium(p)
     assert isinstance(ctx, FakeContext)
-    assert "Chrome" in p.chromium.kwargs[0]["user_agent"]
+    assert "user_agent" not in p.chromium.kwargs[0]  # genuine engine UA
 
 
 # -- launch_context dispatch + fallback ------------------------------------------------------

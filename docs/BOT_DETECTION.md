@@ -44,17 +44,44 @@ runs headful for first contact).
 
 ## 3. Signal table (fill from your runs)
 
-| Signal | Normal Fx | PW headed | PW headless | Notes |
+Measured 2026-09-19 on this Mac (Playwright Chromium-fallback, headed unless
+noted; screenshots + `signals.json` under `output/botcheck*/`, gitignored):
+
+| Signal | Normal Fx (Test A) | PW headed (Test B) | PW headless (Test C) | Notes |
 |---|---|---|---|---|
-| User-Agent | | | | |
-| `navigator.webdriver` | | | | init script hides; verify incl. iframe |
-| Headless markers | | | | |
-| Plugins / languages | | | | |
-| Timezone vs IP | | | | `Asia/Kolkata` + IN IP = consistent |
-| WebRTC leaks | | | | disabled via prefs |
-| Canvas / WebGL | | | | |
-| TLS / HTTP/2 fingerprint | | | | browser-level, not spoofable here |
-| Mouse/typing behaviour | | | | human pauses/scrolls only |
+| User-Agent | — (see below) | genuine `Chrome/153` | `HeadlessChrome` brand | was pinned `126` → fixed, see §5 |
+| `navigator.webdriver` | n/a | `false` (+in iframe) | `false` | init script hides; iframe verified too |
+| Headless markers | n/a | none fired | software GL, 0 plugins, `window.chrome` absent, UA brands | headless-shell lights up 7+ checks |
+| Plugins / languages | n/a | 5 / `['en-IN']` (genuine) | 0 / `en-IN` | stub languages removed, see §5 |
+| Timezone vs IP | n/a | `Asia/Calcutta` ⇔ IN IP, consistent | same | `TIMEZONE=Asia/Kolkata` |
+| WebRTC leaks | n/a | real IPs shown (info-only) | same | disabled prefs don't hide local IPs from JS |
+| Canvas / WebGL | n/a | real Apple M GPU (headed) | SwiftShader software GL | headless dead giveaway |
+| TLS / HTTP/2 fingerprint | n/a | browser-level, not spoofable here | same | accepted residual |
+| Mouse/typing behaviour | n/a | detected after interaction | "waiting for activity" | probe doesn't interact; real runs scroll |
+
+Site verdicts: **Veil** headed 23/23 human (twice) → headless "Automated"
+(2 failed / 7 suspicious). **BrowserScan** headed **44 → 100** after the §5
+fix ("looks genuine", 1 residual: main-vs-worker language). **DeviceAndBrowserInfo**
+headed "bot" on CDP/timing/worker flags only — every classic flag
+(webdriver, Playwright, headless, UA) false; inherent to any CDP-driven
+browser, accepted.
+
+Test A (real Firefox baseline) could NOT run in this sandbox: no Firefox
+engine starts here (stable 155 + Nightly both fail with “Could not find
+profile folder” on this macOS), and screen capture is denied. Manual step
+(~1 min): open the three URLs in your own Firefox/Chrome and compare with
+`output/botcheck2/headed/*.png` — expect green/human verdicts; the gap
+between those and Test B is the true automation delta.
+
+## 5. Fix applied from these measurements (2026-09-19)
+
+Two self-inflicted inconsistencies, both fixed as *consistency* (not spoofing):
+1. Pinned `Chrome/126` UA vs auto-updating engine → BrowserScan "engine NEWER
+   than UA claims". **Fix:** no `user_agent` override; genuine engine UA.
+2. Stubbed `navigator.languages` vs Worker scope → BrowserScan worker mismatch.
+   **Fix:** override removed; Playwright `locale` (`en-IN`) is the single source.
+Result: BrowserScan 44 → 100; Veil unchanged at 23/23. DeviceAndBrowserInfo
+unchanged (CDP-inherent). Suite still 98 tests / 100% coverage.
 
 ## 4. Reading the results
 
