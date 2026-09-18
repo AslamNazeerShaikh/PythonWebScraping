@@ -12,9 +12,10 @@ venv/
 .ms-playwright/
 .tmp/
 
-# Vendored binaries (re-fetch via vendor/download-ubol.sh)
+# Vendored extension (ships pre-extracted; refresh via vendor/download-ubol.sh)
 vendor/*
 !vendor/download-ubol.sh
+!vendor/ubol-chrome/
 
 # App data (local DB + exports are regenerable)
 jobs.db
