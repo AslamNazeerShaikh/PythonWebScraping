@@ -148,5 +148,119 @@
     "seen": 1789764660.6451719,
     "ast_hash": "9b074654045e0a9d8e72d9cf7c908ca4",
     "semantic_hash": "9b074654045e0a9d8e72d9cf7c908ca4"
+  },
+  ".opencode/opencode.json": {
+    "mtime": 1789764745.801291,
+    "seen": 1789811993.0817869,
+    "ast_hash": "e5f74d14a81702b55bdf53b33ec991d7",
+    "semantic_hash": ""
+  },
+  ".opencode/plugins/graphify.js": {
+    "mtime": 1789764698.9945533,
+    "seen": 1789811993.081789,
+    "ast_hash": "3ea725724bc8ebe483c9f13d6aa1124f",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/SKILL.md": {
+    "mtime": 1789764698.993921,
+    "seen": 1789811993.082043,
+    "ast_hash": "2e9858a59406dd2af786cf4cb74bc610",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/add-watch.md": {
+    "mtime": 1789215508.4179926,
+    "seen": 1789811993.082043,
+    "ast_hash": "d59d027fe449f06aa03905a01184e779",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/exports.md": {
+    "mtime": 1789215508.4180956,
+    "seen": 1789811993.082043,
+    "ast_hash": "9da2a2152e60a22f07f05fed5158f287",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/extraction-spec.md": {
+    "mtime": 1789215508.4181883,
+    "seen": 1789811993.082044,
+    "ast_hash": "42fef56a01698118f7fd722acdadea34",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/github-and-merge.md": {
+    "mtime": 1789215508.4182541,
+    "seen": 1789811993.082044,
+    "ast_hash": "cde13df085e4c492aeb7ba298a996d0d",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/hooks.md": {
+    "mtime": 1789215508.4183202,
+    "seen": 1789811993.0820448,
+    "ast_hash": "3f545db6ce646650bb9de588f5512a27",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/query.md": {
+    "mtime": 1789215508.4227014,
+    "seen": 1789811993.0820448,
+    "ast_hash": "3c46f8ad006874260614ed8657d02307",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/transcribe.md": {
+    "mtime": 1789215508.4227986,
+    "seen": 1789811993.0820448,
+    "ast_hash": "67b6a5fa6c0974e18f60db9f8932fbd8",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/graphify/references/update.md": {
+    "mtime": 1789215508.4230678,
+    "seen": 1789811993.082046,
+    "ast_hash": "9378bd03d56baaf78bd738ab3848f142",
+    "semantic_hash": ""
+  },
+  "AGENTS.md": {
+    "mtime": 1789764698.9944062,
+    "seen": 1789811993.082046,
+    "ast_hash": "6a47d64fcc136324ca395065a707ef76",
+    "semantic_hash": ""
+  },
+  "README.md": {
+    "mtime": 1789764757.0601323,
+    "seen": 1789811993.082046,
+    "ast_hash": "f44e8fcaff3bc92aeae594c2d3d42eed",
+    "semantic_hash": ""
+  },
+  "docs/BOT_DETECTION.md": {
+    "mtime": 1789762953.1517413,
+    "seen": 1789811993.082047,
+    "ast_hash": "441518b18358185b15c0a12d4e80439c",
+    "semantic_hash": ""
+  },
+  "docs/CODE_EXPLANATION.md": {
+    "mtime": 1789811987.5273097,
+    "seen": 1789811993.082047,
+    "ast_hash": "da45f28f8e8c5c54a8598cc0da5d1007",
+    "semantic_hash": ""
+  },
+  "docs/GRAPHIFY.md": {
+    "mtime": 1789764745.801633,
+    "seen": 1789811993.082047,
+    "ast_hash": "16bc037dfd591e86751104825759c426",
+    "semantic_hash": ""
+  },
+  "docs/PROJECT.md": {
+    "mtime": 1789764794.434806,
+    "seen": 1789811993.082048,
+    "ast_hash": "4c2aa705546eda6ec13262118380d858",
+    "semantic_hash": ""
+  },
+  "docs/TESTING.md": {
+    "mtime": 1789761863.395417,
+    "seen": 1789811993.082048,
+    "ast_hash": "f756a3e17d3c14beda57649b9620726d",
+    "semantic_hash": ""
+  },
+  "requirements.txt": {
+    "mtime": 1789764615.7947757,
+    "seen": 1789811993.0820491,
+    "ast_hash": "77b32ea654fee7ad50fdd21ae72cbc4a",
+    "semantic_hash": ""
   }
 }

@@ -124,8 +124,9 @@ a block page: back off, retry later.
 ## 8. Knowledge graph (Graphify)
 
 This repo ships a queryable map of itself ([details](GRAPHIFY.md),
-[upstream](https://github.com/Graphify-Labs/graphify)): `graphify-out/`
-(`graph.html`, `GRAPH_REPORT.md`, `graph.json`; 364 nodes, 12 communities).
+[upstream](https://github.com/Graphify-Labs/graphify),
+[code explanation](CODE_EXPLANATION.md)): `graphify-out/`
+(`graph.html`, `GRAPH_REPORT.md`, `graph.json`; 509 nodes, 30 communities).
 Query before grepping: `graphify query "<question>"`. Rebuild after code
 changes: `graphify update .` (free). Excludes: `vendor/`, `docs/evidence/`
 (see `.graphifyignore`).
