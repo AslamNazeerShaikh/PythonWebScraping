@@ -464,6 +464,78 @@ sequenceDiagram
     CLI-->>User: Rich top-20 apply-links table
 ```
 
+### 9.1b Live network trace — measured session on naukri.com (2026-09-19)
+
+Two live sessions were run against the real site with the real
+`stealth_browser.launch_context` + `naukri_scraper` code path (single search:
+`k=asp.net core c# .net, l=pune, exp=6y, last 7d, page 1`). This is what the
+network actually looks like — the diagrams below are drawn from the measured
+request/response log, not from guesswork.
+
+**Session A — headless (default CI-style): blocked.**
+
+| Step | Observation |
+|---|---|
+| `GET /jobs?…` | `403` in ~0.1 s, `document` is the only request |
+| Title / body | `Access Denied` / `errors.edgesuite.net` (Akamai EdgeSuite) |
+| `check_bot_wall` | `True` (block text + 0 job anchors) → `handle_possible_block` would pause for manual solve |
+| Extract | 0 anchors, 0 cards |
+
+**Session B — headed, persistent profile, uBO Lite loaded: success.**
+
+| Phase | Measurement |
+|---|---|
+| `launch_context` | `[ublock] Loading unpacked uBO Lite`, `[privacy] Fallback request-blocker enabled`, persistent profile ready |
+| Navigation | `GET /jobs?…` → `301` → `GET /jobs-in-india?…` → `200` in ~0.7 s (2 `document` responses) |
+| Settle + scroll | 4.0 s settle, 3× wheel + 0.8 s pauses, selector `a[href*="/job-listings-"]` FOUND |
+| Result | title `…500 … Job Vacancies In Pune…`, 21 anchors, wall `False`, **20 cards** extracted (1 duplicate/short-title filtered) |
+| Sample card | `Senior .NET Developer` @ `Scriptshub Technologies`, Pune, `5-8 Yrs`, `jobId 150926505579` |
+| Totals | **148 requests, 119 responses, 29 failed** (`ERR_BLOCKED_BY_CLIENT` — uBOL/fallback doing its job) |
+| Status mix | 118× `200`, 1× `301`, 0× `403/429` |
+| By host | `static.naukimg.com` 91 · `img.naukimg.com` 16 · `www.naukri.com` 8 · `accounts.google.com` 2 (+ uBOL extension-internal) |
+| By type | `script` 50 · `image` 41 · `stylesheet` 15 · `font` 4 · `fetch` 3 · `xhr` 2 · `document` 2 · `manifest` 1 |
+| Blocked (sample) | `www.naukri.com/akam/13/…` (Akamai sensor), `nLoggerJB_v3.4.min.js`, `logs.naukri.com/uba` ×6, `logs.naukri.com/collectorapi/v1/uba/bulk` ×2 |
+| XHR/API | `www.naukri.com/cloudgateway-ccs/inventory-management-services/v2/page/pagename/ni-desktop-srp-homepage-v2?…` (page/inventory config), `accounts.google.com/gsi/client` (Google sign-in widget) |
+| Static fan-out | job-card images + registration widgets (zoho/swiggy/google/flipkart/myntra/tata/dell/gobibo/skoda), `job-promotion-wdgt`, feedback-widget SVGs, logo GIFs |
+
+Reproduce (polite single-page probe, headed): launch via `launch_context`,
+attach `page.on("request"/"response"/"requestfailed")` handlers, `goto` the
+`build_search_url(...)` URL with `wait_until="domcontentloaded"`, settle,
+scroll 3×, `wait_for_selector('a[href*="/job-listings-"]')`, then
+`page.evaluate(LISTING_EXTRACT_JS)` and `check_bot_wall(page)`.
+
+```mermaid
+sequenceDiagram
+    participant Script as probe / run_scrape
+    participant Chromium as Chromium persistent profile
+    participant uBOL as uBO Lite + fallback blocker
+    participant Akamai as Akamai EdgeSuite
+    participant Doc as www.naukri.com documents
+    participant CDN as static/img.naukimg.com
+    participant API as cloudgateway-ccs XHR
+    participant Google as accounts.google.com GSI
+    participant Logger as logs.naukri.com / nLogger
+    participant JS as LISTING_EXTRACT_JS
+    Script->>Chromium: launch_context (profile-chromium, stealth init JS)
+    Chromium->>uBOL: --load-extension vendor/ubol-chrome (headed only)
+    Chromium->>uBOL: context.route(**/*) fallback blocker
+    Script->>Doc: GET /jobs?k=asp.net+core+c%23+.net&l=pune&...&page=1
+    Doc-->>Script: 301 → /jobs-in-india?... (0.7s total)
+    Doc-->>Script: 200 document + 15 stylesheets + 50 scripts + 4 fonts
+    Doc->>CDN: 91 static + 16 image requests (cards, promos, logos, widgets)
+    CDN-->>Script: 200 (all cacheable statics)
+    Script->>API: XHR inventory-management-services .../ni-desktop-srp-homepage-v2 (×2)
+    API-->>Script: 200 page/inventory config
+    Script->>Google: GET gsi/client + gsi/style (sign-in widget)
+    Google-->>Script: 200 script + stylesheet
+    Script->>Logger: nLogger + /uba beacons + /collectorapi bulk
+    uBOL-->>Script: ERR_BLOCKED_BY_CLIENT ×29 (akam sensor, nLogger, uba)
+    Script->>Script: settle 4.0s → 3× mouse-wheel scroll → selector FOUND
+    Script->>JS: evaluate LISTING_EXTRACT_JS (computed-style guards)
+    JS-->>Script: 21 anchors → 20 visible unique cards (jobId dedupe)
+    Note over Script: headless variant ends at step 4 with 403 + wall=True + 0 cards
+```
+
 ### 9.2 Class / data-model diagram
 
 ```mermaid

@@ -4,6 +4,19 @@
   "graph": {},
   "nodes": [
     {
+      "id": "tests_conftest_fakemouse",
+      "label": "FakeMouse",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "test_scraper.py",
+      "file_type": "code",
+      "norm_label": "fakemouse",
+      "source_file": "tests/conftest.py",
+      "source_location": "L83"
+    },
+    {
       "id": "tests_conftest_fakepage",
       "label": "FakePage",
       "_callable": true,
@@ -108,19 +121,6 @@
       "source_location": "L181"
     },
     {
-      "id": "tests_conftest_fakemouse",
-      "label": "FakeMouse",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "fakemouse",
-      "source_file": "tests/conftest.py",
-      "source_location": "L83"
-    },
-    {
       "id": "tests_conftest_fakeroute",
       "label": "FakeRoute",
       "_callable": true,
@@ -153,7 +153,7 @@
       "_callable_class": true,
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "code",
       "norm_label": "product",
       "source_file": "scripts/practice_ecommerce.py",
@@ -210,18 +210,6 @@
       "source_location": "L182"
     },
     {
-      "id": "src_naukri_scraper_coerce_job",
-      "label": "coerce_job()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "test_scraper.py",
-      "file_type": "code",
-      "norm_label": "coerce_job()",
-      "source_file": "src/naukri_scraper.py",
-      "source_location": "L271"
-    },
-    {
       "id": "src_naukri_scraper_enrich_job",
       "label": "enrich_job()",
       "_callable": true,
@@ -270,18 +258,6 @@
       "source_location": "L236"
     },
     {
-      "id": "src_naukri_scraper_normalize_raw",
-      "label": "normalize_raw()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "test_scraper.py",
-      "file_type": "code",
-      "norm_label": "normalize_raw()",
-      "source_file": "src/naukri_scraper.py",
-      "source_location": "L245"
-    },
-    {
       "id": "src_naukri_scraper_run_scrape",
       "label": "run_scrape()",
       "_callable": true,
@@ -294,18 +270,6 @@
       "source_location": "L357"
     },
     {
-      "id": "src_naukri_scraper_save_results",
-      "label": "save_results()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "test_scraper.py",
-      "file_type": "code",
-      "norm_label": "save_results()",
-      "source_file": "src/naukri_scraper.py",
-      "source_location": "L416"
-    },
-    {
       "id": "src_naukri_scraper_scrape_search_page",
       "label": "scrape_search_page()",
       "_callable": true,
@@ -316,6 +280,42 @@
       "norm_label": "scrape_search_page()",
       "source_file": "src/naukri_scraper.py",
       "source_location": "L294"
+    },
+    {
+      "id": "tests_conftest_fakemouse_init",
+      "label": ".__init__()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "test_scraper.py",
+      "file_type": "code",
+      "norm_label": ".__init__()",
+      "source_file": "tests/conftest.py",
+      "source_location": "L86"
+    },
+    {
+      "id": "tests_conftest_fakemouse_move",
+      "label": ".move()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "test_scraper.py",
+      "file_type": "code",
+      "norm_label": ".move()",
+      "source_file": "tests/conftest.py",
+      "source_location": "L96"
+    },
+    {
+      "id": "tests_conftest_fakemouse_wheel",
+      "label": ".wheel()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "test_scraper.py",
+      "file_type": "code",
+      "norm_label": ".wheel()",
+      "source_file": "tests/conftest.py",
+      "source_location": "L91"
     },
     {
       "id": "tests_conftest_fakepage_close",
@@ -366,6 +366,18 @@
       "source_location": "L134"
     },
     {
+      "id": "tests_conftest_fakepage_init",
+      "label": ".__init__()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "test_scraper.py",
+      "file_type": "code",
+      "norm_label": ".__init__()",
+      "source_file": "tests/conftest.py",
+      "source_location": "L118"
+    },
+    {
       "id": "tests_conftest_fakepage_title",
       "label": ".title()",
       "_callable": true,
@@ -400,6 +412,18 @@
       "norm_label": ".wait_for_timeout()",
       "source_file": "tests/conftest.py",
       "source_location": "L143"
+    },
+    {
+      "id": "tests_conftest_fresh_db",
+      "label": "fresh_db()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "test_scraper.py",
+      "file_type": "code",
+      "norm_label": "fresh_db()",
+      "source_file": "tests/conftest.py",
+      "source_location": "L50"
     },
     {
       "id": "tests_conftest_make_job",
@@ -784,18 +808,6 @@
       "norm_label": "test_safe_goto_success()",
       "source_file": "tests/test_scraper.py",
       "source_location": "L124"
-    },
-    {
-      "id": "tests_test_scraper_test_save_results_writes_json_and_csv",
-      "label": "test_save_results_writes_json_and_csv()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "test_scraper.py",
-      "file_type": "code",
-      "norm_label": "test_save_results_writes_json_and_csv()",
-      "source_file": "tests/test_scraper.py",
-      "source_location": "L295"
     },
     {
       "id": "tests_test_scraper_test_scrape_search_page_debug_save_failure_swallowed",
@@ -1206,6 +1218,42 @@
       "source_location": "L129"
     },
     {
+      "id": "src_naukri_scraper_coerce_job",
+      "label": "coerce_job()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Job",
+      "file_type": "code",
+      "norm_label": "coerce_job()",
+      "source_file": "src/naukri_scraper.py",
+      "source_location": "L271"
+    },
+    {
+      "id": "src_naukri_scraper_normalize_raw",
+      "label": "normalize_raw()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Job",
+      "file_type": "code",
+      "norm_label": "normalize_raw()",
+      "source_file": "src/naukri_scraper.py",
+      "source_location": "L245"
+    },
+    {
+      "id": "src_naukri_scraper_save_results",
+      "label": "save_results()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Job",
+      "file_type": "code",
+      "norm_label": "save_results()",
+      "source_file": "src/naukri_scraper.py",
+      "source_location": "L416"
+    },
+    {
       "id": "tests_test_models_test_job_rejects_short_title_and_id",
       "label": "test_job_rejects_short_title_and_id()",
       "_callable": true,
@@ -1290,28 +1338,16 @@
       "source_location": "L32"
     },
     {
-      "id": "scripts_bot_probe_main",
-      "label": "main()",
+      "id": "tests_test_scraper_test_save_results_writes_json_and_csv",
+      "label": "test_save_results_writes_json_and_csv()",
       "_callable": true,
       "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
+      "community": 13,
+      "community_name": "Job",
       "file_type": "code",
-      "norm_label": "main()",
-      "source_file": "scripts/bot_probe.py",
-      "source_location": "L118"
-    },
-    {
-      "id": "scripts_bot_probe_probe",
-      "label": "probe()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "probe()",
-      "source_file": "scripts/bot_probe.py",
-      "source_location": "L76"
+      "norm_label": "test_save_results_writes_json_and_csv()",
+      "source_file": "tests/test_scraper.py",
+      "source_location": "L295"
     },
     {
       "id": "src_stealth_browser_extension_args",
@@ -1324,66 +1360,6 @@
       "norm_label": "_extension_args()",
       "source_file": "src/stealth_browser.py",
       "source_location": "L116"
-    },
-    {
-      "id": "src_stealth_browser_launch_chromium",
-      "label": "_launch_chromium()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "_launch_chromium()",
-      "source_file": "src/stealth_browser.py",
-      "source_location": "L142"
-    },
-    {
-      "id": "src_stealth_browser_launch_context",
-      "label": "launch_context()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "launch_context()",
-      "source_file": "src/stealth_browser.py",
-      "source_location": "L178"
-    },
-    {
-      "id": "src_stealth_browser_launch_playwright",
-      "label": "launch_playwright()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "launch_playwright()",
-      "source_file": "src/stealth_browser.py",
-      "source_location": "L194"
-    },
-    {
-      "id": "src_stealth_browser_maybe_block_ads",
-      "label": "_maybe_block_ads()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "_maybe_block_ads()",
-      "source_file": "src/stealth_browser.py",
-      "source_location": "L93"
-    },
-    {
-      "id": "src_stealth_browser_maybe_block_ads_route",
-      "label": "_route()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "_route()",
-      "source_file": "src/stealth_browser.py",
-      "source_location": "L103"
     },
     {
       "id": "tests_conftest_fake_playwright",
@@ -1506,54 +1482,6 @@
       "source_location": "L201"
     },
     {
-      "id": "tests_conftest_fakemouse_init",
-      "label": ".__init__()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": ".__init__()",
-      "source_file": "tests/conftest.py",
-      "source_location": "L86"
-    },
-    {
-      "id": "tests_conftest_fakemouse_move",
-      "label": ".move()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": ".move()",
-      "source_file": "tests/conftest.py",
-      "source_location": "L96"
-    },
-    {
-      "id": "tests_conftest_fakemouse_wheel",
-      "label": ".wheel()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": ".wheel()",
-      "source_file": "tests/conftest.py",
-      "source_location": "L91"
-    },
-    {
-      "id": "tests_conftest_fakepage_init",
-      "label": ".__init__()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": ".__init__()",
-      "source_file": "tests/conftest.py",
-      "source_location": "L118"
-    },
-    {
       "id": "tests_conftest_fakeroute_abort",
       "label": ".abort()",
       "_callable": true,
@@ -1588,18 +1516,6 @@
       "norm_label": ".__init__()",
       "source_file": "tests/conftest.py",
       "source_location": "L72"
-    },
-    {
-      "id": "tests_conftest_fresh_db",
-      "label": "fresh_db()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "fresh_db()",
-      "source_file": "tests/conftest.py",
-      "source_location": "L50"
     },
     {
       "id": "tests_test_stealth_handler",
@@ -1914,12 +1830,36 @@
       "source_location": "L11"
     },
     {
+      "id": "scripts_bot_probe_main",
+      "label": "main()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "code",
+      "norm_label": "main()",
+      "source_file": "scripts/bot_probe.py",
+      "source_location": "L118"
+    },
+    {
+      "id": "scripts_bot_probe_probe",
+      "label": "probe()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "code",
+      "norm_label": "probe()",
+      "source_file": "scripts/bot_probe.py",
+      "source_location": "L76"
+    },
+    {
       "id": "scripts_practice_ecommerce_dismiss_flipkart_login",
       "label": "_dismiss_flipkart_login()",
       "_callable": true,
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "code",
       "norm_label": "_dismiss_flipkart_login()",
       "source_file": "scripts/practice_ecommerce.py",
@@ -1931,7 +1871,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "code",
       "norm_label": "main()",
       "source_file": "scripts/practice_ecommerce.py",
@@ -1943,7 +1883,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "code",
       "norm_label": ".coerce()",
       "source_file": "scripts/practice_ecommerce.py",
@@ -1955,7 +1895,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "code",
       "norm_label": "scrape_site()",
       "source_file": "scripts/practice_ecommerce.py",
@@ -1967,11 +1907,71 @@
       "_callable": true,
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "code",
       "norm_label": "human_pause()",
       "source_file": "src/stealth_browser.py",
       "source_location": "L82"
+    },
+    {
+      "id": "src_stealth_browser_launch_chromium",
+      "label": "_launch_chromium()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "code",
+      "norm_label": "_launch_chromium()",
+      "source_file": "src/stealth_browser.py",
+      "source_location": "L142"
+    },
+    {
+      "id": "src_stealth_browser_launch_context",
+      "label": "launch_context()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "code",
+      "norm_label": "launch_context()",
+      "source_file": "src/stealth_browser.py",
+      "source_location": "L178"
+    },
+    {
+      "id": "src_stealth_browser_launch_playwright",
+      "label": "launch_playwright()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "code",
+      "norm_label": "launch_playwright()",
+      "source_file": "src/stealth_browser.py",
+      "source_location": "L194"
+    },
+    {
+      "id": "src_stealth_browser_maybe_block_ads",
+      "label": "_maybe_block_ads()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "code",
+      "norm_label": "_maybe_block_ads()",
+      "source_file": "src/stealth_browser.py",
+      "source_location": "L93"
+    },
+    {
+      "id": "src_stealth_browser_maybe_block_ads_route",
+      "label": "_route()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "code",
+      "norm_label": "_route()",
+      "source_file": "src/stealth_browser.py",
+      "source_location": "L103"
     },
     {
       "id": "tests_test_stealth_test_human_pause_zero_is_instant",
@@ -1979,7 +1979,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "code",
       "norm_label": "test_human_pause_zero_is_instant()",
       "source_file": "tests/test_stealth.py",
@@ -2670,6 +2670,17 @@
       "source_location": "L24"
     },
     {
+      "id": "fixture",
+      "label": "fixture",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "test_scraper.py",
+      "file_type": "code",
+      "norm_label": "fixture",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "page",
       "label": "Page",
       "_origin": "ast",
@@ -2679,17 +2690,6 @@
       "norm_label": "page",
       "source_file": "",
       "source_location": ""
-    },
-    {
-      "id": "src_naukri_scraper",
-      "label": "naukri_scraper.py",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "test_scraper.py",
-      "file_type": "code",
-      "norm_label": "naukri_scraper.py",
-      "source_file": "src/naukri_scraper.py",
-      "source_location": "L1"
     },
     {
       "id": "src_naukri_scraper_py_browsercontext",
@@ -2703,15 +2703,15 @@
       "source_location": ""
     },
     {
-      "id": "src_naukri_scraper_py_path",
-      "label": "Path",
+      "id": "tests_conftest",
+      "label": "conftest.py",
       "_origin": "ast",
       "community": 0,
       "community_name": "test_scraper.py",
       "file_type": "code",
-      "norm_label": "path",
-      "source_file": "",
-      "source_location": ""
+      "norm_label": "conftest.py",
+      "source_file": "tests/conftest.py",
+      "source_location": "L1"
     },
     {
       "id": "tests_test_scraper",
@@ -2722,17 +2722,6 @@
       "file_type": "code",
       "norm_label": "test_scraper.py",
       "source_file": "tests/test_scraper.py",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_naukri_scraper_rationale_1",
-      "label": "Naukri.com scraper with honeypot / anti-bot hardening. Personal-use design: -\u2026",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "test_scraper.py",
-      "file_type": "rationale",
-      "norm_label": "naukri.com scraper with honeypot / anti-bot hardening. personal-use design: -...",
-      "source_file": "src/naukri_scraper.py",
       "source_location": "L1"
     },
     {
@@ -2780,28 +2769,6 @@
       "source_location": "L237"
     },
     {
-      "id": "src_naukri_scraper_rationale_246",
-      "label": "Map extractor output (in-page JS camelCase) to Job snake_case fields. Also\u2026",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "test_scraper.py",
-      "file_type": "rationale",
-      "norm_label": "map extractor output (in-page js camelcase) to job snake_case fields. also...",
-      "source_file": "src/naukri_scraper.py",
-      "source_location": "L246"
-    },
-    {
-      "id": "src_naukri_scraper_rationale_272",
-      "label": "Validate one raw dict -> Job. Returns None (with warning) on bad data.",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "test_scraper.py",
-      "file_type": "rationale",
-      "norm_label": "validate one raw dict -> job. returns none (with warning) on bad data.",
-      "source_file": "src/naukri_scraper.py",
-      "source_location": "L272"
-    },
-    {
       "id": "src_naukri_scraper_rationale_295",
       "label": "Load ONE search page and return raw (pre-Pydantic) job-card dicts. Flow:\u2026",
       "_origin": "ast",
@@ -2835,17 +2802,6 @@
       "source_location": "L358"
     },
     {
-      "id": "src_naukri_scraper_rationale_417",
-      "label": "Timestamped JSON + CSV file export (SQLite remains the source of truth).",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "test_scraper.py",
-      "file_type": "rationale",
-      "norm_label": "timestamped json + csv file export (sqlite remains the source of truth).",
-      "source_file": "src/naukri_scraper.py",
-      "source_location": "L417"
-    },
-    {
       "id": "src_naukri_scraper_rationale_54",
       "label": "Build a Naukri ``/jobs`` search URL (stable query-param form). Args: keywords:\u2026",
       "_origin": "ast",
@@ -2855,6 +2811,17 @@
       "norm_label": "build a naukri ``/jobs`` search url (stable query-param form). args: keywords:...",
       "source_file": "src/naukri_scraper.py",
       "source_location": "L54"
+    },
+    {
+      "id": "tests_conftest_rationale_1",
+      "label": "Shared test fixtures: isolated DB, sample jobs, Playwright fakes. The fakes\u2026",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "test_scraper.py",
+      "file_type": "rationale",
+      "norm_label": "shared test fixtures: isolated db, sample jobs, playwright fakes. the fakes...",
+      "source_file": "tests/conftest.py",
+      "source_location": "L1"
     },
     {
       "id": "tests_conftest_rationale_103",
@@ -2888,6 +2855,28 @@
       "norm_label": "build an in-page-js-style raw card dict (camelcase keys).",
       "source_file": "tests/conftest.py",
       "source_location": "L39"
+    },
+    {
+      "id": "tests_conftest_rationale_51",
+      "label": "Point SETTINGS.database_url at a tmp file and give a clean engine.",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "test_scraper.py",
+      "file_type": "rationale",
+      "norm_label": "point settings.database_url at a tmp file and give a clean engine.",
+      "source_file": "tests/conftest.py",
+      "source_location": "L51"
+    },
+    {
+      "id": "tests_conftest_rationale_84",
+      "label": "Mouse double; ``fail=True`` makes every action raise (fallback paths).",
+      "_origin": "ast",
+      "community": 0,
+      "community_name": "test_scraper.py",
+      "file_type": "rationale",
+      "norm_label": "mouse double; ``fail=true`` makes every action raise (fallback paths).",
+      "source_file": "tests/conftest.py",
+      "source_location": "L84"
     },
     {
       "id": "tests_test_scraper_rationale_1",
@@ -2987,17 +2976,6 @@
       "norm_label": "path",
       "source_file": "",
       "source_location": ""
-    },
-    {
-      "id": "src_models",
-      "label": "models.py",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "main.py",
-      "file_type": "code",
-      "norm_label": "models.py",
-      "source_file": "src/models.py",
-      "source_location": "L1"
     },
     {
       "id": "src_scheduler",
@@ -3253,17 +3231,6 @@
       "source_location": "L85"
     },
     {
-      "id": "src_models_rationale_1",
-      "label": "Layer 3 (validation: Pydantic) + Layer 4 (persistence: SQLAlchemy ORM). Data\u2026",
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "main.py",
-      "file_type": "rationale",
-      "norm_label": "layer 3 (validation: pydantic) + layer 4 (persistence: sqlalchemy orm). data...",
-      "source_file": "src/models.py",
-      "source_location": "L1"
-    },
-    {
       "id": "src_models_rationale_149",
       "label": "``scrape_runs`` table: audit log of every pipeline execution.",
       "_origin": "ast",
@@ -3341,18 +3308,6 @@
       "source_location": "L1"
     },
     {
-      "id": "docs_code_explanation",
-      "label": "CODE_EXPLANATION.md",
-      "_origin": "ast",
-      "community": 12,
-      "community_name": "Full Code Explanation \u2014 Secure Naukri.com Jobs Collector",
-      "file_type": "document",
-      "node_kind": "page",
-      "norm_label": "code_explanation.md",
-      "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L1"
-    },
-    {
       "id": "docs_code_explanation_10_testing_architecture_why_100_is_feasible",
       "label": "10. Testing architecture (why 100% is feasible)",
       "_origin": "ast",
@@ -3362,7 +3317,7 @@
       "node_kind": "heading",
       "norm_label": "10. testing architecture (why 100% is feasible)",
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L628"
+      "source_location": "L700"
     },
     {
       "id": "docs_code_explanation_11_knowledge_graph_living_docs",
@@ -3374,7 +3329,7 @@
       "node_kind": "heading",
       "norm_label": "11. knowledge graph + living docs",
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L645"
+      "source_location": "L717"
     },
     {
       "id": "docs_code_explanation_12_fair_use_binding",
@@ -3386,7 +3341,7 @@
       "node_kind": "heading",
       "norm_label": "12. fair use (binding)",
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L654"
+      "source_location": "L726"
     },
     {
       "id": "docs_code_explanation_1_project_structure_where_everything_lives",
@@ -3557,6 +3512,18 @@
       "source_location": "L428"
     },
     {
+      "id": "docs_code_explanation_9_1b_live_network_trace_measured_session_on_naukri_com_2026_09_19",
+      "label": "9.1b Live network trace \u2014 measured session on naukri.com (2026-09-19)",
+      "_origin": "ast",
+      "community": 12,
+      "community_name": "Full Code Explanation \u2014 Secure Naukri.com Jobs Collector",
+      "file_type": "document",
+      "node_kind": "heading",
+      "norm_label": "9.1b live network trace \u2014 measured session on naukri.com (2026-09-19)",
+      "source_file": "docs/CODE_EXPLANATION.md",
+      "source_location": "L467"
+    },
+    {
       "id": "docs_code_explanation_9_2_class_data_model_diagram",
       "label": "9.2 Class / data-model diagram",
       "_origin": "ast",
@@ -3566,7 +3533,7 @@
       "node_kind": "heading",
       "norm_label": "9.2 class / data-model diagram",
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L467"
+      "source_location": "L539"
     },
     {
       "id": "docs_code_explanation_9_3_database_er",
@@ -3578,7 +3545,7 @@
       "node_kind": "heading",
       "norm_label": "9.3 database er",
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L534"
+      "source_location": "L606"
     },
     {
       "id": "docs_code_explanation_9_4_module_dependency_graph",
@@ -3590,7 +3557,7 @@
       "node_kind": "heading",
       "norm_label": "9.4 module dependency graph",
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L566"
+      "source_location": "L638"
     },
     {
       "id": "docs_code_explanation_9_5_browser_launch_decision_flow",
@@ -3602,7 +3569,7 @@
       "node_kind": "heading",
       "norm_label": "9.5 browser-launch decision flow",
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L591"
+      "source_location": "L663"
     },
     {
       "id": "docs_code_explanation_9_6_bot_wall_politeness_state",
@@ -3614,7 +3581,7 @@
       "node_kind": "heading",
       "norm_label": "9.6 bot-wall / politeness state",
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L610"
+      "source_location": "L682"
     },
     {
       "id": "docs_code_explanation_9_mermaid_diagrams_detail",
@@ -3796,6 +3763,17 @@
       "source_location": ""
     },
     {
+      "id": "src_models",
+      "label": "models.py",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Job",
+      "file_type": "code",
+      "norm_label": "models.py",
+      "source_file": "src/models.py",
+      "source_location": "L1"
+    },
+    {
       "id": "src_models_py_basemodel",
       "label": "BaseModel",
       "_origin": "ast",
@@ -3803,6 +3781,28 @@
       "community_name": "Job",
       "file_type": "code",
       "norm_label": "basemodel",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "src_naukri_scraper",
+      "label": "naukri_scraper.py",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Job",
+      "file_type": "code",
+      "norm_label": "naukri_scraper.py",
+      "source_file": "src/naukri_scraper.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_naukri_scraper_py_path",
+      "label": "Path",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Job",
+      "file_type": "code",
+      "norm_label": "path",
       "source_file": "",
       "source_location": ""
     },
@@ -3815,6 +3815,17 @@
       "file_type": "code",
       "norm_label": "test_models.py",
       "source_file": "tests/test_models.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_models_rationale_1",
+      "label": "Layer 3 (validation: Pydantic) + Layer 4 (persistence: SQLAlchemy ORM). Data\u2026",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Job",
+      "file_type": "rationale",
+      "norm_label": "layer 3 (validation: pydantic) + layer 4 (persistence: sqlalchemy orm). data...",
+      "source_file": "src/models.py",
       "source_location": "L1"
     },
     {
@@ -3893,6 +3904,50 @@
       "norm_label": "``jobs`` table: one row per unique naukri job id. ``first_seen``/``last_seen``...",
       "source_file": "src/models.py",
       "source_location": "L83"
+    },
+    {
+      "id": "src_naukri_scraper_rationale_1",
+      "label": "Naukri.com scraper with honeypot / anti-bot hardening. Personal-use design: -\u2026",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Job",
+      "file_type": "rationale",
+      "norm_label": "naukri.com scraper with honeypot / anti-bot hardening. personal-use design: -...",
+      "source_file": "src/naukri_scraper.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_naukri_scraper_rationale_246",
+      "label": "Map extractor output (in-page JS camelCase) to Job snake_case fields. Also\u2026",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Job",
+      "file_type": "rationale",
+      "norm_label": "map extractor output (in-page js camelcase) to job snake_case fields. also...",
+      "source_file": "src/naukri_scraper.py",
+      "source_location": "L246"
+    },
+    {
+      "id": "src_naukri_scraper_rationale_272",
+      "label": "Validate one raw dict -> Job. Returns None (with warning) on bad data.",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Job",
+      "file_type": "rationale",
+      "norm_label": "validate one raw dict -> job. returns none (with warning) on bad data.",
+      "source_file": "src/naukri_scraper.py",
+      "source_location": "L272"
+    },
+    {
+      "id": "src_naukri_scraper_rationale_417",
+      "label": "Timestamped JSON + CSV file export (SQLite remains the source of truth).",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "Job",
+      "file_type": "rationale",
+      "norm_label": "timestamped json + csv file export (sqlite remains the source of truth).",
+      "source_file": "src/naukri_scraper.py",
+      "source_location": "L417"
     },
     {
       "id": "tests_test_models_rationale_1",
@@ -4208,6 +4263,18 @@
       "norm_label": "what you must do when invoked",
       "source_file": ".opencode/skills/graphify/SKILL.md",
       "source_location": "L49"
+    },
+    {
+      "id": "docs_code_explanation",
+      "label": "CODE_EXPLANATION.md",
+      "_origin": "ast",
+      "community": 15,
+      "community_name": "Project Document \u2014 Secure Naukri.com Jobs Collector",
+      "file_type": "document",
+      "node_kind": "page",
+      "norm_label": "code_explanation.md",
+      "source_file": "docs/CODE_EXPLANATION.md",
+      "source_location": "L1"
     },
     {
       "id": "docs_graphify",
@@ -4809,83 +4876,6 @@
       "source_location": ""
     },
     {
-      "id": "fixture",
-      "label": "fixture",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "fixture",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "playwright",
-      "label": "Playwright",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "playwright",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "scripts_bot_probe",
-      "label": "bot_probe.py",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "bot_probe.py",
-      "source_file": "scripts/bot_probe.py",
-      "source_location": "L1"
-    },
-    {
-      "id": "scripts_bot_probe_py_path",
-      "label": "Path",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "path",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "src_stealth_browser",
-      "label": "stealth_browser.py",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "stealth_browser.py",
-      "source_file": "src/stealth_browser.py",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_stealth_browser_py_browsercontext",
-      "label": "BrowserContext",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "browsercontext",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "tests_conftest",
-      "label": "conftest.py",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "code",
-      "norm_label": "conftest.py",
-      "source_file": "tests/conftest.py",
-      "source_location": "L1"
-    },
-    {
       "id": "tests_test_stealth",
       "label": "test_stealth.py",
       "_origin": "ast",
@@ -4894,39 +4884,6 @@
       "file_type": "code",
       "norm_label": "test_stealth.py",
       "source_file": "tests/test_stealth.py",
-      "source_location": "L1"
-    },
-    {
-      "id": "scripts_bot_probe_rationale_1",
-      "label": "Live bot-detection probe \u2014 implements docs/BOT_DETECTION.md Test B/C. Uses the\u2026",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "rationale",
-      "norm_label": "live bot-detection probe \u2014 implements docs/bot_detection.md test b/c. uses the...",
-      "source_file": "scripts/bot_probe.py",
-      "source_location": "L1"
-    },
-    {
-      "id": "scripts_bot_probe_rationale_78",
-      "label": "Run the full probe; returns the results dict (also saved as JSON).",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "rationale",
-      "norm_label": "run the full probe; returns the results dict (also saved as json).",
-      "source_file": "scripts/bot_probe.py",
-      "source_location": "L78"
-    },
-    {
-      "id": "src_stealth_browser_rationale_1",
-      "label": "Stealth Chromium launcher: persistent profile + uBlock Origin Lite. Stack\u2026",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "rationale",
-      "norm_label": "stealth chromium launcher: persistent profile + ublock origin lite. stack...",
-      "source_file": "src/stealth_browser.py",
       "source_location": "L1"
     },
     {
@@ -4939,61 +4896,6 @@
       "norm_label": "build ``--load-extension`` args for ubol (headed mode only). headless-shell...",
       "source_file": "src/stealth_browser.py",
       "source_location": "L117"
-    },
-    {
-      "id": "src_stealth_browser_rationale_143",
-      "label": "Launch persistent Chromium with stealth defaults + uBO Lite. Own ``*-chromium``\u2026",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "rationale",
-      "norm_label": "launch persistent chromium with stealth defaults + ubo lite. own ``*-chromium``...",
-      "source_file": "src/stealth_browser.py",
-      "source_location": "L143"
-    },
-    {
-      "id": "src_stealth_browser_rationale_179",
-      "label": "Launch the browser (Chromium-only stack). Raises: ValueError: If ``BROWSER``\u2026",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "rationale",
-      "norm_label": "launch the browser (chromium-only stack). raises: valueerror: if ``browser``...",
-      "source_file": "src/stealth_browser.py",
-      "source_location": "L179"
-    },
-    {
-      "id": "src_stealth_browser_rationale_195",
-      "label": "Convenience: returns (playwright_handle, context). Caller must stop().",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "rationale",
-      "norm_label": "convenience: returns (playwright_handle, context). caller must stop().",
-      "source_file": "src/stealth_browser.py",
-      "source_location": "L195"
-    },
-    {
-      "id": "src_stealth_browser_rationale_94",
-      "label": "Install the fallback tracker/ad request-blocker (unless disabled). Aborts\u2026",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "rationale",
-      "norm_label": "install the fallback tracker/ad request-blocker (unless disabled). aborts...",
-      "source_file": "src/stealth_browser.py",
-      "source_location": "L94"
-    },
-    {
-      "id": "tests_conftest_rationale_1",
-      "label": "Shared test fixtures: isolated DB, sample jobs, Playwright fakes. The fakes\u2026",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "rationale",
-      "norm_label": "shared test fixtures: isolated db, sample jobs, playwright fakes. the fakes...",
-      "source_file": "tests/conftest.py",
-      "source_location": "L1"
     },
     {
       "id": "tests_conftest_rationale_182",
@@ -5029,17 +4931,6 @@
       "source_location": "L227"
     },
     {
-      "id": "tests_conftest_rationale_51",
-      "label": "Point SETTINGS.database_url at a tmp file and give a clean engine.",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "rationale",
-      "norm_label": "point settings.database_url at a tmp file and give a clean engine.",
-      "source_file": "tests/conftest.py",
-      "source_location": "L51"
-    },
-    {
       "id": "tests_conftest_rationale_70",
       "label": "Captures route.abort() / route.continue_() decisions for assertions.",
       "_origin": "ast",
@@ -5049,17 +4940,6 @@
       "norm_label": "captures route.abort() / route.continue_() decisions for assertions.",
       "source_file": "tests/conftest.py",
       "source_location": "L70"
-    },
-    {
-      "id": "tests_conftest_rationale_84",
-      "label": "Mouse double; ``fail=True`` makes every action raise (fallback paths).",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "FakeContext",
-      "file_type": "rationale",
-      "norm_label": "mouse double; ``fail=true`` makes every action raise (fallback paths).",
-      "source_file": "tests/conftest.py",
-      "source_location": "L84"
     },
     {
       "id": "tests_test_stealth_rationale_1",
@@ -5530,11 +5410,44 @@
       "source_location": "L24"
     },
     {
+      "id": "playwright",
+      "label": "Playwright",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "code",
+      "norm_label": "playwright",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "scripts_bot_probe",
+      "label": "bot_probe.py",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "code",
+      "norm_label": "bot_probe.py",
+      "source_file": "scripts/bot_probe.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "scripts_bot_probe_py_path",
+      "label": "Path",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "code",
+      "norm_label": "path",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "scripts_practice_ecommerce",
       "label": "practice_ecommerce.py",
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "code",
       "norm_label": "practice_ecommerce.py",
       "source_file": "scripts/practice_ecommerce.py",
@@ -5545,7 +5458,7 @@
       "label": "BaseModel",
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "code",
       "norm_label": "basemodel",
       "source_file": "",
@@ -5556,18 +5469,62 @@
       "label": "Path",
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "code",
       "norm_label": "path",
       "source_file": "",
       "source_location": ""
     },
     {
+      "id": "src_stealth_browser",
+      "label": "stealth_browser.py",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "code",
+      "norm_label": "stealth_browser.py",
+      "source_file": "src/stealth_browser.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_stealth_browser_py_browsercontext",
+      "label": "BrowserContext",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "code",
+      "norm_label": "browsercontext",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
+      "id": "scripts_bot_probe_rationale_1",
+      "label": "Live bot-detection probe \u2014 implements docs/BOT_DETECTION.md Test B/C. Uses the\u2026",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "rationale",
+      "norm_label": "live bot-detection probe \u2014 implements docs/bot_detection.md test b/c. uses the...",
+      "source_file": "scripts/bot_probe.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "scripts_bot_probe_rationale_78",
+      "label": "Run the full probe; returns the results dict (also saved as JSON).",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "rationale",
+      "norm_label": "run the full probe; returns the results dict (also saved as json).",
+      "source_file": "scripts/bot_probe.py",
+      "source_location": "L78"
+    },
+    {
       "id": "scripts_practice_ecommerce_rationale_1",
       "label": "E-commerce practice test \u2014 a few products from Amazon.in + Flipkart. Scope\u2026",
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "rationale",
       "norm_label": "e-commerce practice test \u2014 a few products from amazon.in + flipkart. scope...",
       "source_file": "scripts/practice_ecommerce.py",
@@ -5578,7 +5535,7 @@
       "label": "Close Flipkart's login modal when present (normal dismiss, not a wall).",
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "rationale",
       "norm_label": "close flipkart's login modal when present (normal dismiss, not a wall).",
       "source_file": "scripts/practice_ecommerce.py",
@@ -5589,7 +5546,7 @@
       "label": "Scrape one search page; returns a result dict (blocked or products).",
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "rationale",
       "norm_label": "scrape one search page; returns a result dict (blocked or products).",
       "source_file": "scripts/practice_ecommerce.py",
@@ -5600,22 +5557,77 @@
       "label": "Validated product record (e-commerce twin of the Job contract).",
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "rationale",
       "norm_label": "validated product record (e-commerce twin of the job contract).",
       "source_file": "scripts/practice_ecommerce.py",
       "source_location": "L98"
     },
     {
+      "id": "src_stealth_browser_rationale_1",
+      "label": "Stealth Chromium launcher: persistent profile + uBlock Origin Lite. Stack\u2026",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "rationale",
+      "norm_label": "stealth chromium launcher: persistent profile + ublock origin lite. stack...",
+      "source_file": "src/stealth_browser.py",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_stealth_browser_rationale_143",
+      "label": "Launch persistent Chromium with stealth defaults + uBO Lite. Own ``*-chromium``\u2026",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "rationale",
+      "norm_label": "launch persistent chromium with stealth defaults + ubo lite. own ``*-chromium``...",
+      "source_file": "src/stealth_browser.py",
+      "source_location": "L143"
+    },
+    {
+      "id": "src_stealth_browser_rationale_179",
+      "label": "Launch the browser (Chromium-only stack). Raises: ValueError: If ``BROWSER``\u2026",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "rationale",
+      "norm_label": "launch the browser (chromium-only stack). raises: valueerror: if ``browser``...",
+      "source_file": "src/stealth_browser.py",
+      "source_location": "L179"
+    },
+    {
+      "id": "src_stealth_browser_rationale_195",
+      "label": "Convenience: returns (playwright_handle, context). Caller must stop().",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "rationale",
+      "norm_label": "convenience: returns (playwright_handle, context). caller must stop().",
+      "source_file": "src/stealth_browser.py",
+      "source_location": "L195"
+    },
+    {
       "id": "src_stealth_browser_rationale_83",
       "label": "Sleep a random politeness interval (defaults: SETTINGS min/max delay).\u2026",
       "_origin": "ast",
       "community": 4,
-      "community_name": "practice_ecommerce.py",
+      "community_name": "launch_context",
       "file_type": "rationale",
       "norm_label": "sleep a random politeness interval (defaults: settings min/max delay)....",
       "source_file": "src/stealth_browser.py",
       "source_location": "L83"
+    },
+    {
+      "id": "src_stealth_browser_rationale_94",
+      "label": "Install the fallback tracker/ad request-blocker (unless disabled). Aborts\u2026",
+      "_origin": "ast",
+      "community": 4,
+      "community_name": "launch_context",
+      "file_type": "rationale",
+      "norm_label": "install the fallback tracker/ad request-blocker (unless disabled). aborts...",
+      "source_file": "src/stealth_browser.py",
+      "source_location": "L94"
     },
     {
       "id": "src_parser",
@@ -11022,7 +11034,7 @@
     },
     {
       "source": "docs_code_explanation_9_mermaid_diagrams_detail",
-      "target": "docs_code_explanation_9_2_class_data_model_diagram",
+      "target": "docs_code_explanation_9_1b_live_network_trace_measured_session_on_naukri_com_2026_09_19",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -11033,13 +11045,24 @@
     },
     {
       "source": "docs_code_explanation_9_mermaid_diagrams_detail",
+      "target": "docs_code_explanation_9_2_class_data_model_diagram",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/CODE_EXPLANATION.md",
+      "source_location": "L539",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_code_explanation_9_mermaid_diagrams_detail",
       "target": "docs_code_explanation_9_3_database_er",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L534",
+      "source_location": "L606",
       "weight": 1.0
     },
     {
@@ -11050,7 +11073,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L566",
+      "source_location": "L638",
       "weight": 1.0
     },
     {
@@ -11061,7 +11084,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L591",
+      "source_location": "L663",
       "weight": 1.0
     },
     {
@@ -11072,7 +11095,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L610",
+      "source_location": "L682",
       "weight": 1.0
     },
     {
@@ -11165,13 +11188,24 @@
     },
     {
       "source": "docs_code_explanation_full_code_explanation_secure_naukri_com_jobs_collector",
+      "target": "docs_code_explanation_2_start_point_how_the_app_boots",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/CODE_EXPLANATION.md",
+      "source_location": "L70",
+      "weight": 1.0
+    },
+    {
+      "source": "docs_code_explanation_full_code_explanation_secure_naukri_com_jobs_collector",
       "target": "docs_code_explanation_10_testing_architecture_why_100_is_feasible",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L628",
+      "source_location": "L700",
       "weight": 1.0
     },
     {
@@ -11182,7 +11216,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L645",
+      "source_location": "L717",
       "weight": 1.0
     },
     {
@@ -11193,18 +11227,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L654",
-      "weight": 1.0
-    },
-    {
-      "source": "docs_code_explanation_full_code_explanation_secure_naukri_com_jobs_collector",
-      "target": "docs_code_explanation_2_start_point_how_the_app_boots",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/CODE_EXPLANATION.md",
-      "source_location": "L70",
+      "source_location": "L726",
       "weight": 1.0
     },
     {
@@ -15630,6 +15653,17 @@
       "weight": 1.0
     },
     {
+      "source": "docs_project",
+      "target": "docs_code_explanation",
+      "relation": "references",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/PROJECT.md",
+      "source_location": "L128",
+      "weight": 1.0
+    },
+    {
       "source": "src_scheduler_run_scheduled",
       "target": "src_main_do_scrape",
       "relation": "indirect_call",
@@ -15908,5 +15942,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "843a282ab16e01fc0ff944f0dd43649aa61f1ac2"
+  "built_at_commit": "10556ddcc91178bd06835dad70cc7208cff90858"
 }
