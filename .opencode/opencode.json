@@ -1,6 +1,30 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": [
-    ".opencode/plugins/graphify.js"
-  ]
+  "plugins": [],
+  "mcp": {
+    "servers": {
+      "github": {
+        "type": "remote",
+        "url": "https://api.githubcopilot.com/mcp/",
+        "oauth": false,
+        "headers": {
+          "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+        }
+      },
+      "agent-skills": {
+        "type": "local",
+        "command": ["npx", "-y", "awesome-agent-skills-mcp"],
+        "codemode": false,
+        "environment": {
+          "SKILLS_CACHE_DIR": "{env:HOME}/.cache/awesome-agent-skills",
+          "SKILLS_SYNC_INTERVAL": "60",
+          "LOG_LEVEL": "info"
+        },
+        "timeout": {
+          "startup": 180000,
+          "catalog": 120000
+        }
+      }
+    }
+  }
 }

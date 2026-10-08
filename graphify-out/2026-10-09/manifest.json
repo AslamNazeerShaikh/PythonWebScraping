@@ -222,9 +222,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1791486845.2108371,
-    "seen": 1791486857.4685938,
-    "ast_hash": "ebac2eefa300f2bfba9e105fec9c0932",
+    "mtime": 1791486586.040554,
+    "seen": 1791486602.53695,
+    "ast_hash": "97a0c5cad3a6d35acd0fe335d9b1d95d",
     "semantic_hash": ""
   },
   "docs/BOT_DETECTION.md": {
@@ -267,12 +267,6 @@
     "mtime": 1791486586.0405667,
     "seen": 1791486602.5369768,
     "ast_hash": "6f8b17cae0b37087c1564ee77491fc91",
-    "semantic_hash": ""
-  },
-  "docs/OPENCODE_SETUP.md": {
-    "mtime": 1791486843.1371665,
-    "seen": 1791486857.46863,
-    "ast_hash": "db8b33f88214e3b60b8b6a310e9a32f9",
     "semantic_hash": ""
   }
 }

@@ -60,6 +60,8 @@ pytest
 - `docs/GRAPHIFY.md` — queryable knowledge graph ([Graphify-Labs/graphify](https://github.com/Graphify-Labs/graphify)): `graphify query "<q>"`, `graphify path "<A>" "<B>"`, open `graphify-out/graph.html`
 - `docs/TESTING.md` — practice progression (Books → Quotes → … → Naukri), failure taxonomy, suite guide
 - `docs/BOT_DETECTION.md` — Test A/B/C signal matrix (measure exposure, never spoof)
+- `docs/LINKEDIN_RESEARCH.md` — LinkedIn expansion research (skills catalog, MCP servers, R1–R4 repo mapping, phased plan)
+- `docs/OPENCODE_SETUP.md` — opencode v2 config (plugin, skills, MCP servers, verify commands)
 
 > **Heads-up (verified on this Mac):** Naukri blocks **headless** browsers — always do the
 > **first run headful** (default) so you can solve the CAPTCHA / log in once. The persistent

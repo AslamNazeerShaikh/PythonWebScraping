@@ -1,11 +1,11 @@
 # Graph Report - PythonWebScraping  (2026-10-09)
 
 ## Corpus Check
-- 46 files · ~34,427 words
+- 45 files · ~33,980 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 552 nodes · 908 edges · 31 communities (24 shown, 5 thin omitted)
+- 545 nodes · 902 edges · 30 communities (23 shown, 5 thin omitted)
 - Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 24 edges (avg confidence: 0.92)
 - Token cost: 0 input · 0 output
 
@@ -19,7 +19,7 @@
 - main.py
 - FakeContext
 - test_log_scheduler.py
-- practice_ecommerce.py
+- launch_context
 - test_parser.py
 - test_main.py
 - test_config.py
@@ -43,7 +43,6 @@
 - graphify reference: transcribe video and audio
 - AGENTS.md
 - extraction-spec.md
-- OpenCode Setup (v2) — plugins, skills, MCP servers
 
 ## God Nodes (most connected - your core abstractions)
 1. `FakePage` - 38 edges
@@ -72,7 +71,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (31 total, 5 thin omitted)
+## Communities (30 total, 5 thin omitted)
 
 ### Community 0 - "test_scraper.py"
 Cohesion: 0.05
@@ -83,16 +82,16 @@ Cohesion: 0.05
 Nodes (72): DataFrame, DeclarativeBase, command, Session, Central configuration — every tunable lives here, loaded from `.env`.…, All runtime settings. Grouped by concern; see `.env.example`., Settings, count_jobs() (+64 more)
 
 ### Community 2 - "FakeContext"
-Cohesion: 0.05
-Nodes (49): Exception, fixture, Playwright, main(), probe(), Path, Live bot-detection probe — implements docs/BOT_DETECTION.md Test B/C. Uses the…, Run the full probe; returns the results dict (also saved as JSON). (+41 more)
+Cohesion: 0.07
+Nodes (33): Exception, fixture, _extension_args(), Build ``--load-extension`` args for uBOL (headed mode only). Headless-shell…, fake_playwright(), FakeBrowserType, FakeContext, FakeMouse (+25 more)
 
 ### Community 3 - "test_log_scheduler.py"
 Cohesion: 0.15
 Nodes (11): Logging setup — one call at startup, standard library only. We deliberately use…, Configure root logging to stdout. Args: level: Level name such as…, setup_logging(), _FakeSched, Tests for src.log and src.scheduler., BlockingScheduler stand-in — records jobs, scriptable start()., test_run_scheduled_handles_interrupt(), _factory() (+3 more)
 
-### Community 4 - "practice_ecommerce.py"
-Cohesion: 0.18
-Nodes (13): _dismiss_flipkart_login(), main(), Product, BaseModel, Path, E-commerce practice test — a few products from Amazon.in + Flipkart. Scope…, Close Flipkart's login modal when present (normal dismiss, not a wall)., Scrape one search page; returns a result dict (blocked or products). (+5 more)
+### Community 4 - "launch_context"
+Cohesion: 0.09
+Nodes (29): Playwright, main(), probe(), Path, Live bot-detection probe — implements docs/BOT_DETECTION.md Test B/C. Uses the…, Run the full probe; returns the results dict (also saved as JSON)., _dismiss_flipkart_login(), main() (+21 more)
 
 ### Community 5 - "test_parser.py"
 Cohesion: 0.15
@@ -166,29 +165,25 @@ Nodes (3): For --cluster-only, For --update (incremental re-extraction), graphif
 Cohesion: 0.10
 Nodes (20): codemode, environment, timeout, type, LOG_LEVEL, SKILLS_CACHE_DIR, SKILLS_SYNC_INTERVAL, headers (+12 more)
 
-### Community 30 - "OpenCode Setup (v2) — plugins, skills, MCP servers"
-Cohesion: 0.29
-Nodes (6): 1. Config file — `.opencode/opencode.json`, 2. Plugin — `.opencode/plugins/graphify.js`, 3. MCP servers, 4. Skills — `.opencode/skills/`, 5. Verify (run after any change here), OpenCode Setup (v2) — plugins, skills, MCP servers
-
 ## Knowledge Gaps
-- **133 isolated node(s):** `$schema`, `plugins`, `type`, `url`, `oauth` (+128 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 306 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **128 isolated node(s):** `$schema`, `plugins`, `type`, `url`, `oauth` (+123 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 300 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **5 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Job` connect `Job` to `test_scraper.py`, `main.py`, `FakeContext`?**
-  _High betweenness centrality (0.079) - this node is a cross-community bridge._
+  _High betweenness centrality (0.081) - this node is a cross-community bridge._
 - **Why does `parse_search_html()` connect `test_parser.py` to `main.py`?**
-  _High betweenness centrality (0.057) - this node is a cross-community bridge._
-- **Why does `launch_context()` connect `FakeContext` to `practice_tests.py`, `main.py`, `practice_ecommerce.py`?**
-  _High betweenness centrality (0.053) - this node is a cross-community bridge._
+  _High betweenness centrality (0.058) - this node is a cross-community bridge._
+- **Why does `launch_context()` connect `launch_context` to `practice_tests.py`, `main.py`, `FakeContext`?**
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
 - **Are the 7 inferred relationships involving `Job` (e.g. with `fetch_all_jobs()` and `upsert_jobs()`) actually correct?**
   _`Job` has 7 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 2 inferred relationships involving `upsert_jobs()` (e.g. with `Job` and `JobRow`) actually correct?**
   _`upsert_jobs()` has 2 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `$schema`, `plugins`, `type` to the rest of the system?**
-  _133 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _128 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `test_scraper.py` be split into smaller, more focused modules?**
   _Cohesion score 0.05468215994531784 - nodes in this community are weakly interconnected._
