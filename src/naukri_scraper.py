@@ -62,8 +62,7 @@ SEARCH_CANDIDATES = {
     "experience": ["#experienceDD",
                    'input[aria-label="Select experience"]',
                    'input[placeholder="Select experience"]'],
-    "search_btn": [".nI-gNb-sb__icon-wrapper",
-                   'button[aria-label="Search"]'],
+    "experience_option": ["li"],
 }
 
 
@@ -371,22 +370,82 @@ def extract_listing_cards(page: Page) -> list[dict]:
     return jobs
 
 
-def with_page_param(url: str, pnum: int) -> str:
-    """Return ``url`` with its ``page`` query param set (for post-bar paging)."""
+def slugify_keywords(text: str) -> str:
+    """Slugify a keyword string the way Naukri's own search box does.
+
+    Derived from a live manual search (``c-sharp-asp-dot-net-core-...``):
+    lowercase, ``#`` → ``sharp``, ``.`` → ``dot``, commas dropped,
+    whitespace → dashes. Unit-tested against that exact manual slug.
+    """
+    s = (text or "").lower()
+    s = s.replace("#", " sharp ").replace(".", " dot ").replace(",", "")
+    s = re.sub(r"[^a-z0-9\s-]", "", s)
+    s = re.sub(r"\s+", "-", s.strip())
+    return re.sub(r"-+", "-", s).strip("-")
+
+
+def build_slug_search_url(keywords: str, location: str, experience: int,
+                          days: int, page: int = 1) -> str:
+    """Skills-scan fallback URL mirroring a manual Naukri search exactly.
+
+    ``/<slug>-jobs-in-<loc>?k=&l=&experience=&jobAge=&page=`` — the
+    lordzohar-bot pattern (``/{keyword}-jobs[-in-{location}]``) plus the
+    user-verified ``jobAge`` freshness param. Verified live: loads 20
+    anchors with a stable clean slug. The collector's legacy
+    ``/jobs?k=&l=`` builder is untouched.
+    """
+    slug = f"{slugify_keywords(keywords)}-jobs-in-{location.lower()}"
+    q = {"k": keywords, "l": location, "experience": str(experience),
+         "jobAge": str(days), "page": str(page)}
+    return f"https://www.naukri.com/{slug}?{urllib.parse.urlencode(q)}"
+
+
+def with_page_param(url: str, pnum: int, experience: int, days: int) -> str:
+    """Set page + filters on a landed search URL (post-bar paging).
+
+    Re-asserts ``experience``/``jobAge`` (idempotent when the bar already
+    applied them; repairs the run when the dropdown step was skipped).
+    """
     parts = urllib.parse.urlsplit(url)
     q = dict(urllib.parse.parse_qsl(parts.query))
-    q["page"] = str(pnum)
+    q.update({"page": str(pnum), "experience": str(experience),
+              "jobAge": str(days)})
     return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(q)))
+
+
+def _pick_option(page: Page, candidates: list[str], text: str) -> bool:
+    """Click the dropdown option matching ``text``; False when none matches.
+
+    Exact (case-insensitive) hit first, then substring — e.g. ``6 years``
+    picks its own row, never ``16 years``. Text matching (ankitbaghel01's
+    discipline) survives the class renames automated visits get.
+    """
+    sel = _first_match(page, candidates)
+    if sel is None:
+        return False
+    texts = page.evaluate(
+        f"/*OPTION_TEXTS*/Array.from(document.querySelectorAll('{sel}')).map(e=>((e.innerText||e.textContent)||'').trim())") or []
+    want = (text or "").strip().casefold()
+    for i, current in enumerate(texts):
+        if want and current.casefold() == want:
+            page.evaluate(f"document.querySelectorAll('{sel}')[{i}].click()")
+            return True
+    for i, current in enumerate(texts):
+        if want and want in current.casefold():
+            page.evaluate(f"document.querySelectorAll('{sel}')[{i}].click()")
+            return True
+    return False
 
 
 def submit_searchbar(page: Page, keywords: str, location: str,
                      experience: int) -> str:
     """Drive Naukri's search bar like a human; return the landed results URL.
 
-    Fills the keyword suggestor, picks the location suggestion, sets the
-    experience dropdown, and clicks Search — the same inputs a human types
-    into ``ni-gnb-searchbar``. Raises on failure so the caller can fall back
-    to direct-URL navigation (which never breaks the run).
+    Fills the keyword/location suggestors (variant-tolerant resolution),
+    picks the location suggestion and the ``<N> years`` experience option by
+    visible text, then submits with Enter (proven live — the search button
+    node is absent in the served variant). Raises on failure so the caller
+    falls back to slug-URL navigation (which never breaks the run).
     """
     log.info("Skills search via search bar: %r in %s (%sy)", keywords,
              location, experience)
@@ -396,28 +455,24 @@ def submit_searchbar(page: Page, keywords: str, location: str,
     kw_sel = _first_match(page, SEARCH_CANDIDATES["keywords"])
     loc_sel = _first_match(page, SEARCH_CANDIDATES["location"])
     exp_sel = _first_match(page, SEARCH_CANDIDATES["experience"])
-    btn_sel = _first_match(page, SEARCH_CANDIDATES["search_btn"])
-    if not all([kw_sel, loc_sel, exp_sel, btn_sel]):
+    if not all([kw_sel, loc_sel, exp_sel]):
         raise RuntimeError("search bar variant without known inputs")
-    assert kw_sel and loc_sel and exp_sel and btn_sel  # narrowed for typing
+    assert kw_sel and loc_sel and exp_sel  # narrowed for typing
     page.fill(kw_sel, keywords)
     page.wait_for_timeout(800)
     page.fill(loc_sel, location)
-    try:
-        opt_sel = _first_match(page, SEARCH_CANDIDATES["location_option"])
-        if opt_sel is None:
-            raise RuntimeError("no location suggestion")
-        page.wait_for_selector(opt_sel, timeout=8000)
-        page.click(opt_sel)  # first suggestion (e.g. Pune)
-    except Exception:
+    page.wait_for_timeout(1500)  # let suggestions render
+    if not _pick_option(page, SEARCH_CANDIDATES["location_option"], location):
         log.info("Location suggestion skipped — typed text kept")
     try:
         page.click(exp_sel)
-        page.fill(exp_sel, f"{experience} years")
-        page.keyboard.press("Enter")
+        if not _pick_option(page, SEARCH_CANDIDATES["experience_option"],
+                            f"{experience} years"):
+            log.info("Experience option missing — typed search continues")
     except Exception:
         log.info("Experience dropdown skipped — search continues without it")
-    page.click(btn_sel)
+    page.click(kw_sel)
+    page.keyboard.press("Enter")
     page.wait_for_selector('a[href*="/job-listings-"]', timeout=15000)
     log.info("Search bar landed: %s", page.url)
     return page.url
@@ -653,12 +708,13 @@ def run_skills_scan(context: BrowserContext, keywords: str, location: str,
                     landed = submit_searchbar(page, keywords, location, experience)
                     raw_jobs = extract_listing_cards(page)
                 except Exception as e:
-                    log.warning("Search-bar submit failed (%s) — URL fallback", e)
+                    log.warning("Search-bar submit failed (%s) — slug fallback", e)
                     raw_jobs = scrape_search_page(
-                        page, build_search_url(keywords, location,
-                                               experience, days, pnum))
+                        page, build_slug_search_url(keywords, location,
+                                                    experience, days, pnum))
             else:
-                raw_jobs = scrape_search_page(page, with_page_param(landed, pnum))
+                raw_jobs = scrape_search_page(
+                    page, with_page_param(landed, pnum, experience, days))
         except Exception as e:
             log.error("Search page failed: %s", e)
             human_pause()

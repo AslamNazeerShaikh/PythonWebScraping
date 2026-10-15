@@ -146,6 +146,10 @@ class FakePage:
         self.click_plan: list = []
         #: Scripted querySelectorAll counts (consumed per call).
         self.query_counts: list[int] = []
+        #: Scripted dropdown option texts (returned whole per Array.from call).
+        self.option_texts: list[str] = []
+        #: Every evaluate() call (proves indexed option clicks ran).
+        self.evals: list[str] = []
         #: Current URL (search-bar submit returns this as the landed URL).
         self.url = "https://www.naukri.com/"
 
@@ -177,8 +181,13 @@ class FakePage:
 
     # -- JS evaluation (dispatches on markers in the real query strings) --
     def evaluate(self, js: str):
+        self.evals.append(js)
         if 'innerText.slice(0,4000)' in js:
             return self.body_text
+        if '/*OPTION_TEXTS*/' in js:
+            return list(self.option_texts)  # dropdown texts for _pick_option
+        if '.click()' in js:
+            return None  # indexed option click (recorded in evals)
         if js.lstrip().startswith('document.querySelectorAll'):
             if self.query_counts:
                 return self.query_counts.pop(0)

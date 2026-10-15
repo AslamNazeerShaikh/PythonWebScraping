@@ -100,12 +100,15 @@ unchanged. Browse via dashboard or `GET /api/logs[/{name}]`.
 
 `POST /api/skills {keywords (comma titles), location, experience, days,
 pages, max_jobs (default 100, cap 200)}` starts a `skills` run: page 1 is
-submitted through Naukri's own search bar (keyword suggestor + location
-suggestion + experience dropdown, like manual typing). The bar is resolved
-variant-tolerantly (proven classes first, then placeholder/aria-label
-semantics — automated visits get different markup); any failure falls
-back to `?k=<all titles>` URL navigation, then pages 2+ continue in the
-same session. Detail enrichment for key skills next (no relevance filter —
+submitted through Naukri's own search bar (keyword/location suggestor
+fills resolved variant-tolerantly, location + `<N> years` options picked
+by visible text per ankitbaghel01's text-selector discipline, submitted
+with Enter — proven live to land the clean manual-style slug). Any bar
+failure falls back to a slug-style URL (`/<slug>-jobs-in-<loc>?k=&l=
+&experience=&jobAge=` — the lordzohar-bot `/{keyword}-jobs` pattern plus
+your verified `jobAge` freshness param; verified live with 20 anchors),
+then pages 2+ continue in the same session with filters re-asserted.
+Detail enrichment for key skills next (no relevance filter —
 the titles are the query), then a frequency
 report (top 30, one vote per posting, case-folded). Every skill carries a
 company breakdown (`companies: [{name, count}]`, count desc) so a skill

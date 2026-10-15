@@ -465,8 +465,6 @@ def test_submit_searchbar_drives_bar_inputs(monkeypatch):
     assert landed == page.url == "https://www.naukri.com/"
     assert (ns.SEARCH_CANDIDATES["keywords"][0], "C#, ASP.Net Core") in page.fills
     assert (ns.SEARCH_CANDIDATES["location"][0], "pune") in page.fills
-    assert (ns.SEARCH_CANDIDATES["experience"][0], "6 years") in page.fills
-    assert ns.SEARCH_CANDIDATES["search_btn"][0] in page.clicks
     assert "Enter" in page.keyboard.presses
     assert page.goto_urls == ["https://www.naukri.com/"]
 
@@ -474,10 +472,9 @@ def test_submit_searchbar_drives_bar_inputs(monkeypatch):
 def test_submit_searchbar_experience_fallback(monkeypatch):
     _tune_skills(monkeypatch)
     page = FakePage()
-    page.click_plan = [None, RuntimeError("dropdown stuck")]
+    page.click_plan = [RuntimeError("dropdown stuck")]
     landed = ns.submit_searchbar(page, "x", "pune", 6)
     assert landed == page.url  # dropdown skipped, typed search still submitted
-    assert ns.SEARCH_CANDIDATES["search_btn"][0] in page.clicks
 
 
 def test_skills_scan_bar_failure_uses_url_fallback(monkeypatch):
@@ -487,28 +484,43 @@ def test_skills_scan_bar_failure_uses_url_fallback(monkeypatch):
     page.selector_fail = True  # no suggestions, no cards -> submit raises
     rep = ns.run_skills_scan(FakeContext(page), "a", "pune", 6, 7, 1, 10)
     assert rep["jobs_scanned"] == 1  # fallback found the card, run survived
-    assert any("/jobs?" in u for u in page.goto_urls)  # URL fallback was taken
+    assert any("-jobs-in-pune?" in u for u in page.goto_urls)  # slug fallback taken
 
 
-def test_with_page_param_sets_page():
-    assert ns.with_page_param("https://www.naukri.com/x?k=a", 3) == \
-        "https://www.naukri.com/x?k=a&page=3"
-    assert ns.with_page_param("https://www.naukri.com/x?k=a&page=1", 3).endswith("page=3")
+def test_with_page_param_sets_page_and_filters():
+    out = ns.with_page_param("https://www.naukri.com/x?k=a", 3, 6, 7)
+    assert "page=3" in out and "experience=6" in out and "jobAge=7" in out
+
+
+def test_slugify_matches_manual_search():
+    # Ground truth: the user's own manual Naukri URL slug, character-exact.
+    assert ns.slugify_keywords(
+        "C#, ASP.Net Core, .NET Application Developer, "
+        "Full Stack .Net Developer, Net Development, .Net Core") == \
+        "c-sharp-asp-dot-net-core-dot-net-application-developer-\
+full-stack-dot-net-developer-net-development-dot-net-core"
+
+
+def test_build_slug_search_url_mirrors_manual():
+    url = ns.build_slug_search_url("C#, ASP.Net Core", "pune", 6, 7, 1)
+    assert url.startswith("https://www.naukri.com/c-sharp-asp-dot-net-core-jobs-in-pune?")
+    assert "k=C%23%2C+ASP.Net+Core" in url and "l=pune" in url
+    assert "experience=6" in url and "jobAge=7" in url
 
 
 def test_submit_searchbar_resolves_variant_inputs(monkeypatch):
     _tune_skills(monkeypatch)
     page = FakePage()
     # Bot-variant homepage: class selectors absent, semantic ones present.
-    page.query_counts = [0, 0, 3, 0, 2, 0, 0, 1, 0, 1, 0, 1]
+    page.query_counts = [0, 0, 3, 0, 2, 0, 0, 1, 0, 1, 1]
+    page.option_texts = ["Pune", "Mumbai", "6 years"]
     landed = ns.submit_searchbar(page, "C#, x", "pune", 6)
     assert landed == page.url
     cands = ns.SEARCH_CANDIDATES
     assert (cands["keywords"][2], "C#, x") in page.fills
     assert (cands["location"][1], "pune") in page.fills
-    assert (cands["experience"][2], "6 years") in page.fills
-    assert cands["location_option"][1] in page.clicks
-    assert cands["search_btn"][1] in page.clicks
+    assert cands["location_option"][1] in str(page.evals)  # indexed option click ran
+    assert "search_btn" not in cands  # submit is Enter-based, no button
 
 
 def test_submit_searchbar_missing_option_keeps_typed(monkeypatch):
@@ -528,3 +540,23 @@ def test_submit_searchbar_absent_bar_raises(monkeypatch):
     with _pytest.raises(RuntimeError, match="without known inputs"):
         ns.submit_searchbar(page, "x", "pune", 6)
     assert page.fills == []  # failed fast: nothing typed anywhere
+
+
+def test_pick_option_exact_substring_and_miss():
+    page = FakePage()
+    page.query_counts = [1]
+    page.option_texts = ["Fresher (less than 1 year)", "6 years", "16 years"]
+    assert ns._pick_option(page, ["li"], "6 years") is True  # exact beats 16
+    assert "[1].click()" in str(page.evals)
+    page2 = FakePage()
+    page2.query_counts = [1]
+    page2.option_texts = ["16 years"]
+    assert ns._pick_option(page2, ["li"], "6 years") is True  # substring fallback
+    page3 = FakePage()
+    page3.query_counts = [1]
+    page3.option_texts = ["Fresher"]
+    assert ns._pick_option(page3, ["li"], "6 years") is False
+    assert ns._pick_option(page3, ["li"], "") is False
+    page4 = FakePage()
+    page4.query_counts = [0]
+    assert ns._pick_option(page4, ["li"], "6 years") is False  # no nodes
