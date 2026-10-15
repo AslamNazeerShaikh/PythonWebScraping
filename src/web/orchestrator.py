@@ -122,8 +122,9 @@ def default_scrape_runner(record: RunRecord) -> dict:
     params = record.params
     if params.get("keywords"):
         SETTINGS.keywords = str(params["keywords"])
-    if params.get("locations"):
-        SETTINGS.locations = [s.strip().lower() for s in str(params["locations"]).split(",") if s.strip()]
+    loc = params.get("locations") or params.get("location") or ""
+    if loc:
+        SETTINGS.locations = [s.strip().lower() for s in str(loc).split(",") if s.strip()]
     for key in ("experience", "date_filter", "max_pages_per_search", "max_jobs_total"):
         alias = {"experience": "experience", "date_filter": "days",
                  "max_pages_per_search": "pages", "max_jobs_total": "max_jobs"}[key]

@@ -260,7 +260,7 @@ def test_default_scrape_runner_failure_restores_settings(fresh_db, tmp_path,
     monkeypatch.setattr(ns, "run_scrape", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("net down")))
     with pytest.raises(RuntimeError, match="net down"):
         default_scrape_runner(RunRecord(run_id="s", kind="scrape", seq=1,
-                                        params={}))
+                                        params={"location": "pune,hyderabad"}))
     assert SETTINGS.keywords == before_kw
 
 

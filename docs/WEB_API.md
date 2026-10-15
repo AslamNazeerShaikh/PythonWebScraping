@@ -123,6 +123,8 @@ then pages 2+ continue in the same session with filters re-asserted.
 Pagination follows Naukri's own link scheme (path suffix `...-pune-2`,
 the lordzohar pattern — `?page=` on slug URLs provably reloads page 1,
 which is why early runs stopped near ~20 jobs instead of covering all).
+The main collection loop uses the same slug paging (the legacy
+`/jobs?k=&page=` form provably redirects to one slug page, dropping `page`).
 Detail enrichment for key skills next (no relevance filter —
 the titles are the query), then a frequency
 report (top 30, one vote per posting, case-folded). Every skill carries a

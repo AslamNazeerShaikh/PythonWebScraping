@@ -531,8 +531,8 @@ def run_scrape(context: BrowserContext,
             if stopped():
                 log.info("Scrape cancel requested — stopping after %d jobs", len(all_jobs))
                 break
-            url = build_search_url(keywords, location, SETTINGS.experience,
-                                   SETTINGS.date_filter, pnum)
+            url = build_slug_search_url(keywords, location, SETTINGS.experience,
+                                          SETTINGS.date_filter, pnum)
             log.info("Search %s p%d: %s", location, pnum, url)
             try:
                 raw_jobs = scrape_search_page(page, url)
