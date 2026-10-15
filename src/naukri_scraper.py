@@ -516,16 +516,19 @@ def build_skills_report(jobs: list[Job]) -> dict:
             "unique_skills": len(forms), "top": top}
 
 
-def run_skills_scan(context: BrowserContext, titles: list[str], location: str,
-                    experience: int, days: int, pages_per_title: int,
+def run_skills_scan(context: BrowserContext, keywords: str, location: str,
+                    experience: int, days: int, pages: int,
                     max_jobs: int, should_stop: StopHook | None = None,
                     on_progress: ProgressHook | None = None) -> dict:
-    """Scan detail pages for key skills: titles × pages → enriched → report.
+    """Scan detail pages for key skills: one search → enriched → report.
 
-    Same polite machinery as :func:`run_scrape` (pauses, bot-wall handling,
-    honeypot-safe extraction) but WITHOUT the relevance filter — the titles
-    given are already the query. Analysis-only: nothing is written to the
-    DB; the report (plus a .txt written by the caller) is the artifact.
+    The full comma-separated keyword string goes into a SINGLE search
+    (``?k=<all titles>``), exactly like Naukri's own search box — Naukri
+    matches across the titles itself. Same polite machinery as
+    :func:`run_scrape` (pauses, bot-wall handling, honeypot-safe
+    extraction) but WITHOUT the relevance filter. Analysis-only: nothing
+    is written to the DB; the report (plus a .txt written by the caller)
+    is the artifact.
     """
     stopped = should_stop or (lambda: False)
 
@@ -535,30 +538,26 @@ def run_skills_scan(context: BrowserContext, titles: list[str], location: str,
 
     page = context.new_page()
     found: dict[str, Job] = {}
-    for title in titles:
-        if stopped():
-            log.info("Skills scan cancel requested — stopping")
+    for pnum in range(1, pages + 1):
+        if len(found) >= max_jobs or stopped():
             break
-        for pnum in range(1, pages_per_title + 1):
-            if len(found) >= max_jobs or stopped():
-                break
-            url = build_search_url(title, location, experience, days, pnum)
-            log.info("Skills search %s p%d: %s", title, pnum, url)
-            try:
-                raw_jobs = scrape_search_page(page, url)
-            except Exception as e:
-                log.error("Search page failed: %s", e)
-                human_pause()
+        url = build_search_url(keywords, location, experience, days, pnum)
+        log.info("Skills search %s p%d: %s", keywords, pnum, url)
+        try:
+            raw_jobs = scrape_search_page(page, url)
+        except Exception as e:
+            log.error("Search page failed: %s", e)
+            human_pause()
+            continue
+        for raw in raw_jobs:
+            job = coerce_job(raw, search_location=location)
+            if job is None or job.job_id in found:
                 continue
-            for raw in raw_jobs:
-                job = coerce_job(raw, search_location=location)
-                if job is None or job.job_id in found:
-                    continue
-                found[job.job_id] = job
-                if len(found) >= max_jobs:
-                    break
-            _report("search", title=title, page=pnum, found=len(found))
-            human_pause()  # politeness between pages
+            found[job.job_id] = job
+            if len(found) >= max_jobs:
+                break
+        _report("search", location=location, page=pnum, found=len(found))
+        human_pause()  # politeness between pages
 
     jobs_list = list(found.values())
     log.info("Skills scan collected %d postings — enriching key skills", len(jobs_list))

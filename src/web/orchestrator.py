@@ -184,8 +184,7 @@ def default_skills_runner(record: RunRecord) -> dict:
     from ..stealth_browser import launch_context
 
     params = record.params
-    titles = [t.strip() for t in str(params.get("keywords") or "").split(",")
-              if t.strip()]
+    keywords = str(params.get("keywords") or "").strip()
     location = str(params.get("location") or "pune").strip().lower()
     experience = params.get("experience") or 6
     days = params.get("days") or 7
@@ -196,7 +195,7 @@ def default_skills_runner(record: RunRecord) -> dict:
     with sync_playwright() as p:
         context = launch_context(p)
         try:
-            report = run_skills_scan(context, titles, location, experience,
+            report = run_skills_scan(context, keywords, location, experience,
                                      days, pages, max_jobs,
                                      should_stop=record.should_stop,
                                      on_progress=record.push_progress)

@@ -640,7 +640,7 @@ def test_default_skills_runner_full(fresh_db, tmp_path, monkeypatch):
     rec = RunRecord(run_id="k", kind="skills", seq=1,
                     params={"keywords": "asp.net core, web api",
                             "location": "pune", "experience": 6,
-                            "days": 7, "pages": 1, "max_jobs": 10})
+                            "days": 7, "pages": 2, "max_jobs": 10})
     summary = default_skills_runner(rec)
     assert summary["jobs_scanned"] == 2 and summary["unique_skills"] == 2
     assert summary["top"][0]["skill"] == "C#" and summary["top"][0]["count"] == 2

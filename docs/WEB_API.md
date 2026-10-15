@@ -99,9 +99,10 @@ unchanged. Browse via dashboard or `GET /api/logs[/{name}]`.
 ## Key-skills scan
 
 `POST /api/skills {keywords (comma titles), location, experience, days,
-pages, max_jobs (default 100, cap 200)}` starts a `skills` run: one search
-per title (freshness-filtered via `jobPostDate`), detail enrichment for key
-skills (no relevance filter — the titles are the query), then a frequency
+pages, max_jobs (default 100, cap 200)}` starts a `skills` run: the full
+keyword string goes into ONE search (`?k=<all titles>`, Naukri matches
+across them), paged to `pages`, then detail enrichment for key skills
+(no relevance filter — the titles are the query), then a frequency
 report (top 30, one vote per posting, case-folded). Every skill carries a
 company breakdown (`companies: [{name, count}]`, count desc) so a skill
 repeated by 4–5 prolific hirers reads honestly — shown as tags under each
