@@ -102,8 +102,11 @@ unchanged. Browse via dashboard or `GET /api/logs[/{name}]`.
 pages, max_jobs (default 100, cap 200)}` starts a `skills` run: one search
 per title (freshness-filtered via `jobPostDate`), detail enrichment for key
 skills (no relevance filter — the titles are the query), then a frequency
-report (top 30, one vote per posting, case-folded). Analysis-only: postings
-are NOT upserted to SQLite; the report + `skills_<ts>.txt` (same shape as
+report (top 30, one vote per posting, case-folded). Every skill carries a
+company breakdown (`companies: [{name, count}]`, count desc) so a skill
+repeated by 4–5 prolific hirers reads honestly — shown as tags under each
+bar (top 5 + "+N more") and as `@ Company xN` lines in the .txt.
+Analysis-only: postings are NOT upserted to SQLite; the report + `skills_<ts>.txt` (same shape as
 the export download) is the artifact, with `verdict` + `duration_s` in the
 summary. Dashboard renders top-5 chips + ranked bars (top 10 numbered) +
 meta + .txt link. Shares the single browser lock (409 when busy) and the

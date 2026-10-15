@@ -475,13 +475,17 @@ def build_skills_report(jobs: list[Job]) -> dict:
     """Aggregate key-skill frequencies across enriched jobs.
 
     Each posting votes once per skill (case-insensitive, dupes collapsed);
-    display casing follows the most common raw form. Returns a JSON-safe
-    report with the top 30 skills by posting count. Pure function.
+    display casing follows the most common raw form. Every skill also carries
+    its company breakdown (which companies asked for it, how many postings
+    each) so company-heavy skills are visible instead of silently repeated.
+    Returns a JSON-safe report with the top 30 skills by posting count.
+    Pure function.
     """
     if not jobs:
         return {"jobs_scanned": 0, "with_skills": 0,
                 "unique_skills": 0, "top": []}
     forms: dict[str, Counter] = {}
+    by_company: dict[str, Counter] = {}
     for job in jobs:
         seen: set[str] = set()
         for raw in job.skills:
@@ -494,10 +498,19 @@ def build_skills_report(jobs: list[Job]) -> dict:
             if counts is None:
                 counts = forms[key] = Counter()
             counts[name] += 1
+            company = (job.company or "").strip() or "Unknown"
+            cc = by_company.get(key)
+            if cc is None:
+                cc = by_company[key] = Counter()
+            cc[company] += 1
     ranked = Counter({k: sum(c.values()) for k, c in forms.items()}).most_common(30)
     total = len(jobs)
-    top = [{"skill": forms[key].most_common(1)[0][0], "count": count,
-            "pct": round(100 * count / total, 1)} for key, count in ranked]
+    top = []
+    for key, count in ranked:
+        cos = sorted(by_company[key].items(), key=lambda kv: (-kv[1], kv[0]))
+        top.append({"skill": forms[key].most_common(1)[0][0], "count": count,
+                    "pct": round(100 * count / total, 1),
+                    "companies": [{"name": n, "count": c} for n, c in cos]})
     return {"jobs_scanned": total,
             "with_skills": sum(1 for j in jobs if j.skills),
             "unique_skills": len(forms), "top": top}

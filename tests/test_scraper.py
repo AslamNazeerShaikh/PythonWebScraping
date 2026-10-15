@@ -353,14 +353,25 @@ def test_build_skills_report_counts_postings_once(monkeypatch):
 
     _tune_skills(monkeypatch)
     jobs = [make_job("11111111", skills=["C#", "c#", "ASP.NET", "C#", "", "  "]),  # dupes + blanks collapse
-            make_job("22222222", skills=["c#", "SQL"]),
-            make_job("33333333")]  # no skills
+            make_job("22222222", company="Globex", skills=["c#", "SQL"]),
+            make_job("33333333", company="Initech")]  # no skills
     rep = ns.build_skills_report(jobs)
     assert rep["jobs_scanned"] == 3 and rep["with_skills"] == 2
     assert rep["unique_skills"] == 3
     top = {t["skill"]: t for t in rep["top"]}
     assert top["C#"]["count"] == 2 and top["C#"]["pct"] == round(200 / 3, 1)
+    assert top["C#"]["companies"] == [{"name": "Acme", "count": 1},
+                                      {"name": "Globex", "count": 1}]  # tie -> alpha
+    assert top["SQL"]["companies"] == [{"name": "Globex", "count": 1}]
     assert len(rep["top"]) <= 30
+
+
+def test_build_skills_report_unknown_company():
+    from tests.conftest import make_job
+
+    rep = ns.build_skills_report([make_job("11111111", company="",
+                                           skills=["Go"])])
+    assert rep["top"][0]["companies"] == [{"name": "Unknown", "count": 1}]
 
 
 def test_build_skills_report_empty():

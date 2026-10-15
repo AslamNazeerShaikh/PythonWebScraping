@@ -228,6 +228,8 @@ def render_skills_text(report: dict, params: dict) -> str:
              ""]
     for t in report["top"]:
         lines.append(f"{t['count']:4d}x ({t['pct']:5.1f}%)  {t['skill']}")
+        lines.append("           @ " + ", ".join(
+            f"{c['name']} x{c['count']}" for c in t["companies"]))
     lines += ["", f"Unique skills: {report['unique_skills']} | "
                   f"postings with skills: {report['with_skills']}"]
     return "\n".join(lines) + "\n"

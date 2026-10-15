@@ -643,10 +643,12 @@ def test_default_skills_runner_full(fresh_db, tmp_path, monkeypatch):
                             "days": 7, "pages": 1, "max_jobs": 10})
     summary = default_skills_runner(rec)
     assert summary["jobs_scanned"] == 2 and summary["unique_skills"] == 2
-    assert summary["top"][0] == {"skill": "C#", "count": 2, "pct": 100.0}
+    assert summary["top"][0]["skill"] == "C#" and summary["top"][0]["count"] == 2
+    assert summary["top"][0]["companies"] == [{"name": "Acme", "count": 2}]
     assert summary["cancelled"] is False and "top: C#, SQL" in summary["verdict"]
     dest = tmp_path / summary["file"]
     assert dest.suffix == ".txt" and "2x (100.0%)  C#" in dest.read_text()
+    assert "Acme x2" in dest.read_text()
 
 
 def test_default_skills_runner_empty(fresh_db, tmp_path, monkeypatch):

@@ -361,10 +361,16 @@ function renderSkills(r) {
   $("skills-top5").innerHTML = top.slice(0, 5).map((t, i) =>
     `<span class="pill st-running">#${i + 1} ${esc(t.skill)} · ${t.count}</span>`).join("");
   const max = Math.max(1, ...top.map((t) => t.count));
+  const coTags = (t) => {
+    const cos = t.companies || [];
+    const shown = cos.slice(0, 5).map((c) => `${esc(c.name)} ×${c.count}`).join(" · ");
+    const more = cos.length > 5 ? ` · +${cos.length - 5} more` : "";
+    return shown ? `<div class="text-zinc-600" style="font-size:.62rem">${shown}${more}</div>` : "";
+  };
   $("skills-bars").innerHTML = top.length ? top.map((t, i) => `
-    <div class="grid grid-cols-[10rem_1fr_4rem] items-center gap-2">
-      <span class="truncate ${i < 10 ? "text-zinc-100" : "text-zinc-400"}">${i < 10 ? `<b>#${i + 1}</b> ` : ""}${esc(t.skill)}</span>
-      <div class="bar-track"><div class="bar" style="width:${Math.max(2, Math.round(100 * t.count / max))}%;${i < 5 ? "" : "background:#52525b"}"></div></div>
+    <div class="grid grid-cols-[10rem_1fr_4rem] items-start gap-2">
+      <div><div class="${i < 10 ? "text-zinc-100" : "text-zinc-400"}">${i < 10 ? `<b>#${i + 1}</b> ` : ""}${esc(t.skill)}</div>${coTags(t)}</div>
+      <div class="bar-track mt-1"><div class="bar" style="width:${Math.max(2, Math.round(100 * t.count / max))}%;${i < 5 ? "" : "background:#52525b"}"></div></div>
       <span class="text-right text-zinc-300">${t.count} · ${t.pct}%</span>
     </div>`).join("") : `<span class="text-zinc-600">no skills found.</span>`;
   $("skills-dl").innerHTML = (r.status === "succeeded" && s.file)
