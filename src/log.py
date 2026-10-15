@@ -23,7 +23,12 @@ def setup_logging(level: str = "INFO") -> None:
           so repeated calls / test runs re-apply cleanly).
         - Quiets the ``playwright`` logger to ``WARNING`` — its INFO chatter
           would otherwise drown out scraper progress lines.
+        - Preserves any existing :class:`FileHandler`s (e.g. per-run log
+          files): ``force=True`` would otherwise detach them and new runs
+          would log to empty files.
     """
+    kept = [h for h in logging.getLogger().handlers
+            if isinstance(h, logging.FileHandler)]
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
@@ -31,5 +36,7 @@ def setup_logging(level: str = "INFO") -> None:
         stream=sys.stdout,
         force=True,
     )
+    for handler in kept:
+        logging.getLogger().addHandler(handler)
     # Playwright is chatty at INFO — keep our signal clean.
     logging.getLogger("playwright").setLevel(logging.WARNING)

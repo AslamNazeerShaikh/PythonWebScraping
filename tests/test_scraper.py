@@ -463,10 +463,10 @@ def test_submit_searchbar_drives_bar_inputs(monkeypatch):
     page = FakePage()
     landed = ns.submit_searchbar(page, "C#, ASP.Net Core", "pune", 6)
     assert landed == page.url == "https://www.naukri.com/"
-    assert (ns.SEARCHBAR["keywords"], "C#, ASP.Net Core") in page.fills
-    assert (ns.SEARCHBAR["location"], "pune") in page.fills
-    assert (ns.SEARCHBAR["experience"], "6 years") in page.fills
-    assert ns.SEARCHBAR["search_btn"] in page.clicks
+    assert (ns.SEARCH_CANDIDATES["keywords"][0], "C#, ASP.Net Core") in page.fills
+    assert (ns.SEARCH_CANDIDATES["location"][0], "pune") in page.fills
+    assert (ns.SEARCH_CANDIDATES["experience"][0], "6 years") in page.fills
+    assert ns.SEARCH_CANDIDATES["search_btn"][0] in page.clicks
     assert "Enter" in page.keyboard.presses
     assert page.goto_urls == ["https://www.naukri.com/"]
 
@@ -477,7 +477,7 @@ def test_submit_searchbar_experience_fallback(monkeypatch):
     page.click_plan = [None, RuntimeError("dropdown stuck")]
     landed = ns.submit_searchbar(page, "x", "pune", 6)
     assert landed == page.url  # dropdown skipped, typed search still submitted
-    assert ns.SEARCHBAR["search_btn"] in page.clicks
+    assert ns.SEARCH_CANDIDATES["search_btn"][0] in page.clicks
 
 
 def test_skills_scan_bar_failure_uses_url_fallback(monkeypatch):
@@ -494,3 +494,37 @@ def test_with_page_param_sets_page():
     assert ns.with_page_param("https://www.naukri.com/x?k=a", 3) == \
         "https://www.naukri.com/x?k=a&page=3"
     assert ns.with_page_param("https://www.naukri.com/x?k=a&page=1", 3).endswith("page=3")
+
+
+def test_submit_searchbar_resolves_variant_inputs(monkeypatch):
+    _tune_skills(monkeypatch)
+    page = FakePage()
+    # Bot-variant homepage: class selectors absent, semantic ones present.
+    page.query_counts = [0, 0, 3, 0, 2, 0, 0, 1, 0, 1, 0, 1]
+    landed = ns.submit_searchbar(page, "C#, x", "pune", 6)
+    assert landed == page.url
+    cands = ns.SEARCH_CANDIDATES
+    assert (cands["keywords"][2], "C#, x") in page.fills
+    assert (cands["location"][1], "pune") in page.fills
+    assert (cands["experience"][2], "6 years") in page.fills
+    assert cands["location_option"][1] in page.clicks
+    assert cands["search_btn"][1] in page.clicks
+
+
+def test_submit_searchbar_missing_option_keeps_typed(monkeypatch):
+    _tune_skills(monkeypatch)
+    page = FakePage()
+    page.query_counts = [1, 1, 1, 1, 0, 0]  # inputs found, no suggestion nodes
+    landed = ns.submit_searchbar(page, "x", "pune", 6)
+    assert landed == page.url  # suggestion skipped, typed search submitted
+
+
+def test_submit_searchbar_absent_bar_raises(monkeypatch):
+    import pytest as _pytest
+
+    _tune_skills(monkeypatch)
+    page = FakePage()
+    page.query_counts = [0] * 13  # no known inputs anywhere
+    with _pytest.raises(RuntimeError, match="without known inputs"):
+        ns.submit_searchbar(page, "x", "pune", 6)
+    assert page.fills == []  # failed fast: nothing typed anywhere

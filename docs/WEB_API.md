@@ -101,10 +101,12 @@ unchanged. Browse via dashboard or `GET /api/logs[/{name}]`.
 `POST /api/skills {keywords (comma titles), location, experience, days,
 pages, max_jobs (default 100, cap 200)}` starts a `skills` run: page 1 is
 submitted through Naukri's own search bar (keyword suggestor + location
-suggestion + experience dropdown, like manual typing; any failure falls
-back to `?k=<all titles>` URL navigation), then pages 2+ continue in the
-same session, then detail enrichment for key skills
-(no relevance filter — the titles are the query), then a frequency
+suggestion + experience dropdown, like manual typing). The bar is resolved
+variant-tolerantly (proven classes first, then placeholder/aria-label
+semantics — automated visits get different markup); any failure falls
+back to `?k=<all titles>` URL navigation, then pages 2+ continue in the
+same session. Detail enrichment for key skills next (no relevance filter —
+the titles are the query), then a frequency
 report (top 30, one vote per posting, case-folded). Every skill carries a
 company breakdown (`companies: [{name, count}]`, count desc) so a skill
 repeated by 4–5 prolific hirers reads honestly — shown as tags under each

@@ -45,16 +45,40 @@ log = logging.getLogger(__name__)
 
 BASE_SEARCH = "https://www.naukri.com/jobs"
 
-#: Naukri homepage + search-bar selectors (verified against the live DOM —
-#: keyword/location suggestor inputs, experience dropdown, search button).
+#: Naukri homepage + search-bar selector CANDIDATES (ordered: proven class
+#: selectors first, semantic placeholder/aria fallbacks for markup variants
+#: served to automated visits — verified live: the bar exists but classes
+#: may differ while placeholders/aria-labels stay stable).
 NAUKRI_HOME = "https://www.naukri.com/"
-SEARCHBAR = {
-    "keywords": ".nI-gNb-sb__keywords input.suggestor-input",
-    "location": ".nI-gNb-sb__locations input.suggestor-input",
-    "location_option": ".nI-gNb-sb__locations li.tuple-wrap",
-    "experience": "#experienceDD",
-    "search_btn": ".nI-gNb-sb__icon-wrapper",
+SEARCH_CANDIDATES = {
+    "keywords": [".nI-gNb-sb__keywords input.suggestor-input",
+                 'input[aria-label*="keyword, designation"]',
+                 'input[placeholder*="designation"]'],
+    "location": [".nI-gNb-sb__locations input.suggestor-input",
+                 'input[placeholder="Enter location"]',
+                 'input[aria-label="Enter location"]'],
+    "location_option": [".nI-gNb-sb__locations li.tuple-wrap",
+                        "li.tuple-wrap"],
+    "experience": ["#experienceDD",
+                   'input[aria-label="Select experience"]',
+                   'input[placeholder="Select experience"]'],
+    "search_btn": [".nI-gNb-sb__icon-wrapper",
+                   'button[aria-label="Search"]'],
 }
+
+
+def _first_match(page: Page, candidates: list[str]) -> str | None:
+    """Return the first selector matching ≥1 node, else None (fast probe).
+
+    Evaluate errors propagate — the caller treats them as a failed submit
+    and falls back to URL navigation, so no swallowing here.
+    """
+    for sel in candidates:
+        count = page.evaluate(
+            f"document.querySelectorAll('{sel}').length") or 0
+        if count:
+            return sel
+    return None
 
 BOT_WALL_PATTERNS = re.compile(
     r"verify you are (a )?human|captcha|access denied|pardon the interruption|"
@@ -369,21 +393,31 @@ def submit_searchbar(page: Page, keywords: str, location: str,
     _safe_goto(page, NAUKRI_HOME)
     page.wait_for_timeout(2000)
     handle_possible_block(page)
-    page.fill(SEARCHBAR["keywords"], keywords)
+    kw_sel = _first_match(page, SEARCH_CANDIDATES["keywords"])
+    loc_sel = _first_match(page, SEARCH_CANDIDATES["location"])
+    exp_sel = _first_match(page, SEARCH_CANDIDATES["experience"])
+    btn_sel = _first_match(page, SEARCH_CANDIDATES["search_btn"])
+    if not all([kw_sel, loc_sel, exp_sel, btn_sel]):
+        raise RuntimeError("search bar variant without known inputs")
+    assert kw_sel and loc_sel and exp_sel and btn_sel  # narrowed for typing
+    page.fill(kw_sel, keywords)
     page.wait_for_timeout(800)
-    page.fill(SEARCHBAR["location"], location)
+    page.fill(loc_sel, location)
     try:
-        page.wait_for_selector(SEARCHBAR["location_option"], timeout=8000)
-        page.click(SEARCHBAR["location_option"])  # first suggestion (e.g. Pune)
+        opt_sel = _first_match(page, SEARCH_CANDIDATES["location_option"])
+        if opt_sel is None:
+            raise RuntimeError("no location suggestion")
+        page.wait_for_selector(opt_sel, timeout=8000)
+        page.click(opt_sel)  # first suggestion (e.g. Pune)
     except Exception:
         log.info("Location suggestion skipped — typed text kept")
     try:
-        page.click(SEARCHBAR["experience"])
-        page.fill(SEARCHBAR["experience"], f"{experience} years")
+        page.click(exp_sel)
+        page.fill(exp_sel, f"{experience} years")
         page.keyboard.press("Enter")
     except Exception:
         log.info("Experience dropdown skipped — search continues without it")
-    page.click(SEARCHBAR["search_btn"])
+    page.click(btn_sel)
     page.wait_for_selector('a[href*="/job-listings-"]', timeout=15000)
     log.info("Search bar landed: %s", page.url)
     return page.url

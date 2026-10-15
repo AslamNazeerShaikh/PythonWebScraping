@@ -82,3 +82,23 @@ def test_run_scheduled_handles_system_exit(monkeypatch):
     monkeypatch.setattr(sched_mod, "BlockingScheduler", _factory)
     sched_mod.run_scheduled([9])
     assert pytest is not None  # reached here = SystemExit swallowed
+
+
+def test_setup_logging_preserves_file_handlers(tmp_path):
+    import logging.handlers
+
+    from src.log import setup_logging
+
+    dest = tmp_path / "keep.log"
+    file_handler = logging.FileHandler(dest, encoding="utf-8")
+    logging.getLogger().addHandler(file_handler)
+    try:
+        setup_logging("INFO")  # must not detach the file sink (empty-log bug)
+        handlers = logging.getLogger().handlers
+        assert file_handler in handlers
+        assert any(isinstance(h, logging.StreamHandler)
+                   and not isinstance(h, logging.FileHandler)
+                   for h in handlers)
+    finally:
+        logging.getLogger().removeHandler(file_handler)
+        file_handler.close()

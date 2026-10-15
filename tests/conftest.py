@@ -144,6 +144,8 @@ class FakePage:
         self.clicks: list[str] = []
         #: Per-click failure plan (None = ok), mirroring ``goto_plan``.
         self.click_plan: list = []
+        #: Scripted querySelectorAll counts (consumed per call).
+        self.query_counts: list[int] = []
         #: Current URL (search-bar submit returns this as the landed URL).
         self.url = "https://www.naukri.com/"
 
@@ -178,6 +180,8 @@ class FakePage:
         if 'innerText.slice(0,4000)' in js:
             return self.body_text
         if js.lstrip().startswith('document.querySelectorAll'):
+            if self.query_counts:
+                return self.query_counts.pop(0)
             return self.anchor_count  # bot-wall anchor probe (exact-match first:
             # the listing/detail scripts also mention querySelectorAll/length)
         if self.LISTING_MARK in js:
