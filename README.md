@@ -52,8 +52,10 @@ python -m src.main parse output/debug_last_search.html
 # Daily runs at 08:05 + 20:05 (blocking; or use cron/launchd)
 python -m src.main schedule --hours 8,20
 
-# Tests: 120 tests, 100% coverage gate (no browser/network needed)
+# Tests: 167 tests, 100% coverage gate (no browser/network needed)
 pytest
+
+# Daily apply-links recipe: docs/LANES_RUNBOOK.md (2 lanes → hyperlinked Excel)
 
 # Web control plane spec: docs/WEB_API.md (REST + dashboard + MCP + Scalar)
 
