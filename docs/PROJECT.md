@@ -130,3 +130,133 @@ This repo ships a queryable map of itself ([details](GRAPHIFY.md),
 Query before grepping: `graphify query "<question>"`. Rebuild after code
 changes: `graphify update .` (free). Excludes: `vendor/`, `docs/evidence/`
 (see `.graphifyignore`).
+
+## 9. External repo survey (5 repos, verified Oct 2026)
+
+Our collector is **collection-only** (links into SQLite, human applies).
+Four adjacent repos cover the write-side (apply / profile-touch) plus one
+multi-board read-side (JobSpy). All summaries below were verified against the
+live repos (README + source reads); star counts are approximate.
+
+### 9.1 speedyapply/JobSpy (~4.5k stars, MIT, `pip install python-jobspy`)
+
+Multi-board **read-only** scraper: one call
+`scrape_jobs(site_name=[...], search_term, location, results_wanted, hours_old, ...)`
+fans out via threads to LinkedIn / Indeed / Glassdoor / ZipRecruiter / Bayt /
+Naukri / BDJobs / HelloWork, normalizes to a 33-column `JobPost` pydantic model,
+returns a DataFrame (`df.attrs["errors"/"warnings"]` carry per-board failures).
+Transport is raw HTTP with TLS impersonation (`curl_cffi`), proxy round-robin,
+fixed 2–7s delays — no browser. Naukri goes through the private
+`jobapi/v3/search` (+ `v4/job/{id}`) with an RSA `nkparam` token
+(`appid:109/121`); `406` means rate-limit or stale hardcoded public key.
+Only `internship` job_type is natively supported on Naukri; salary is parsed to
+`min/max/currency/interval`; `fetch_description` costs one extra request per job.
+Google Jobs is a dead stub. See prior session analysis for the full breakdown.
+
+**Reusable in our scraper:** `nkparam` fast-path as an optional pre-filter with
+Playwright fallback on 406; salary parsing (`hideSalary` → yearly INR, else
+`N/month` stipend regex); `jobAge=ceil(hours/24)`, `wfhType=2` params;
+`skills.split(",")`; errors/warnings attrs pattern.
+
+### 9.2 lordzohar/Naukri-autoapply-bot (~61 stars, educational)
+
+Selenium + Edge (`webdriver-manager`) **bulk-apply bot**: auto-login
+(`login.naukri.com` + `usernameField`), multi-tab parallel search
+(`/{keyword}-jobs[-in-{location}]`), BS4 (`html5lib`) parse of
+`div.srp-jobtuple-wrapper` / `a.title`, per-job `driver.get` + ordered
+try of `Apply` / `Apply on company site` selectors, inline firstname/lastname
+fill, daily-quota detection, `naukriapplied.csv {passed, failed}`.
+Second script (`Naukri-Recommended.py`) drives `/mnjuser/recommendedjobs`
+multi-apply + chatbot drawer with a `difflib` fuzzy Q&A bank
+(`application_answers.csv`, radio + contenteditable handlers).
+Anti-bot is minimal (`--disable-notifications`, sleeps, `scrollIntoView`).
+
+**Reusable:** ordered apply-button selector fallback chain; quota-text
+detection (`daily quota has been expired`); passed/failed CSV split;
+recommended-jobs multi-apply concept. **Not reusable:** Edge-only stack,
+`time.sleep`-heavy waits, counting external redirects as `passed`.
+
+### 9.3 navchandar/Naukri (~93 stars, GPL-3.0)
+
+Selenium + Chrome **profile-touch bot** (no search/apply at all): premise is
+recruiters surface recently-updated profiles. Flow
+`login → UpdateProfile (rewrite mobile number, verify "today") →
+UploadResume (via attachCV/lazyAttachCV, verify updateOn date) → Logout`.
+Optional stealth PDF mutation (off-page invisible text via
+reportlab+pypdf, default off). Config is plaintext `constants.py`
+(`USERNAME/PASSWORD/MOBILE` — do-not-commit warning). Minimal anti-bot
+(maximized Chrome, popup closers, `safe_click` JS fallback); scheduling is
+external (Windows Task Scheduler how-to link only).
+
+**Reusable:** profile-freshness concept as a complement to collection
+(visibility vs apply links); `attachCV` upload + `updateOn`-date verification
+pattern; `safe_click` JS fallback for chatbot-overlay intercepts.
+**Not reusable:** hardcoded ID/XPath selectors, Windows-only date format
+(`%#d`), plaintext-creds-in-source pattern, GPL-3.0 (license-incompatible
+with permissive reuse — treat as ideas-only).
+
+### 9.4 ankitbaghel01/naukri_update (~83 stars, Node.js 18+, Windows)
+
+Playwright (`playwright-core` + stealth plugin) **two-part system**:
+(1) `naukri-profile-refresh.js` — hourly headline dot-cycle
+(`""→"."→".. "→""`) + daily CV re-upload with server re-verification,
+Google-login flow with persistent profile dir, off-screen window
+(headless is blocked by Akamai/DataDome), error screenshots;
+(2) `auto-apply-runner.js` + per-site inject scripts
+(`naukri-/wellfound-/indeed-auto-apply.js`) — title keyword/blocklist
+filtering, infinite-scroll + Next-page, `localStorage` seen-lists
+(separate dry/live), chatbot/Q&A bank + Gemini fallback, cover-letter
+generation, external-ATS handler (`external-apply.js`, skips
+Workday/Taleo/iCIMS/etc.), post-submit verification against the site's
+applied list, `applications.csv` (with `Verified` column) +
+`apply-state-{site}.json` daily caps (Naukri 20/day), `DRY_RUN`-by-default,
+Task Scheduler hourly/daily wiring, `check-setup.js` diagnostics.
+Best engineering of the four: persistent contexts, human typing
+(45–150s paces), text-based selectors, supervisor restart loop.
+
+**Reusable:** headline dot-cycle refresh (cheapest visibility bump);
+dry-run-by-default discipline; seen vs seenDry split; daily-cap state files;
+post-submit verification against applied list; external-ATS skip-list;
+`check-setup.js`-style session diagnostics. **Adaptation needed:** Node→Python
+port, Windows Scheduler → APScheduler, Chrome profile dirs → our
+`.pw-profile` convention.
+
+### 9.5 Traverser25/NopeRi (~88 stars, self-reports working Jul 2026)
+
+Selenium-free Python **API client** for Naukri (closest to JobSpy's Naukri
+module, but account-aware): `NaukriLoginClient` (login + OTP/MFA,
+`nauk_at` bearer, profile-id cache, `formKey` extraction from JS bundles,
+resume upload via `filevalidation...` + `advResume`, profile update) +
+`NaukriJobClient` (recommended-jobs POST, `v3/search` + `nkparam`, job
+details, `is_external_apply` check, `cloudgateway-workflow/.../v1/apply`
+with questionnaire heuristics + hardcoded profile answers, history fetch).
+`nkparam` generated pure-Python (RSA `PKCS1_v1_5`, `v0|<ms>|121_srp`) with
+Selenium harvester fallback (`nkPool.txt`); `httpcloak`/`curl_cffi` TLS
+impersonation; exponential retry with jitter (no retry on 403/406);
+`apply_agent.py` adds OpenAI scoring + `applied_jobs.csv` dedup + terminal
+dashboard. IP-bound sessions (datacenter IPs burned; home/residential OK).
+
+**Reusable:** the write-side API surface our collector lacks (login/OTP,
+`formKey` mining, resume/profile endpoints, apply + questionnaire payloads,
+`APPLY_SRC_MAP`/`sid`/`logstr` construction); pure-Python `nkparam`
+generator (compare with JobSpy's before adopting either); retry-with-jitter
+helper (extend our tenacity policy); CSV-dedupe agent loop shape.
+**Caution:** hardcoded RSA key + payload formats break on Naukri rotation;
+questionnaire answers are hardcoded; ToS risk is highest here (authenticated
+writes at volume).
+
+### 9.6 Adoption map for our collector (read-side stays, write-side optional)
+
+| Idea | Source | Fits our stack? | Notes |
+|---|---|---|---|
+| `nkparam` fast-path search w/ Playwright fallback | JobSpy / NopeRi | Yes, low risk | Compare both generators first; fallback on 403/406 |
+| Structured salary/skills/WFH parsing | JobSpy / NopeRi | Yes | Port `_parse_salary`, `tagsAndSkills.split`, placeholder location parse |
+| Ordered apply-button fallback + quota detection | lordzohar | Only if we add apply | New capability; needs auth + caps + dry-run |
+| Profile headline dot-cycle + CV re-upload verify | ankitbaghel01 / navchandar | Only if we add refresh | Cheapest visibility win; port to Playwright/Python + APScheduler |
+| Dry-run default + applied-list verification + daily caps | ankitbaghel01 / NopeRi | Only if we add apply | Required guardrails before any live apply |
+| `safe_click` JS fallback, `check-setup` diagnostics | navchandar / ankitbaghel01 | Yes | Small, stack-neutral robustness wins |
+
+Scope guard: our repo is collection-only by design (see §7 fair use).
+Anything in the "only if we add" rows is a new authenticated write capability
+and needs an explicit requirement prompt before implementation — which is the
+next step (awaiting user requirements).
