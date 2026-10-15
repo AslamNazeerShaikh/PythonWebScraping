@@ -10,3 +10,49 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+## Agent Skills (OpenCode)
+
+This project uses skills installed under `.opencode/skills/` (plus shared
+checklists under `.opencode/references/`), per
+https://github.com/addyosmani/agent-skills/blob/main/docs/opencode-setup.md.
+
+### Core Rules
+
+- If a task matches a skill, invoke it with the `skill` tool before acting.
+- Skills live in `.opencode/skills/<skill-name>/SKILL.md`; follow the skill
+  workflow strictly; do not partially apply it.
+- Never skip required steps such as spec, plan, or test when a skill demands
+  them. Project gates are non-negotiable: `pytest` must stay at
+  100% coverage (`--cov-fail-under=100`), SQLite stays the source of truth,
+  no CAPTCHA solving, no secrets in commits.
+- Framework calls must be source-driven: verify against official docs and
+  cite URLs (spec in `docs/WEB_API.md` lists the canonical sources).
+
+### Intent → Skill Mapping
+
+- Feature / new endpoint or UI → `spec-driven-development`, then
+  `api-and-interface-design` (contract first), `incremental-implementation`,
+  `test-driven-development`
+- WebAPI structure / routers / layout → `api-and-interface-design` plus the
+  FastAPI bigger-applications guide (`src/web/main.py` + `routers/` + `dependencies.py`)
+- Planning / breakdown → `planning-and-task-breakdown`
+- Bug / failure / unexpected behavior → `debugging-and-error-recovery`
+- Code review → `code-review-and-quality`
+- Refactoring / simplification → `code-simplification`
+- UI work (dashboard) → `frontend-ui-engineering` (Tailwind v4 + IBM Plex Mono,
+  flat zinc/emerald, no AI-slop aesthetics)
+- API docs / decisions → `documentation-and-adrs` (update `docs/WEB_API.md`)
+- High-stakes or unfamiliar change → `doubt-driven-development`
+- New dependency or framework pattern → `source-driven-development`
+
+### Execution Model
+
+For every request:
+
+1. Determine if any skill applies (even a small chance). Combine with the
+   graphify rules above: codebase questions go through the graph first.
+2. Load the skill with the `skill` tool.
+3. Follow the skill workflow exactly (spec → plan → tasks → implement).
+4. Verify with the repo's own commands (`pytest`, live `curl` against the
+   running server) before declaring done.
