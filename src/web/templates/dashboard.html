@@ -126,6 +126,24 @@
     </div>
   </section>
 
+  <!-- ══ key skills ══ -->
+  <section class="card p-4 mb-4">
+    <h2 class="text-sm font-semibold text-zinc-100 mb-1">key skills</h2>
+    <p class="text-xs text-zinc-500 mb-3">scan "Key Skills" across fresh postings · top shared skills with posting counts · .txt export.</p>
+    <div class="grid grid-cols-2 lg:grid-cols-6 gap-2 mb-3">
+      <div class="col-span-2"><label class="lbl" for="s-kw">titles (comma separated)</label><input id="s-kw" class="inp" placeholder="asp.net core, web api, c#"></div>
+      <div><label class="lbl" for="s-loc">location</label><input id="s-loc" class="inp" value="pune"></div>
+      <div><label class="lbl" for="s-exp">exp yrs</label><input id="s-exp" class="inp" type="number" min="1" value="6"></div>
+      <div><label class="lbl" for="s-days">last n days</label><input id="s-days" class="inp" type="number" min="1" value="7"></div>
+      <div><label class="lbl" for="s-max">max jobs</label><input id="s-max" class="inp" type="number" min="1" max="200" value="100"></div>
+    </div>
+    <button id="btn-skills" class="btn btn-go" type="button">scan key skills →</button>
+    <span id="skills-meta" class="text-xs text-zinc-500 ms-2"></span>
+    <div id="skills-top5" class="flex flex-wrap gap-2 mt-3"></div>
+    <div id="skills-bars" class="mt-3 space-y-2 text-xs"></div>
+    <div id="skills-dl" class="mt-2 text-xs"></div>
+  </section>
+
   <!-- ══ runs ══ -->
   <section class="card p-4 mb-4">
     <div class="flex items-center mb-2"><h2 class="text-sm font-semibold text-zinc-100">runs</h2><span class="text-xs text-zinc-500 ms-2">newest first · auto-refresh 3s</span></div>
@@ -320,6 +338,37 @@ function renderActive(r) {
   if (r.kind === "export" && r.status === "succeeded" && (r.summary || {}).file)
     $("dl-zone").innerHTML = `ready → <a class="lnk" href="/api/runs/${esc(r.run_id)}/download">↓ ${esc(r.summary.file)}</a>`;
   if (["succeeded", "failed", "cancelled"].includes(r.status)) { refreshStats(); refreshJobs(); refreshLogs(); }
+  if (r.kind === "skills" && ["succeeded", "failed", "cancelled"].includes(r.status)) renderSkills(r);
+}
+
+async function startSkills() {
+  const num = (id, fb) => { const v = $(id).value.trim(); return v === "" ? fb : Number(v); };
+  try {
+    $("btn-skills").disabled = true; $("skills-meta").textContent = "scanning…";
+    const r = await api("/api/skills", { method: "POST", body: JSON.stringify({
+      keywords: $("s-kw").value.trim(), location: $("s-loc").value.trim() || "pune",
+      experience: num("s-exp", 6), days: num("s-days", 7), max_jobs: num("s-max", 100) }) });
+    trackedRun = r.run_id; renderActive(r);
+  } catch (e) { $("skills-meta").textContent = "start failed: " + e.message; }
+  finally { $("btn-skills").disabled = false; refreshRuns(); }
+}
+
+function renderSkills(r) {
+  const s = r.summary || {}, top = s.top || [];
+  $("skills-meta").textContent =
+    `${s.jobs_scanned ?? 0} postings · ${s.with_skills ?? 0} with skills · ${s.unique_skills ?? 0} unique` +
+    (s.verdict ? ` — ${s.verdict}` : "") + (s.cancelled ? " (cancelled, partials)" : "");
+  $("skills-top5").innerHTML = top.slice(0, 5).map((t, i) =>
+    `<span class="pill st-running">#${i + 1} ${esc(t.skill)} · ${t.count}</span>`).join("");
+  const max = Math.max(1, ...top.map((t) => t.count));
+  $("skills-bars").innerHTML = top.length ? top.map((t, i) => `
+    <div class="grid grid-cols-[10rem_1fr_4rem] items-center gap-2">
+      <span class="truncate ${i < 10 ? "text-zinc-100" : "text-zinc-400"}">${i < 10 ? `<b>#${i + 1}</b> ` : ""}${esc(t.skill)}</span>
+      <div class="bar-track"><div class="bar" style="width:${Math.max(2, Math.round(100 * t.count / max))}%;${i < 5 ? "" : "background:#52525b"}"></div></div>
+      <span class="text-right text-zinc-300">${t.count} · ${t.pct}%</span>
+    </div>`).join("") : `<span class="text-zinc-600">no skills found.</span>`;
+  $("skills-dl").innerHTML = (r.status === "succeeded" && s.file)
+    ? `export → <a class="lnk" href="/api/runs/${esc(r.run_id)}/download">↓ ${esc(s.file)}</a>` : "";
 }
 
 let dbTable = "jobs", dbPage = 1;
@@ -406,6 +455,7 @@ async function refreshJobs() {
 
 $("btn-scrape").addEventListener("click", startScrape);
 $("btn-export").addEventListener("click", startExport);
+$("btn-skills").addEventListener("click", startSkills);
 $("j-go").addEventListener("click", () => { jobPage = 1; refreshJobs(); });
 $("j-prev").addEventListener("click", () => { if (jobPage > 1) { jobPage--; refreshJobs(); } });
 $("j-next").addEventListener("click", () => { jobPage++; refreshJobs(); });

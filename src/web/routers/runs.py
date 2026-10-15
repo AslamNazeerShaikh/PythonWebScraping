@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse
 
 from ..dependencies import get_orchestrator
 from ..orchestrator import Orchestrator
-from ..schemas import ExportRequest, RunOut, ScrapeRequest
+from ..schemas import ExportRequest, RunOut, ScrapeRequest, SkillsRequest
 
 router = APIRouter(prefix="/api", tags=["runs"])
 
@@ -35,6 +35,15 @@ def start_export(body: ExportRequest,
                  orch: Orchestrator = Depends(get_orchestrator)) -> RunOut:
     """Start an export run; fetch the file at its download URL when done."""
     record = orch.start_export(body.model_dump())
+    return RunOut.from_record(record)
+
+
+@router.post("/skills", status_code=202, response_model=RunOut,
+             operation_id="start_skills_scan")
+def start_skills(body: SkillsRequest,
+                 orch: Orchestrator = Depends(get_orchestrator)) -> RunOut:
+    """Scan key skills across fresh postings (202 + run id; 409 when busy)."""
+    record = orch.start_skills(body.model_dump())
     return RunOut.from_record(record)
 
 
@@ -62,11 +71,11 @@ def cancel(run_id: str,
 @router.get("/runs/{run_id}/download", operation_id="download_export")
 def download(run_id: str,
              orch: Orchestrator = Depends(get_orchestrator)):  # type: ignore[no-untyped-def]
-    """Download a finished export run's file (409 until it succeeds)."""
+    """Download a finished export/skills run's file (409 until it succeeds)."""
     record = orch.get(run_id)
-    if record.kind != "export":
+    if record.kind not in ("export", "skills"):
         raise HTTPException(status_code=409,
-                            detail="only export runs have files")
+                            detail="only export/skills runs have files")
     if record.status != "succeeded":
         raise HTTPException(status_code=409,
                             detail=f"export {record.status}; retry when it succeeds")

@@ -20,6 +20,7 @@ import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from .errors import ApiError
 from .runlog import attached_run_log
@@ -168,14 +169,80 @@ def default_export_runner(record: RunRecord) -> dict:
     return {"file": dest.name, "path": str(dest)}
 
 
+def default_skills_runner(record: RunRecord) -> dict:
+    """Key-skills scan in the worker thread (browser → report + .txt).
+
+    Analysis-only: scanned postings are NOT upserted to the DB — the
+    frequency report (and its text file) is the artifact. Params carry
+    explicit search fields so ``SETTINGS`` is never mutated here.
+    """
+    from playwright.sync_api import sync_playwright
+
+    from ..config import SETTINGS
+    from ..log import setup_logging
+    from ..naukri_scraper import run_skills_scan
+    from ..stealth_browser import launch_context
+
+    params = record.params
+    titles = [t.strip() for t in str(params.get("keywords") or "").split(",")
+              if t.strip()]
+    location = str(params.get("location") or "pune").strip().lower()
+    experience = params.get("experience") or 6
+    days = params.get("days") or 7
+    pages = params.get("pages") or 5
+    max_jobs = params.get("max_jobs") or 100
+    started = time.time()
+    setup_logging(SETTINGS.log_level)
+    with sync_playwright() as p:
+        context = launch_context(p)
+        try:
+            report = run_skills_scan(context, titles, location, experience,
+                                     days, pages, max_jobs,
+                                     should_stop=record.should_stop,
+                                     on_progress=record.push_progress)
+        finally:
+            context.close()
+    duration = round(time.time() - started, 1)
+    top = report["top"]
+    if top:
+        names = ", ".join(t["skill"] for t in top[:3])
+        verdict = (f"{report['unique_skills']} unique skills across "
+                   f"{report['jobs_scanned']} postings in {duration}s — "
+                   f"top: {names}")
+    else:
+        verdict = f"no postings found in {duration}s"
+    out = SETTINGS.output_dir
+    out.mkdir(parents=True, exist_ok=True)
+    dest = out / f"skills_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    dest.write_text(render_skills_text(report, params), encoding="utf-8")
+    return {**report, "file": dest.name, "path": str(dest),
+            "duration_s": duration, "verdict": verdict,
+            "cancelled": record.should_stop()}
+
+
+def render_skills_text(report: dict, params: dict) -> str:
+    """Render the frequency report as a plain-text file (the .txt export)."""
+    lines = [f"Key skills across {report['jobs_scanned']} postings "
+             f"({params.get('keywords') or ''} | {params.get('location') or ''} | "
+             f"exp {params.get('experience') or ''}y | last {params.get('days') or ''}d)",
+             ""]
+    for t in report["top"]:
+        lines.append(f"{t['count']:4d}x ({t['pct']:5.1f}%)  {t['skill']}")
+    lines += ["", f"Unique skills: {report['unique_skills']} | "
+                  f"postings with skills: {report['with_skills']}"]
+    return "\n".join(lines) + "\n"
+
+
 class Orchestrator:
     """Spawns, tracks, and cancels background runs (thread-safe)."""
 
     def __init__(self, scrape_runner: RunnerFunc | None = None,
                  export_runner: RunnerFunc | None = None,
+                 skills_runner: RunnerFunc | None = None,
                  max_runs: int = 200) -> None:
         self._scrape_runner = scrape_runner or default_scrape_runner
         self._export_runner = export_runner or default_export_runner
+        self._skills_runner = skills_runner or default_skills_runner
         self._max_runs = max_runs
         self._runs: dict[str, RunRecord] = {}
         self._threads: dict[str, threading.Thread] = {}
@@ -196,6 +263,14 @@ class Orchestrator:
         """Start an export run (exports never contend with each other)."""
         record = self._new_record("export", params or {})
         self._launch(record, self._export_runner, release_lock=False)
+        return record
+
+    def start_skills(self, params: dict | None = None) -> RunRecord:
+        """Start a key-skills scan (shares the single browser lock)."""
+        if not self._scrape_lock.acquire(blocking=False):
+            raise BusyError("a browser run is already in progress")
+        record = self._new_record("skills", params or {})
+        self._launch(record, self._skills_runner, release_lock=True)
         return record
 
     # -- observing --------------------------------------------------------

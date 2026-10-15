@@ -18,6 +18,7 @@ import logging
 import random
 import re
 import urllib.parse
+from collections import Counter
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -465,3 +466,101 @@ def save_results(jobs: list[Job], output_dir: Path | None = None) -> tuple[Path,
             w.writerow(j)
     log.info("Saved %d jobs -> %s, %s", len(jobs), json_path, csv_path)
     return json_path, csv_path
+
+
+# ---------------------------------------------------------------------------
+# Key-skills scan (analysis-only: aggregates "Key Skills" across postings)
+# ---------------------------------------------------------------------------
+def build_skills_report(jobs: list[Job]) -> dict:
+    """Aggregate key-skill frequencies across enriched jobs.
+
+    Each posting votes once per skill (case-insensitive, dupes collapsed);
+    display casing follows the most common raw form. Returns a JSON-safe
+    report with the top 30 skills by posting count. Pure function.
+    """
+    if not jobs:
+        return {"jobs_scanned": 0, "with_skills": 0,
+                "unique_skills": 0, "top": []}
+    forms: dict[str, Counter] = {}
+    for job in jobs:
+        seen: set[str] = set()
+        for raw in job.skills:
+            name = (raw or "").strip()
+            key = name.casefold()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            counts = forms.get(key)
+            if counts is None:
+                counts = forms[key] = Counter()
+            counts[name] += 1
+    ranked = Counter({k: sum(c.values()) for k, c in forms.items()}).most_common(30)
+    total = len(jobs)
+    top = [{"skill": forms[key].most_common(1)[0][0], "count": count,
+            "pct": round(100 * count / total, 1)} for key, count in ranked]
+    return {"jobs_scanned": total,
+            "with_skills": sum(1 for j in jobs if j.skills),
+            "unique_skills": len(forms), "top": top}
+
+
+def run_skills_scan(context: BrowserContext, titles: list[str], location: str,
+                    experience: int, days: int, pages_per_title: int,
+                    max_jobs: int, should_stop: StopHook | None = None,
+                    on_progress: ProgressHook | None = None) -> dict:
+    """Scan detail pages for key skills: titles × pages → enriched → report.
+
+    Same polite machinery as :func:`run_scrape` (pauses, bot-wall handling,
+    honeypot-safe extraction) but WITHOUT the relevance filter — the titles
+    given are already the query. Analysis-only: nothing is written to the
+    DB; the report (plus a .txt written by the caller) is the artifact.
+    """
+    stopped = should_stop or (lambda: False)
+
+    def _report(stage: str, **extra: object) -> None:
+        if on_progress is not None:
+            on_progress({"stage": stage, **extra})
+
+    page = context.new_page()
+    found: dict[str, Job] = {}
+    for title in titles:
+        if stopped():
+            log.info("Skills scan cancel requested — stopping")
+            break
+        for pnum in range(1, pages_per_title + 1):
+            if len(found) >= max_jobs or stopped():
+                break
+            url = build_search_url(title, location, experience, days, pnum)
+            log.info("Skills search %s p%d: %s", title, pnum, url)
+            try:
+                raw_jobs = scrape_search_page(page, url)
+            except Exception as e:
+                log.error("Search page failed: %s", e)
+                human_pause()
+                continue
+            for raw in raw_jobs:
+                job = coerce_job(raw, search_location=location)
+                if job is None or job.job_id in found:
+                    continue
+                found[job.job_id] = job
+                if len(found) >= max_jobs:
+                    break
+            _report("search", title=title, page=pnum, found=len(found))
+            human_pause()  # politeness between pages
+
+    jobs_list = list(found.values())
+    log.info("Skills scan collected %d postings — enriching key skills", len(jobs_list))
+    for i, job in enumerate(jobs_list, 1):
+        if stopped():
+            log.info("Skills scan cancel requested — skipping remaining details")
+            break
+        jobs_list[i - 1] = enrich_job(page, job)
+        _report("detail", index=i, total=len(jobs_list))
+        human_pause(1.5, 3.5)  # extra polite on detail pages
+
+    try:
+        page.close()
+    except Exception:
+        pass
+    report = build_skills_report(jobs_list)
+    _report("done", found=len(jobs_list))
+    return report

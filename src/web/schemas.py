@@ -30,6 +30,25 @@ class ExportRequest(BaseModel):
     location: str = ""
 
 
+class SkillsRequest(BaseModel):
+    """Start a key-skills scan over the freshest matching postings."""
+
+    keywords: str = Field(min_length=1)  # comma-separated titles, e.g. "asp.net core, web api"
+    location: str = "pune"
+    experience: int | None = Field(default=6, gt=0)
+    days: int | None = Field(default=7, gt=0)
+    pages: int | None = Field(default=5, gt=0, le=10)
+    max_jobs: int | None = Field(default=100, gt=0, le=200)
+
+
+class SkillTop(BaseModel):
+    """One ranked skill: posting count + share of scanned postings."""
+
+    skill: str
+    count: int
+    pct: float
+
+
 class RunOut(BaseModel):
     """One background run: scrape or export, with live progress + result."""
 

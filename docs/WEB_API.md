@@ -30,6 +30,7 @@ Run `python -m src.main web` (default `127.0.0.1:8000`, see `WEB_HOST` /
 ```
 POST /api/scrape                 → 202 {run_id,...}   409 SCRAPE_ALREADY_RUNNING
 POST /api/exports                → 202 {run_id,...}
+POST /api/skills                 → 202 {run_id,...}   409 when a browser run is busy
 GET  /api/runs                   → newest-first list
 GET  /api/runs/{id}              → live progress + events[] stage timeline + verdict
 POST /api/runs/{id}/cancel       → cancelling → cancelled (partials kept)
@@ -95,11 +96,26 @@ Every run writes `logs/<kind>_<run-id>_YYYYMMDD_HHMMSS.log`
 `2026-10-15 19:02:11 INFO     src.web.orchestrator: message`. Console output
 unchanged. Browse via dashboard or `GET /api/logs[/{name}]`.
 
+## Key-skills scan
+
+`POST /api/skills {keywords (comma titles), location, experience, days,
+pages, max_jobs (default 100, cap 200)}` starts a `skills` run: one search
+per title (freshness-filtered via `jobPostDate`), detail enrichment for key
+skills (no relevance filter — the titles are the query), then a frequency
+report (top 30, one vote per posting, case-folded). Analysis-only: postings
+are NOT upserted to SQLite; the report + `skills_<ts>.txt` (same shape as
+the export download) is the artifact, with `verdict` + `duration_s` in the
+summary. Dashboard renders top-5 chips + ranked bars (top 10 numbered) +
+meta + .txt link. Shares the single browser lock (409 when busy) and the
+cancel twin. Sort order inside Naukri pages is Naukri's own; the freshness
+window (`days`) is what keeps the pool recent.
+
 ## MCP tools (curated) + harness wiring
 
 `collector_stats`, `search_jobs(query, location, page_size)`,
-`start_scrape(keywords, locations)`, `run_status(run_id)`,
-`cancel_run(run_id)`. Errors return `{"error": ...}` dicts (never raise).
+`start_scrape(keywords, locations)`, `start_skill_scan(keywords, location,
+max_jobs)`, `run_status(run_id)`, `cancel_run(run_id)`. Errors return
+`{"error": ...}` dicts (never raise).
 
 The agent harness talks to the **running** server: `.opencode/opencode.json`
 declares `mcp.servers["naukri-collector"]` → `http://127.0.0.1:8000/mcp/`

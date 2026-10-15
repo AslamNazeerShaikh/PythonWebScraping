@@ -452,7 +452,7 @@ def test_mcp_read_tools(fresh_db):
     orch = Orchestrator(scrape_runner=_instant(), export_runner=_instant())
     mcp = build_mcp(orch)
     assert {t.name for t in asyncio.run(_tools(mcp))} == {
-        "collector_stats", "search_jobs", "start_scrape",
+        "collector_stats", "search_jobs", "start_scrape", "start_skill_scan",
         "run_status", "cancel_run"}
     stats = _payload(_tool(mcp, "collector_stats", {}))
     assert stats["total_jobs"] == 1
@@ -472,7 +472,8 @@ def test_mcp_start_and_cancel(fresh_db, tmp_path, monkeypatch):
     from src.config import SETTINGS
 
     monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
-    orch = Orchestrator(scrape_runner=_blocking(), export_runner=_instant())
+    orch = Orchestrator(scrape_runner=_blocking(), export_runner=_instant(),
+                        skills_runner=_instant())
     mcp = build_mcp(orch)
     started = _payload(_tool(mcp, "start_scrape",
                              {"keywords": "x", "locations": "pune"}))
@@ -485,6 +486,12 @@ def test_mcp_start_and_cancel(fresh_db, tmp_path, monkeypatch):
     monkeypatch.setattr(orch, "start_scrape",
                         lambda params: (_ for _ in ()).throw(BusyError("busy")))
     assert _payload(_tool(mcp, "start_scrape", {}))["error"] == "busy"
+    assert _payload(_tool(mcp, "start_skill_scan",
+                          {"keywords": "x"})).get("run_id", "").startswith("skills-")
+    monkeypatch.setattr(orch, "start_skills",
+                        lambda params: (_ for _ in ()).throw(BusyError("busy")))
+    assert _payload(_tool(mcp, "start_skill_scan",
+                          {"keywords": "x"}))["error"] == "busy"
 
 
 # ---------------------------------------------------------------------------
@@ -602,3 +609,109 @@ def test_config_log_dir_default(tmp_path, monkeypatch):
 
     monkeypatch.delenv("LOG_DIR", raising=False)
     assert config.Settings().log_dir.name == "logs"
+
+
+# ---------------------------------------------------------------------------
+# skills runs — scan kind, report file, API, MCP, dashboard
+# ---------------------------------------------------------------------------
+def test_start_skills_shares_browser_lock():
+    orch = Orchestrator(scrape_runner=_blocking(), export_runner=_instant(),
+                        skills_runner=_blocking())
+    rec = orch.start_skills({"keywords": "x"})
+    assert rec.run_id.startswith("skills-")
+    with pytest.raises(BusyError):
+        orch.start_skills({"keywords": "y"})
+    with pytest.raises(BusyError):
+        orch.start_scrape({})  # one browser: skills run holds the lock
+    orch.cancel(rec.run_id)
+    assert orch.wait_for(rec.run_id, timeout=10).status == "cancelled"
+
+
+def test_default_skills_runner_full(fresh_db, tmp_path, monkeypatch):
+    from src.config import SETTINGS
+    from src.web.orchestrator import default_skills_runner
+
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    _tune_web(monkeypatch, tmp_path)
+    page = FakePage()
+    page.listing_queue = [[raw_card("11111111")], [raw_card("22222222")]]
+    page.detail_result = {"skills": ["C#", "SQL"]}
+    _wire_browser(monkeypatch, page)
+    rec = RunRecord(run_id="k", kind="skills", seq=1,
+                    params={"keywords": "asp.net core, web api",
+                            "location": "pune", "experience": 6,
+                            "days": 7, "pages": 1, "max_jobs": 10})
+    summary = default_skills_runner(rec)
+    assert summary["jobs_scanned"] == 2 and summary["unique_skills"] == 2
+    assert summary["top"][0] == {"skill": "C#", "count": 2, "pct": 100.0}
+    assert summary["cancelled"] is False and "top: C#, SQL" in summary["verdict"]
+    dest = tmp_path / summary["file"]
+    assert dest.suffix == ".txt" and "2x (100.0%)  C#" in dest.read_text()
+
+
+def test_default_skills_runner_empty(fresh_db, tmp_path, monkeypatch):
+    from src.config import SETTINGS
+    from src.web.orchestrator import default_skills_runner, render_skills_text
+
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    _tune_web(monkeypatch, tmp_path)
+    _wire_browser(monkeypatch, FakePage())
+    rec = RunRecord(run_id="k", kind="skills", seq=1,
+                    params={"keywords": "zzz-no-such-title"})
+    summary = default_skills_runner(rec)
+    assert summary["jobs_scanned"] == 0 and summary["top"] == []
+    assert summary["verdict"].startswith("no postings found")
+    assert "Unique skills: 0" in render_skills_text(summary, rec.params)
+
+
+def test_skills_api_flow(fresh_db, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from src.config import SETTINGS
+    from src.web.main import create_app
+
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    report = tmp_path / "skills_demo.txt"
+    report.write_text("  12x (60.0%)  C#\n")
+    orch = Orchestrator(scrape_runner=_instant(), export_runner=_instant(),
+                        skills_runner=_instant({"jobs_scanned": 20,
+                                                "with_skills": 18,
+                                                "unique_skills": 9,
+                                                "top": [{"skill": "C#",
+                                                         "count": 12,
+                                                         "pct": 60.0}],
+                                                "file": report.name,
+                                                "path": str(report)}))
+    with TestClient(create_app(orch)) as client:
+        started = client.post("/api/skills", json={"keywords": "asp.net core"})
+        assert started.status_code == 202
+        run_id = started.json()["run_id"]
+        assert orch.wait_for(run_id, timeout=10).status == "succeeded"
+        dl = client.get(f"/api/runs/{run_id}/download")
+        assert dl.status_code == 200 and "C#" in dl.text
+        assert client.post("/api/skills", json={}).status_code == 422
+        assert client.post("/api/skills",
+                           json={"keywords": "x", "max_jobs": 0}).status_code == 422
+
+
+def test_skills_api_busy(fresh_db, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from src.config import SETTINGS
+    from src.web.main import create_app
+
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    orch = Orchestrator(scrape_runner=_instant(), export_runner=_instant(),
+                        skills_runner=_blocking())
+    with TestClient(create_app(orch)) as client:
+        first = client.post("/api/skills", json={"keywords": "x"}).json()
+        busy = client.post("/api/skills", json={"keywords": "y"})
+        assert busy.status_code == 409
+        assert busy.json()["error"]["code"] == "SCRAPE_ALREADY_RUNNING"
+        client.post(f"/api/runs/{first['run_id']}/cancel")
+        assert orch.wait_for(first["run_id"], timeout=10).status == "cancelled"
+
+
+def test_dashboard_has_skills_section(web_env):
+    client, _ = web_env
+    assert "key skills" in client.get("/").text

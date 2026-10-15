@@ -336,3 +336,109 @@ def test_run_scrape_stop_before_first_page_reports_done(monkeypatch):
     assert jobs == []  # cancelled early: nothing collected, nothing lost
     assert [s["stage"] for s in seen] == ["done"]
     assert page.goto_urls == []  # no navigation happened
+
+
+# -- key-skills scan -------------------------------------------------------------------------------
+def _tune_skills(monkeypatch, **kw):
+    monkeypatch.setattr(ns, "human_pause", lambda *a, **k: None)
+    return kw
+
+
+def _detail_skills(*skills):
+    return {"skills": list(skills)}
+
+
+def test_build_skills_report_counts_postings_once(monkeypatch):
+    from tests.conftest import make_job
+
+    _tune_skills(monkeypatch)
+    jobs = [make_job("11111111", skills=["C#", "c#", "ASP.NET", "C#", "", "  "]),  # dupes + blanks collapse
+            make_job("22222222", skills=["c#", "SQL"]),
+            make_job("33333333")]  # no skills
+    rep = ns.build_skills_report(jobs)
+    assert rep["jobs_scanned"] == 3 and rep["with_skills"] == 2
+    assert rep["unique_skills"] == 3
+    top = {t["skill"]: t for t in rep["top"]}
+    assert top["C#"]["count"] == 2 and top["C#"]["pct"] == round(200 / 3, 1)
+    assert len(rep["top"]) <= 30
+
+
+def test_build_skills_report_empty():
+    assert ns.build_skills_report([]) == {"jobs_scanned": 0, "with_skills": 0,
+                                          "unique_skills": 0, "top": []}
+
+
+def test_run_skills_scan_full_flow(monkeypatch):
+    _tune_skills(monkeypatch)
+    page = FakePage()
+    page.listing_queue = [[raw_card("11111111")],
+                          [raw_card("22222222"), raw_card("11111111"),  # dup skipped
+                           {"jobId": "1", "title": "AB", "url": "https://x"}]]  # invalid dropped
+    page.detail_result = _detail_skills("C#", "SQL")
+    seen: list = []
+    rep = ns.run_skills_scan(FakeContext(page), ["asp.net core"], "pune",
+                             6, 7, 2, 10, on_progress=seen.append)
+    assert rep["jobs_scanned"] == 2 and rep["unique_skills"] == 2
+    assert [s["stage"] for s in seen] == ["search", "search", "detail",
+                                          "detail", "done"]
+    assert len(page.goto_urls) == 2 + 2  # 2 searches + 2 details
+
+
+def test_run_skills_scan_cap_breaks_page_loop(monkeypatch):
+    _tune_skills(monkeypatch)
+    page = FakePage()
+    page.listing_queue = [[raw_card("11111111"), raw_card("22222222")],
+                          [raw_card("33333333")]]
+    rep = ns.run_skills_scan(FakeContext(page), ["asp.net core"], "pune",
+                             6, 7, 3, 1)
+    assert rep["jobs_scanned"] == 1
+    searches = [u for u in page.goto_urls if "/jobs?" in u]
+    assert len(searches) == 1  # cap hit: page 2 never visited
+
+
+def test_run_skills_scan_stop_mid_pass_keeps_partial(monkeypatch):
+    _tune_skills(monkeypatch)
+    page = FakePage()
+    page.listing_queue = [[raw_card("11111111")], [raw_card("22222222")]]
+    calls = [0]
+
+    def _stop():
+        calls[0] += 1
+        return calls[0] > 3  # two pages pass; third page poll + enrich stop it
+
+    seen: list = []
+    rep = ns.run_skills_scan(FakeContext(page), ["a", "b"], "pune", 6, 7, 3,
+                             10, should_stop=_stop, on_progress=seen.append)
+    assert rep["jobs_scanned"] == 2  # both pages done, details skipped
+    assert [s["stage"] for s in seen] == ["search", "search", "done"]
+
+
+def test_run_skills_scan_stop_before_first_title(monkeypatch):
+    _tune_skills(monkeypatch)
+    page = FakePage()
+    page.listing_queue = [[raw_card("11111111")]]
+    seen: list = []
+    rep = ns.run_skills_scan(FakeContext(page), ["a"], "pune", 6, 7, 2, 10,
+                             should_stop=lambda: True,
+                             on_progress=seen.append)
+    assert rep["jobs_scanned"] == 0
+    assert [s["stage"] for s in seen] == ["done"]
+    assert page.goto_urls == []
+
+
+def test_run_skills_scan_search_error_continues(monkeypatch):
+    _tune_skills(monkeypatch)
+    page = FakePage()
+    page.goto_plan = [RuntimeError("boom"), None]
+    page.listing_queue = [[raw_card("11111111")]]
+    rep = ns.run_skills_scan(FakeContext(page), ["a"], "pune", 6, 7, 2, 10)
+    assert rep["jobs_scanned"] == 1
+
+
+def test_run_skills_scan_close_failure_swallowed(monkeypatch):
+    _tune_skills(monkeypatch)
+    page = FakePage()
+    page.listing_queue = [[]]
+    page.close_fail = True
+    rep = ns.run_skills_scan(FakeContext(page), ["a"], "pune", 6, 7, 1, 10)
+    assert rep["jobs_scanned"] == 0  # empty page -> empty report, close ignored
