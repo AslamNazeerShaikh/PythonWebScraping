@@ -65,7 +65,6 @@ SEARCH_CANDIDATES = {
     "experience_option": ["li"],
 }
 
-
 def _first_match(page: Page, candidates: list[str]) -> str | None:
     """Return the first selector matching ≥1 node, else None (fast probe).
 
@@ -88,7 +87,6 @@ BOT_WALL_PATTERNS = re.compile(
 # Anchors on Naukri job pages always look like /job-listings-<slug>-<digits>
 JOB_URL_RE = re.compile(r"/job-listings-[\w\-]+-(\d+)")
 
-
 def build_search_url(keywords: str, location: str, experience: int,
                      date_filter: int, page: int = 1) -> str:
     """Build a Naukri ``/jobs`` search URL (stable query-param form).
@@ -107,7 +105,6 @@ def build_search_url(keywords: str, location: str, experience: int,
         "page": str(page),
     }
     return f"{BASE_SEARCH}?{urllib.parse.urlencode(q)}"
-
 
 LISTING_EXTRACT_JS = """
 () => {
@@ -218,7 +215,6 @@ DETAIL_EXTRACT_JS = """
 }
 """
 
-
 def check_bot_wall(page: Page) -> bool:
     """True only on *visible* block pages (not raw HTML, avoids false positives)."""
     try:
@@ -233,7 +229,6 @@ def check_bot_wall(page: Page) -> bool:
         return anchors == 0
     except Exception:
         return False
-
 
 def handle_possible_block(page: Page) -> None:
     """Pause for MANUAL bot-wall solving when one is detected (never bypass).
@@ -250,7 +245,6 @@ def handle_possible_block(page: Page) -> None:
         except EOFError:
             pass
         human_pause(2, 4)
-
 
 def human_scroll(page: Page, rounds: int = 3) -> None:
     """Mimic human reading: mouse-wheel scrolls + small pauses + mouse wiggle.
@@ -272,7 +266,6 @@ def human_scroll(page: Page, rounds: int = 3) -> None:
     except Exception:
         pass
 
-
 def is_relevant(title: str, desc: str = "") -> bool:
     """Light relevance filter for .NET fullstack roles; keeps recall high."""
     t = f"{title} {desc}".lower()
@@ -280,7 +273,6 @@ def is_relevant(title: str, desc: str = "") -> bool:
     if not any(k in t for k in must):
         return False
     return True
-
 
 def normalize_raw(raw: dict, search_location: str = "") -> dict:
     """Map extractor output (in-page JS camelCase) to Job snake_case fields.
@@ -307,7 +299,6 @@ def normalize_raw(raw: dict, search_location: str = "") -> dict:
         "skills": raw.get("skills") or [],
     }
 
-
 def coerce_job(raw: dict, search_location: str = "") -> Job | None:
     """Validate one raw dict -> Job. Returns None (with warning) on bad data."""
     try:
@@ -316,7 +307,6 @@ def coerce_job(raw: dict, search_location: str = "") -> Job | None:
         log.warning("Dropping invalid job %r: %s",
                     str(raw.get("jobId") or raw.get("url"))[:80], e.errors()[0])
         return None
-
 
 # --- Tenacity: transient navigation failures only ---------------------------
 # Playwright raises its OWN TimeoutError (not the builtin) on slow loads.
@@ -330,7 +320,6 @@ _safe_goto = retry(
     reraise=True,
 )(lambda page, url: page.goto(url, wait_until="domcontentloaded"))
 
-
 def scrape_search_page(page: Page, url: str) -> list[dict]:
     """Load ONE search page and return raw (pre-Pydantic) job-card dicts.
 
@@ -340,7 +329,6 @@ def scrape_search_page(page: Page, url: str) -> list[dict]:
     """
     _safe_goto(page, url)
     return extract_listing_cards(page)
-
 
 def extract_listing_cards(page: Page) -> list[dict]:
     """Extract job cards from the CURRENT page (no navigation).
@@ -369,7 +357,6 @@ def extract_listing_cards(page: Page) -> list[dict]:
             pass
     return jobs
 
-
 def slugify_keywords(text: str) -> str:
     """Slugify a keyword string the way Naukri's own search box does.
 
@@ -383,34 +370,24 @@ def slugify_keywords(text: str) -> str:
     s = re.sub(r"\s+", "-", s.strip())
     return re.sub(r"-+", "-", s).strip("-")
 
-
 def build_slug_search_url(keywords: str, location: str, experience: int,
                           days: int, page: int = 1) -> str:
-    """Skills-scan fallback URL mirroring a manual Naukri search exactly.
+    """Skills-scan search URL mirroring a manual Naukri search exactly.
 
-    ``/<slug>-jobs-in-<loc>?k=&l=&experience=&jobAge=&page=`` — the
-    lordzohar-bot pattern (``/{keyword}-jobs[-in-{location}]``) plus the
-    user-verified ``jobAge`` freshness param. Verified live: loads 20
-    anchors with a stable clean slug. The collector's legacy
-    ``/jobs?k=&l=`` builder is untouched.
+    ``/<slug>-jobs-in-<loc>[-<n>]?k=&l=&experience=&jobAge=``: the
+    lordzohar-bot ``/{keyword}-jobs`` pattern plus the user-verified
+    ``jobAge`` freshness param. Pagination is PATH-based (``...-pune-2``):
+    verified live that ``?page=2`` on a slug URL reloads page 1 (same
+    first job id, deduped to nothing new), while the ``-2`` suffix
+    returns 20 fresh postings. The collector's legacy ``/jobs?k=&l=``
+    builder is untouched.
     """
-    slug = f"{slugify_keywords(keywords)}-jobs-in-{location.lower()}"
+    base = f"{slugify_keywords(keywords)}-jobs-in-{location.lower()}"
+    if page > 1:
+        base = f"{base}-{page}"
     q = {"k": keywords, "l": location, "experience": str(experience),
-         "jobAge": str(days), "page": str(page)}
-    return f"https://www.naukri.com/{slug}?{urllib.parse.urlencode(q)}"
-
-
-def with_page_param(url: str, pnum: int, experience: int, days: int) -> str:
-    """Set page + filters on a landed search URL (post-bar paging).
-
-    Re-asserts ``experience``/``jobAge`` (idempotent when the bar already
-    applied them; repairs the run when the dropdown step was skipped).
-    """
-    parts = urllib.parse.urlsplit(url)
-    q = dict(urllib.parse.parse_qsl(parts.query))
-    q.update({"page": str(pnum), "experience": str(experience),
-              "jobAge": str(days)})
-    return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(q)))
+         "jobAge": str(days)}
+    return f"https://www.naukri.com/{base}?{urllib.parse.urlencode(q)}"
 
 
 def _pick_option(page: Page, candidates: list[str], text: str) -> bool:
@@ -435,7 +412,6 @@ def _pick_option(page: Page, candidates: list[str], text: str) -> bool:
             page.evaluate(f"document.querySelectorAll('{sel}')[{i}].click()")
             return True
     return False
-
 
 def submit_searchbar(page: Page, keywords: str, location: str,
                      experience: int) -> str:
@@ -482,7 +458,6 @@ def submit_searchbar(page: Page, keywords: str, location: str,
     q["page"] = str(pnum)
     return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(q)))
 
-
 def enrich_job(page: Page, job: Job) -> Job:
     """Visit ONE job page and merge detail fields (description/skills/apply).
 
@@ -515,7 +490,6 @@ def enrich_job(page: Page, job: Job) -> Job:
     except Exception as e:
         log.warning("Detail fetch failed for %s: %s", job.url, e)
         return job
-
 
 def run_scrape(context: BrowserContext,
                should_stop: Callable[[], bool] | None = None,
@@ -601,7 +575,6 @@ def run_scrape(context: BrowserContext,
     _report("done", found=len(jobs_list))
     return jobs_list
 
-
 def save_results(jobs: list[Job], output_dir: Path | None = None) -> tuple[Path, Path]:
     """Timestamped JSON + CSV file export (SQLite remains the source of truth)."""
     out = output_dir or SETTINGS.output_dir
@@ -624,7 +597,6 @@ def save_results(jobs: list[Job], output_dir: Path | None = None) -> tuple[Path,
     log.info("Saved %d jobs -> %s, %s", len(jobs), json_path, csv_path)
     return json_path, csv_path
 
-
 # ---------------------------------------------------------------------------
 # Key-skills scan (analysis-only: aggregates "Key Skills" across postings)
 # ---------------------------------------------------------------------------
@@ -639,7 +611,7 @@ def build_skills_report(jobs: list[Job]) -> dict:
     Pure function.
     """
     if not jobs:
-        return {"jobs_scanned": 0, "with_skills": 0,
+        return {"jobs_scanned": 0, "with_skills": 0, "without_skills": 0,
                 "unique_skills": 0, "top": []}
     forms: dict[str, Counter] = {}
     by_company: dict[str, Counter] = {}
@@ -668,8 +640,9 @@ def build_skills_report(jobs: list[Job]) -> dict:
         top.append({"skill": forms[key].most_common(1)[0][0], "count": count,
                     "pct": round(100 * count / total, 1),
                     "companies": [{"name": n, "count": c} for n, c in cos]})
-    return {"jobs_scanned": total,
-            "with_skills": sum(1 for j in jobs if j.skills),
+    with_skills = sum(1 for j in jobs if j.skills)
+    return {"jobs_scanned": total, "with_skills": with_skills,
+            "without_skills": total - with_skills,
             "unique_skills": len(forms), "top": top}
 
 
@@ -695,7 +668,6 @@ def run_skills_scan(context: BrowserContext, keywords: str, location: str,
 
     page = context.new_page()
     found: dict[str, Job] = {}
-    landed = ""
     for pnum in range(1, pages + 1):
         if len(found) >= max_jobs or stopped():
             break
@@ -705,7 +677,7 @@ def run_skills_scan(context: BrowserContext, keywords: str, location: str,
                 # + experience, like manual typing). Any failure falls back to
                 # the proven direct-URL navigation — the run never breaks here.
                 try:
-                    landed = submit_searchbar(page, keywords, location, experience)
+                    submit_searchbar(page, keywords, location, experience)
                     raw_jobs = extract_listing_cards(page)
                 except Exception as e:
                     log.warning("Search-bar submit failed (%s) — slug fallback", e)
@@ -713,8 +685,11 @@ def run_skills_scan(context: BrowserContext, keywords: str, location: str,
                         page, build_slug_search_url(keywords, location,
                                                     experience, days, pnum))
             else:
+                # Path-based paging (slug-2, slug-3, ...): ?page= is ignored
+                # on slug URLs (reloads page 1 — deduped to nothing new).
                 raw_jobs = scrape_search_page(
-                    page, with_page_param(landed, pnum, experience, days))
+                    page, build_slug_search_url(keywords, location,
+                                                experience, days, pnum))
         except Exception as e:
             log.error("Search page failed: %s", e)
             human_pause()

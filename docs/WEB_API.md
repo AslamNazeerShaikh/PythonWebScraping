@@ -108,6 +108,9 @@ failure falls back to a slug-style URL (`/<slug>-jobs-in-<loc>?k=&l=
 &experience=&jobAge=` — the lordzohar-bot `/{keyword}-jobs` pattern plus
 your verified `jobAge` freshness param; verified live with 20 anchors),
 then pages 2+ continue in the same session with filters re-asserted.
+Pagination follows Naukri's own link scheme (path suffix `...-pune-2`,
+the lordzohar pattern — `?page=` on slug URLs provably reloads page 1,
+which is why early runs stopped near ~20 jobs instead of covering all).
 Detail enrichment for key skills next (no relevance filter —
 the titles are the query), then a frequency
 report (top 30, one vote per posting, case-folded). Every skill carries a

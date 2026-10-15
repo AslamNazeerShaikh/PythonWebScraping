@@ -230,7 +230,9 @@ def render_skills_text(report: dict, params: dict) -> str:
         lines.append("           @ " + ", ".join(
             f"{c['name']} x{c['count']}" for c in t["companies"]))
     lines += ["", f"Unique skills: {report['unique_skills']} | "
-                  f"postings with skills: {report['with_skills']}"]
+                  f"postings with skills: {report['with_skills']} | "
+                  f"without skills (detail unreadable or skill-less): "
+                  f"{report['without_skills']}"]
     return "\n".join(lines) + "\n"
 
 

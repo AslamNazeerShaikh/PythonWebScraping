@@ -357,6 +357,7 @@ def test_build_skills_report_counts_postings_once(monkeypatch):
             make_job("33333333", company="Initech")]  # no skills
     rep = ns.build_skills_report(jobs)
     assert rep["jobs_scanned"] == 3 and rep["with_skills"] == 2
+    assert rep["without_skills"] == 1  # card-only reads surface here, not silently
     assert rep["unique_skills"] == 3
     top = {t["skill"]: t for t in rep["top"]}
     assert top["C#"]["count"] == 2 and top["C#"]["pct"] == round(200 / 3, 1)
@@ -376,6 +377,7 @@ def test_build_skills_report_unknown_company():
 
 def test_build_skills_report_empty():
     assert ns.build_skills_report([]) == {"jobs_scanned": 0, "with_skills": 0,
+                                          "without_skills": 0,
                                           "unique_skills": 0, "top": []}
 
 
@@ -487,11 +489,6 @@ def test_skills_scan_bar_failure_uses_url_fallback(monkeypatch):
     assert any("-jobs-in-pune?" in u for u in page.goto_urls)  # slug fallback taken
 
 
-def test_with_page_param_sets_page_and_filters():
-    out = ns.with_page_param("https://www.naukri.com/x?k=a", 3, 6, 7)
-    assert "page=3" in out and "experience=6" in out and "jobAge=7" in out
-
-
 def test_slugify_matches_manual_search():
     # Ground truth: the user's own manual Naukri URL slug, character-exact.
     assert ns.slugify_keywords(
@@ -506,6 +503,8 @@ def test_build_slug_search_url_mirrors_manual():
     assert url.startswith("https://www.naukri.com/c-sharp-asp-dot-net-core-jobs-in-pune?")
     assert "k=C%23%2C+ASP.Net+Core" in url and "l=pune" in url
     assert "experience=6" in url and "jobAge=7" in url
+    p3 = ns.build_slug_search_url("C#, ASP.Net Core", "pune", 6, 7, 3)
+    assert "-jobs-in-pune-3?" in p3 and "jobAge=7" in p3  # path paging, filters kept
 
 
 def test_submit_searchbar_resolves_variant_inputs(monkeypatch):

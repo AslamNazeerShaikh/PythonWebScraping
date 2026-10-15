@@ -356,7 +356,7 @@ async function startSkills() {
 function renderSkills(r) {
   const s = r.summary || {}, top = s.top || [];
   $("skills-meta").textContent =
-    `${s.jobs_scanned ?? 0} postings · ${s.with_skills ?? 0} with skills · ${s.unique_skills ?? 0} unique` +
+    `${s.jobs_scanned ?? 0} postings · ${s.with_skills ?? 0} with skills · ${s.unique_skills ?? 0} unique · ${s.without_skills ?? 0} without skills` +
     (s.verdict ? ` — ${s.verdict}` : "") + (s.cancelled ? " (cancelled, partials)" : "");
   $("skills-top5").innerHTML = top.slice(0, 5).map((t, i) =>
     `<span class="pill st-running">#${i + 1} ${esc(t.skill)} · ${t.count}</span>`).join("");
