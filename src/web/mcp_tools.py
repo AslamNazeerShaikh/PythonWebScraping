@@ -3,7 +3,7 @@
 Per the FastMCP FastAPI guide, auto-converting every REST endpoint gives LLMs
 a worse interface than a small curated set — so the MCP surface here is five
 focused tools: read stats, search jobs, start a scrape, check a run, cancel
-a run. Mounted at ``/mcp`` by :mod:`src.web.app`.
+a run. Mounted at ``/mcp`` by :mod:`src.web.main`.
 
 Sources:
 * https://gofastmcp.com/integrations/fastapi — ``mcp.http_app(path=...)``,
@@ -11,7 +11,7 @@ Sources:
 """
 from __future__ import annotations
 
-from .data import get_stats, list_jobs
+from .crud import get_stats, list_jobs
 from .orchestrator import BusyError, Orchestrator, RunNotCancellable, RunNotFound
 
 

@@ -18,9 +18,10 @@ from typer.testing import CliRunner
 
 import src.main as main
 import src.naukri_scraper as ns
-from src.web.app import create_app
-from src.web.data import get_job, get_stats, list_jobs
-from src.web.errors import ApiError
+from src.web.dependencies import get_orchestrator
+from src.web.main import create_app
+from src.web.crud import get_job, get_stats, list_jobs, list_tables, table_rows
+from src.web.errors import ApiError, TableNotFound
 from src.web.mcp_tools import build_mcp
 from src.web.orchestrator import (
     BusyError,
@@ -32,6 +33,14 @@ from src.web.orchestrator import (
     default_scrape_runner,
 )
 from tests.conftest import FakeContext, FakePage, make_job, raw_card
+
+
+@pytest.fixture(autouse=True)
+def _isolated_logs(tmp_path, monkeypatch):
+    """Per-run log files land in a tmp dir (never the real logs/)."""
+    from src.config import SETTINGS
+
+    monkeypatch.setattr(SETTINGS, "log_dir", tmp_path / "logs")
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +126,9 @@ def test_start_and_finish_success():
     e = orch.start_export({"format": "csv"})
     assert s.run_id.startswith("scrape-") and e.run_id.startswith("export-")
     assert orch.wait_for(s.run_id).status == "succeeded"
-    assert orch.wait_for(e.run_id).summary == {"found": 1, "new": 1}
+    final = orch.wait_for(e.run_id)
+    assert final.summary["found"] == 1 and final.summary["log"].endswith(".log")
+    assert final.to_dict()["events"][-1]["stage"] == "done"
     assert orch.active_count() == 0
     assert [r.run_id for r in orch.list_runs()] == [e.run_id, s.run_id]
     d = s.to_dict()
@@ -228,7 +239,9 @@ def test_default_scrape_runner_full_params(fresh_db, tmp_path, monkeypatch):
                             "experience": 6, "days": 7, "pages": 1,
                             "max_jobs": 10, "enrich": True})
     summary = default_scrape_runner(rec)
-    assert summary == {"found": 2, "new": 2, "cancelled": False}
+    assert summary["found"] == 2 and summary["new"] == 2
+    assert summary["cancelled"] is False and summary["duration_s"] >= 0
+    assert summary["verdict"].startswith("2 new of 2 collected across 2 location(s) in ")
     assert rec.progress["stage"] == "done"
     after = (settings.keywords, list(settings.locations), settings.experience,
              settings.date_filter, settings.max_pages_per_search,
@@ -257,7 +270,8 @@ def test_default_scrape_runner_immediate_stop(fresh_db, tmp_path, monkeypatch):
     rec = RunRecord(run_id="s", kind="scrape", seq=1, params={})
     rec._stop_event.set()
     summary = default_scrape_runner(rec)
-    assert summary == {"found": 0, "new": 0, "cancelled": True}
+    assert summary["found"] == 0 and summary["cancelled"] is True
+    assert summary["verdict"].startswith("cancelled after ")
 
 
 # ---------------------------------------------------------------------------
@@ -395,6 +409,7 @@ def test_dashboard_scalar_openapi(web_env):
     page = client.get("/")
     assert page.status_code == 200
     assert "IBM Plex Mono" in page.text and "/api/scrape" in page.text
+    assert "database" in page.text and "run logs" in page.text  # req: browse store + logs
     scalar = client.get("/scalar")
     assert scalar.status_code == 200
     spec = client.get("/openapi.json").json()
@@ -486,3 +501,104 @@ def test_web_command_serves(monkeypatch, fresh_db):
     assert result.exit_code == 0
     assert calls == {"app": calls["app"], "host": "127.0.0.1", "port": 8123}
     assert "8123" in result.output
+
+
+# ---------------------------------------------------------------------------
+# runlog — per-run files, both loggers, timestamped lines
+# ---------------------------------------------------------------------------
+def test_run_log_captures_python_and_playwright_with_timestamps():
+    import logging
+
+    from src.web.runlog import attached_run_log, list_log_files, read_log_file
+
+    logging.getLogger("src.web.test").info("python hello")
+    with attached_run_log("scrape", "scrape-0001") as name:
+        assert name.startswith("scrape_scrape-0001_") and name.endswith(".log")
+        logging.getLogger("src.web.test").info("inside run")
+        logging.getLogger("playwright").info("browser hello")
+    body = read_log_file(name)
+    assert "inside run" in body and "browser hello" in body
+    import re as _re
+    assert _re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} INFO", body)
+    assert "python hello" not in body  # outside the context: not captured
+    files = list_log_files()
+    assert files[0]["name"] == name and files[0]["size"] > 0
+    assert read_log_file(name, max_lines=1).count("\n") == 0  # tail of 1
+
+
+def test_read_log_file_rejects_bad_names(tmp_path, monkeypatch):
+    from src.config import SETTINGS
+    from src.web.runlog import LogNotFound, read_log_file
+
+    monkeypatch.setattr(SETTINGS, "log_dir", tmp_path / "logs")
+    with pytest.raises(LogNotFound):
+        read_log_file("../evil.log")
+    with pytest.raises(LogNotFound):
+        read_log_file("missing.log")
+
+
+# ---------------------------------------------------------------------------
+# crud explorer — tables + rows over serverless SQLite
+# ---------------------------------------------------------------------------
+def test_db_explorer_tables_and_rows(fresh_db):
+    from src.db import upsert_jobs
+
+    upsert_jobs([make_job("11111111")])
+    tables = {t["name"]: t for t in list_tables()}
+    assert set(tables) == {"jobs", "scrape_runs"}
+    assert "job_id" in tables["jobs"]["columns"] and tables["jobs"]["rows"] == 1
+    cols, rows, total = table_rows("jobs", page=1, page_size=10)
+    assert total == 1 and rows[0]["job_id"] == "11111111" and "title" in cols
+    _, empty, _ = table_rows("jobs", page=9, page_size=10)
+    assert empty == []
+    with pytest.raises(TableNotFound):
+        table_rows("pg_shadow")
+
+
+# ---------------------------------------------------------------------------
+# ops router — /api/db/*, /api/logs/*, dependency override
+# ---------------------------------------------------------------------------
+def test_ops_db_and_log_endpoints(web_env):
+    client, orch = web_env
+    tables = client.get("/api/db/tables").json()
+    assert {t["name"] for t in tables} == {"jobs", "scrape_runs"}
+    page = client.get("/api/db/tables/jobs", params={"page_size": 1}).json()
+    assert page["total"] == 2 and len(page["data"]) == 1
+    assert client.get("/api/db/tables/nope").status_code == 404
+    assert client.get("/api/db/tables/nope").json()["error"]["code"] == "TABLE_NOT_FOUND"
+    rec = orch.start_export({})
+    orch.wait_for(rec.run_id, timeout=10)
+    logs = client.get("/api/logs").json()
+    assert rec.run_id in logs[0]["name"]
+    tail = client.get(f"/api/logs/{logs[0]['name']}", params={"max_lines": 5})
+    assert tail.status_code == 200
+    assert client.get("/api/logs/../x").status_code == 404
+
+
+def test_dependency_override_injects_orchestrator(fresh_db):
+    from fastapi.testclient import TestClient
+
+    from src.web.main import create_app
+
+    orch = Orchestrator(scrape_runner=_instant(), export_runner=_instant())
+    app = create_app()  # default orchestrator inside...
+    app.dependency_overrides[get_orchestrator] = lambda: orch  # ...swapped here
+    with TestClient(app) as client:
+        run_id = client.post("/api/exports", json={}).json()["run_id"]
+        assert orch.wait_for(run_id, timeout=10).status == "succeeded"
+
+
+def test_run_events_timeline_capped():
+    rec = RunRecord(run_id="s", kind="scrape", seq=1)
+    for i in range(60):
+        rec.push_progress({"stage": "search", "page": i})
+    assert len(rec.events) == 60  # deque keeps 500...
+    assert len(rec.to_dict()["events"]) == 50  # ...API ships newest 50
+    assert rec.to_dict()["events"][-1]["page"] == 59
+
+
+def test_config_log_dir_default(tmp_path, monkeypatch):
+    from src import config
+
+    monkeypatch.delenv("LOG_DIR", raising=False)
+    assert config.Settings().log_dir.name == "logs"

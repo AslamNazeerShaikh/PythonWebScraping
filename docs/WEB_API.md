@@ -31,10 +31,12 @@ Run `python -m src.main web` (default `127.0.0.1:8000`, see `WEB_HOST` /
 POST /api/scrape                 → 202 {run_id,...}   409 SCRAPE_ALREADY_RUNNING
 POST /api/exports                → 202 {run_id,...}
 GET  /api/runs                   → newest-first list
-GET  /api/runs/{id}              → live progress (progress.stage/page/found)
+GET  /api/runs/{id}              → live progress + events[] stage timeline + verdict
 POST /api/runs/{id}/cancel       → cancelling → cancelled (partials kept)
 GET  /api/runs/{id}/download     → export file (409 until succeeded, 404 if lost)
 GET  /api/health | /api/stats | /api/jobs[?q&location&page&page_size] | /api/jobs/{id}
+GET  /api/db/tables | /api/db/tables/{name}[?page&page_size] → browse SQLite in the UI
+GET  /api/logs | /api/logs/{name}[?max_lines]               → per-run timestamped logs
 ```
 
 All failures share one envelope: `{"error": {"code": ..., "message": ...}}`
@@ -45,17 +47,30 @@ Rules: one scrape at a time (process lock, second start = 409); cancel is
 cooperative (worker polls between pages, partial results upserted); run
 history is a 200-entry ring (evicted ids → 404); SQLite stays source of truth.
 
-## Architecture
+## Architecture (FastAPI bigger-applications shape)
+
+Per https://fastapi.tiangolo.com/tutorial/bigger-applications/ —
+`APIRouter(prefix, tags)`, shared `dependencies`, `internal/` mounted with
+prefix/tags at include time, `[tool.fastapi] entrypoint` in `pyproject.toml`:
 
 ```
-browser UI / REST / MCP  ──→  FastAPI (src/web/app.py)
-                                   ├── data.py ......... reads: jobs/stats (SQLite)
-                                   ├── orchestrator.py . runs: threads + cancel events + lock
-                                   │     ├── default_scrape_runner (browser→DB→files, lazy imports)
-                                   │     └── default_export_runner (snapshot → file)
-                                   ├── mcp_tools.py .... 5 curated tools (not auto-converted)
-                                   └── templates/dashboard.html (Tailwind v4 + IBM Plex Mono)
+src/web/
+    main.py            ← FastAPI app + include_router + mounts + GET / (uvicorn src.web.main:app)
+    dependencies.py    ← get_orchestrator (app.state; override via dependency_overrides)
+    routers/jobs.py    ← APIRouter(prefix="/api/jobs", tags=["jobs"])
+    routers/runs.py    ← APIRouter(prefix="/api", tags=["runs"])
+    internal/ops.py    ← no prefix inside; included with prefix="/api", tags=["ops"]
+    schemas.py         ← Pydantic contracts (RunOut now carries events[])
+    crud.py            ← SQLite reads + stats + DB explorer (renamed from data.py)
+    orchestrator.py    ← run threads, cancel events, stage timeline, verdicts
+    runlog.py          ← per-run timestamped log files (python + playwright)
+    mcp_tools.py       ← 5 curated MCP tools
+    templates/dashboard.html
 ```
+
+Deliberately NOT added (YAGNI): token auth (personal local tool), DuckDB
+second store (SQLite is already serverless/engineless), global overdue
+dependencies.
 
 `run_scrape()` gained two optional hooks (`should_stop`, `on_progress`;
 CLI passes neither — behavior unchanged). Defaults resolve from `SETTINGS`;
@@ -66,13 +81,30 @@ per-run overrides are restored in `finally`.
 Single self-contained `dashboard.html`: Tailwind v4 browser CDN + IBM Plex
 Mono everywhere, zinc/emerald dev-console look (flat, no gradients, dense
 tables). Works without the CDN too (inline `<style>` fallback). Polls run
-state every 3s; charts are CSS bars from `/api/stats`.
+state every 3s; charts are CSS bars from `/api/stats`. Live run panel shows
+counters (found / steps / elapsed), the `events[]` stage timeline, and a
+final **verdict** card (`"3 new of 12 collected across 2 location(s) in
+41.2s"` + duration + link to the run's log file). Separate cards browse the
+SQLite tables and tail per-run logs.
 
-## MCP tools (curated)
+## Run logs
+
+Every run writes `logs/<kind>_<run-id>_YYYYMMDD_HHMMSS.log`
+(`LOG_DIR`, default `logs/`, gitignored): root logger (all Python code) +
+`playwright` logger at INFO, line shape
+`2026-10-15 19:02:11 INFO     src.web.orchestrator: message`. Console output
+unchanged. Browse via dashboard or `GET /api/logs[/{name}]`.
+
+## MCP tools (curated) + harness wiring
 
 `collector_stats`, `search_jobs(query, location, page_size)`,
 `start_scrape(keywords, locations)`, `run_status(run_id)`,
 `cancel_run(run_id)`. Errors return `{"error": ...}` dicts (never raise).
+
+The agent harness talks to the **running** server: `.opencode/opencode.json`
+declares `mcp.servers["naukri-collector"]` → `http://127.0.0.1:8000/mcp`
+(Streamable HTTP). Start the server first (`python -m src.main web`), then
+the harness gets the same 5 tools.
 
 ## Boundaries
 
@@ -96,8 +128,11 @@ state every 3s; charts are CSS bars from `/api/stats`.
 
 ## Evidence (verify-before-claim)
 
-- `pytest`: **120 passed, 100% coverage** (gate `--cov-fail-under=100` green).
+- `pytest`: **127 passed, 100% coverage** (gate `--cov-fail-under=100` green).
 - Live boot on `:8123` against the real `jobs.db` (45 jobs): health/stats/
   dashboard/scalar all 200; export run `export-0001` → succeeded → download
   200; cancel-after-finish → `409 RUN_NOT_CANCELLABLE`; jobs search returned
   real TCS listing. Cancel-mid-run proven in tests with blocking runners.
+- Restructure verified: `uvicorn src.web.main:app` boots; routers resolve
+  every route; `[tool.fastapi] entrypoint` declared per the guide; MCP tools
+  reachable over HTTP `/mcp` by the harness config.

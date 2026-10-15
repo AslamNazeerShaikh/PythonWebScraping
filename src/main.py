@@ -185,7 +185,7 @@ def web(
     _ensure_env()
     import uvicorn
 
-    from .web.app import app as web_app
+    from .web.main import app as web_app
 
     console.print(f"[bold]Serving control plane[/bold] on http://{host}:{port} "
                   f"(dashboard + /scalar + /mcp)")

@@ -29,6 +29,7 @@ source .venv/bin/activate
 
 # Web control plane (one process, one port — recommended):
 python -m src.main web                      # dashboard :8000 + /scalar + /mcp
+uvicorn src.web.main:app --port 8000        # same, without the CLI wrapper
 python -m src.main web --port 8123          # custom port
 # open http://127.0.0.1:8000  → trigger/cancel scrapes + exports from the UI
 # (REST: POST /api/scrape → 202 run id → POST /api/runs/<id>/cancel)

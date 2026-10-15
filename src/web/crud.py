@@ -9,11 +9,12 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, select
+from fastapi.encoders import jsonable_encoder
+from sqlalchemy import func, inspect, select, text
 
-from ..db import count_jobs, fetch_all_jobs, get_session
+from ..db import count_jobs, fetch_all_jobs, get_engine, get_session
 from ..models import Job, JobRow
-from .errors import ApiError
+from .errors import ApiError, TableNotFound
 
 
 class JobNotFound(ApiError):
@@ -72,3 +73,42 @@ def get_stats(top_n: int = 8) -> dict:
         "by_location": [{"name": name, "count": n} for name, n in by_loc],
         "by_company": [{"name": name, "count": n} for name, n in by_co],
     }
+
+
+# ---------------------------------------------------------------------------
+# Database explorer (serverless SQLite, browsed from the dashboard)
+# ---------------------------------------------------------------------------
+def list_tables() -> list[dict]:
+    """Every user table with columns + row count (explorer overview)."""
+    engine = get_engine()
+    inspector = inspect(engine)
+    tables = []
+    with engine.connect() as conn:
+        for name in inspector.get_table_names():
+            columns = [c["name"] for c in inspector.get_columns(name)]
+            total = conn.execute(
+                text(f'SELECT COUNT(*) FROM "{name}"')).scalar() or 0
+            tables.append({"name": name, "columns": columns, "rows": total})
+    return tables
+
+
+def table_rows(name: str, page: int = 1,
+               page_size: int = 20) -> tuple[list[str], list[dict], int]:
+    """Paginated rows of one table (name validated against the inspector).
+
+    Returns ``(columns, rows, total)`` with JSON-safe values. Raises
+    :class:`TableNotFound` for unknown tables (never interpolates raw input
+    into SQL — the name must come from :func:`list_tables` first).
+    """
+    engine = get_engine()
+    inspector = inspect(engine)
+    if name not in inspector.get_table_names():
+        raise TableNotFound(f"no table {name!r}")
+    columns = [c["name"] for c in inspector.get_columns(name)]
+    with engine.connect() as conn:
+        total = conn.execute(text(f'SELECT COUNT(*) FROM "{name}"')).scalar() or 0
+        rows = conn.execute(
+            text(f'SELECT * FROM "{name}" LIMIT :limit OFFSET :offset'),
+            {"limit": page_size,
+             "offset": (page - 1) * page_size}).mappings().all()
+    return columns, [jsonable_encoder(dict(r)) for r in rows], total

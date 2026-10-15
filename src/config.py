@@ -102,6 +102,9 @@ class Settings:
     output_dir: Path = field(
         default_factory=lambda: (BASE_DIR / _get("OUTPUT_DIR", "output")).resolve()
     )
+    log_dir: Path = field(
+        default_factory=lambda: (BASE_DIR / _get("LOG_DIR", "logs")).resolve()
+    )
 
     # -- Persistence / logging ------------------------------------------------
     database_url: str = _get("DATABASE_URL", f"sqlite:///{(BASE_DIR / 'jobs.db').resolve()}")

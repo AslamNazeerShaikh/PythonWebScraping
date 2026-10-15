@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from .errors import ApiError
+from .runlog import attached_run_log
 
 
 class RunNotFound(ApiError):
@@ -65,6 +67,10 @@ class RunRecord:
     error: str = ""
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
+    #: Stage timeline (append-only, newest 500 kept): every ``push_progress``
+    #: lands here with a timestamp — the dashboard renders it as live steps.
+    events: deque = field(default_factory=lambda: deque(maxlen=500),
+                         repr=False, compare=False)
     _stop_event: threading.Event = field(default_factory=threading.Event,
                                          repr=False, compare=False)
 
@@ -73,8 +79,9 @@ class RunRecord:
         return self._stop_event.is_set()
 
     def push_progress(self, update: dict) -> None:
-        """Merge a progress update (stage/page/found) into the record."""
+        """Merge a progress update and append it to the stage timeline."""
         self.progress = {**self.progress, **update}
+        self.events.append({"t": round(time.time(), 3), **update})
         self.updated_at = time.time()
 
     def to_dict(self) -> dict:
@@ -83,6 +90,7 @@ class RunRecord:
             "run_id": self.run_id, "kind": self.kind, "status": self.status,
             "cancel_requested": self.cancel_requested,
             "params": dict(self.params), "progress": dict(self.progress),
+            "events": list(self.events)[-50:],
             "summary": dict(self.summary), "error": self.error,
             "created_at": self.created_at, "updated_at": self.updated_at,
         }
@@ -119,6 +127,7 @@ def default_scrape_runner(record: RunRecord) -> dict:
             setattr(SETTINGS, key, params[alias])
     if params.get("enrich") is not None:
         SETTINGS.enrich_details = bool(params["enrich"])
+    started = time.time()
     try:
         from playwright.sync_api import sync_playwright
 
@@ -135,8 +144,16 @@ def default_scrape_runner(record: RunRecord) -> dict:
         record_run(SETTINGS.keywords, ",".join(SETTINGS.locations),
                    SETTINGS.max_pages_per_search, found=total, new_jobs=new)
         save_results(jobs)
-        return {"found": total, "new": new,
-                "cancelled": record.should_stop()}
+        duration = round(time.time() - started, 1)
+        places = len(SETTINGS.locations)
+        if record.should_stop():
+            verdict = (f"cancelled after {duration}s — {new} new of {total} "
+                       f"kept across {places} location(s) (partials upserted)")
+        else:
+            verdict = (f"{new} new of {total} collected across {places} "
+                       f"location(s) in {duration}s")
+        return {"found": total, "new": new, "cancelled": record.should_stop(),
+                "duration_s": duration, "verdict": verdict}
     finally:
         for key, value in prev.items():
             setattr(SETTINGS, key, value)
@@ -242,20 +259,22 @@ class Orchestrator:
     def _launch(self, record: RunRecord, func: RunnerFunc,
                 release_lock: bool) -> None:
         def _target() -> None:
-            try:
-                record.summary = func(record)
-            except Exception as e:  # worker must never die silently
-                record.error = f"{type(e).__name__}: {e}"
-                record.status = "failed"
-            else:
-                if record.cancel_requested:
-                    record.status = "cancelled"
+            with attached_run_log(record.kind, record.run_id) as log_name:
+                try:
+                    record.summary = func(record)
+                except Exception as e:  # worker must never die silently
+                    record.error = f"{type(e).__name__}: {e}"
+                    record.status = "failed"
                 else:
-                    record.status = "succeeded"
-            finally:
-                record.updated_at = time.time()
-                if release_lock:
-                    self._scrape_lock.release()
+                    if record.cancel_requested:
+                        record.status = "cancelled"
+                    else:
+                        record.status = "succeeded"
+                finally:
+                    record.updated_at = time.time()
+                    if release_lock:
+                        self._scrape_lock.release()
+            record.summary["log"] = log_name
 
         thread = threading.Thread(target=_target, daemon=True,
                                   name=f"run-{record.run_id}")

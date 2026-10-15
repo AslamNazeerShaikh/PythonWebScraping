@@ -39,6 +39,8 @@ class RunOut(BaseModel):
     cancel_requested: bool
     params: dict = Field(default_factory=dict)
     progress: dict = Field(default_factory=dict)
+    #: Stage timeline (newest 50) — the dashboard renders these as live steps.
+    events: list = Field(default_factory=list)
     summary: dict = Field(default_factory=dict)
     error: str = ""
     created_at: float = 0.0
@@ -54,6 +56,7 @@ class RunOut(BaseModel):
             cancel_requested=get(record, "cancel_requested"),
             params=dict(get(record, "params") or {}),
             progress=dict(get(record, "progress") or {}),
+            events=list(get(record, "events") or []),
             summary=dict(get(record, "summary") or {}),
             error=get(record, "error") or "",
             created_at=get(record, "created_at") or 0.0,
@@ -93,3 +96,30 @@ class HealthOut(BaseModel):
     status: str = "ok"
     jobs: int = 0
     runs: int = 0
+
+
+class DbTable(BaseModel):
+    """One database table in the explorer (name/columns/row count)."""
+
+    name: str
+    columns: list[str] = Field(default_factory=list)
+    rows: int = 0
+
+
+class DbTablePage(BaseModel):
+    """Paginated rows of one table (JSON-safe values)."""
+
+    name: str
+    columns: list[str] = Field(default_factory=list)
+    data: list[dict] = Field(default_factory=list)
+    page: int = 1
+    page_size: int = 20
+    total: int = 0
+
+
+class LogFile(BaseModel):
+    """One per-run log file on disk."""
+
+    name: str
+    size: int = 0
+    modified: float = 0.0

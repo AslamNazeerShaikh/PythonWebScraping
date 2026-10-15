@@ -1,7 +1,7 @@
 """Shared API error type — one shape for every failure.
 
 All errors surface as ``{"error": {"code": ..., "message": ...}}`` (see the
-``ApiError`` handler in :mod:`src.web.app`), per the consistent-error rule in
+``ApiError`` handler in :mod:`src.web.main`), per the consistent-error rule in
 the api-and-interface-design skill.
 """
 from __future__ import annotations
@@ -16,3 +16,10 @@ class ApiError(Exception):
     def __init__(self, message: str = "") -> None:
         super().__init__(message or self.code)
         self.message = message or self.code
+
+
+class TableNotFound(ApiError):
+    """Unknown database table in the explorer."""
+
+    status = 404
+    code = "TABLE_NOT_FOUND"

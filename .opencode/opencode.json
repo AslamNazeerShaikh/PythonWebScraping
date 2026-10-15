@@ -24,6 +24,10 @@
           "startup": 180000,
           "catalog": 120000
         }
+      },
+      "naukri-collector": {
+        "type": "remote",
+        "url": "http://127.0.0.1:8000/mcp"
       }
     }
   }

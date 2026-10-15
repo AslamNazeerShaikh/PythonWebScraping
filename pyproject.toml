@@ -1,3 +1,6 @@
+[tool.fastapi]
+entrypoint = "src.web.main:app"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=src --cov-report=term-missing --cov-fail-under=100"

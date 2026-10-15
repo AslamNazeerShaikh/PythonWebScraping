@@ -113,7 +113,14 @@
       <h2 class="text-sm font-semibold text-zinc-100 mb-1">◎ active run</h2>
       <p class="text-xs text-zinc-500 mb-3">live progress · cancel keeps partials.</p>
       <div id="active-box" class="text-xs text-zinc-500">no run in flight. start a scrape or export.</div>
+      <div class="grid grid-cols-3 gap-2 mt-3 text-center">
+        <div class="bar-track p-2"><div class="lbl">found</div><div id="c-found" class="text-lg font-bold text-emerald-400">–</div></div>
+        <div class="bar-track p-2"><div class="lbl">steps</div><div id="c-steps" class="text-lg font-bold text-zinc-100">–</div></div>
+        <div class="bar-track p-2"><div class="lbl">elapsed</div><div id="c-elapsed" class="text-lg font-bold text-zinc-100">–</div></div>
+      </div>
       <div id="active-prog" class="prog mt-3 hidden"><div id="active-bar" style="width:0%"></div></div>
+      <div id="active-steps" class="mt-2 space-y-1 text-xs max-h-36 overflow-y-auto"></div>
+      <div id="active-verdict" class="mt-2 text-xs hidden"></div>
       <button id="btn-cancel" class="btn btn-stop w-full mt-3 hidden" type="button">■ cancel run</button>
       <div id="active-log" class="text-xs text-zinc-500 mt-2"></div>
     </div>
@@ -132,6 +139,30 @@
   <section class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
     <div class="card p-4"><h2 class="text-sm font-semibold text-zinc-100 mb-3">jobs by location</h2><div id="chart-loc" class="space-y-2 text-xs"></div></div>
     <div class="card p-4"><h2 class="text-sm font-semibold text-zinc-100 mb-3">top companies</h2><div id="chart-co" class="space-y-2 text-xs"></div></div>
+  </section>
+
+  <!-- ══ database + logs ══ -->
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4">
+    <div class="card p-4 lg:col-span-2">
+      <div class="flex flex-wrap items-end gap-2 mb-2">
+        <h2 class="text-sm font-semibold text-zinc-100 me-2">database</h2>
+        <select id="db-tbl" class="inp" style="width:auto"></select>
+        <div class="ms-auto flex items-center gap-2 text-xs text-zinc-400">
+          <button id="db-prev" class="btn btn-ghost" type="button">←</button>
+          <span id="db-page">1</span>
+          <button id="db-next" class="btn btn-ghost" type="button">→</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto"><table class="grid"><thead><tr id="db-head"></tr></thead>
+        <tbody id="db-body"><tr><td class="text-zinc-500">loading…</td></tr></tbody></table></div>
+      <div id="db-count" class="text-xs text-zinc-500 mt-2"></div>
+    </div>
+    <div class="card p-4">
+      <h2 class="text-sm font-semibold text-zinc-100 mb-1">run logs</h2>
+      <p class="text-xs text-zinc-500 mb-2">timestamped python + browser lines, one file per run.</p>
+      <div id="logs-list" class="space-y-1 text-xs mb-2"></div>
+      <pre id="log-view" class="text-xs text-zinc-400 whitespace-pre-wrap max-h-64 overflow-y-auto bar-track p-2 hidden"></pre>
+    </div>
   </section>
 
   <!-- ══ jobs ══ -->
@@ -178,7 +209,13 @@ function fmtRun(r) {
   if (p.stage === "search") prog = `search ${esc(p.location || "")} p${p.page ?? "?"}/${p.pages ?? "?"} · ${p.found ?? 0} found`;
   else if (p.stage === "detail") prog = `detail ${p.index ?? "?"}/${p.total ?? "?"} · ${p.found ?? ""}`;
   else if (p.stage === "done") prog = "done";
-  const res = r.status === "succeeded" ? esc(JSON.stringify(s)) : (r.error ? esc(r.error) : "–");
+  const steps = (r.events || []).length;
+  let res;
+  if (r.status === "succeeded" && s.verdict) res = esc(s.verdict);
+  else if (r.status === "succeeded") res = esc(JSON.stringify(s));
+  else res = r.error ? esc(r.error) : "–";
+  if (s.log) res += ` <a class="lnk" href="/api/logs/${esc(s.log)}" target="_blank" rel="noopener">log</a>`;
+  if (steps) res += ` <span class="text-zinc-600">· ${steps} steps</span>`;
   const can = (r.status === "running" || r.status === "cancelling")
     ? `<button class="btn btn-stop" data-cancel="${esc(r.run_id)}" type="button">cancel</button>` : "";
   const dl = (r.kind === "export" && r.status === "succeeded")
@@ -238,6 +275,18 @@ function renderIdle() {
   $("active-box").innerHTML = `no run in flight. start a scrape or export.`;
   $("active-prog").classList.add("hidden");
   $("btn-cancel").classList.add("hidden");
+  $("active-steps").innerHTML = "";
+  $("active-verdict").classList.add("hidden");
+  $("c-found").textContent = "–"; $("c-steps").textContent = "–"; $("c-elapsed").textContent = "–";
+}
+const fmtT = (t) => new Date(t * 1000).toLocaleTimeString("en-IN", { hour12: false });
+function stepLine(e) {
+  const bits = [e.stage];
+  if (e.location) bits.push(e.location);
+  if (e.page != null) bits.push(`p${e.page}/${e.pages ?? "?"}`);
+  if (e.index != null) bits.push(`${e.index}/${e.total ?? "?"}`);
+  if (e.found != null) bits.push(`${e.found} found`);
+  return bits.join(" · ");
 }
 function renderActive(r) {
   const p = r.progress || {};
@@ -253,9 +302,60 @@ function renderActive(r) {
   $("active-box").innerHTML = `<span class="text-zinc-200">${esc(r.run_id)}</span> — ${esc(txt)}`;
   $("active-prog").classList.remove("hidden");
   $("active-bar").style.width = pct + "%";
+  const evs = r.events || [];
+  $("c-found").textContent = p.found ?? (r.summary || {}).found ?? "–";
+  $("c-steps").textContent = evs.length || "–";
+  $("c-elapsed").textContent = Math.max(0, Math.round((r.updated_at || 0) - (r.created_at || 0))) + "s";
+  $("active-steps").innerHTML = evs.slice(-8).reverse().map((e) =>
+    `<div class="text-zinc-500"><span class="text-zinc-600">${fmtT(e.t)}</span> → ${esc(stepLine(e))}</div>`).join("");
+  const v = $("active-verdict");
+  if (["succeeded", "failed", "cancelled"].includes(r.status)) {
+    const s = r.summary || {};
+    v.classList.remove("hidden");
+    v.innerHTML = `<div class="bar-track p-2"><span class="lbl">verdict</span><br>
+      <span class="text-zinc-100">${esc(s.verdict || r.status)}</span>
+      ${s.duration_s != null ? `<span class="text-zinc-500">· ${s.duration_s}s</span>` : ""}
+      ${s.log ? `<a class="lnk" href="/api/logs/${esc(s.log)}" target="_blank" rel="noopener">full log</a>` : ""}</div>`;
+  } else v.classList.add("hidden");
   if (r.kind === "export" && r.status === "succeeded" && (r.summary || {}).file)
     $("dl-zone").innerHTML = `ready → <a class="lnk" href="/api/runs/${esc(r.run_id)}/download">↓ ${esc(r.summary.file)}</a>`;
-  if (["succeeded", "failed", "cancelled"].includes(r.status)) { refreshStats(); refreshJobs(); }
+  if (["succeeded", "failed", "cancelled"].includes(r.status)) { refreshStats(); refreshJobs(); refreshLogs(); }
+}
+
+let dbTable = "jobs", dbPage = 1;
+const DB_SIZE = 12;
+async function refreshDbTables() {
+  const tables = await api("/api/db/tables");
+  const sel = $("db-tbl");
+  sel.innerHTML = tables.map((t) => `<option value="${esc(t.name)}" ${t.name === dbTable ? "selected" : ""}>${esc(t.name)} (${t.rows})</option>`).join("");
+  if (!tables.some((t) => t.name === dbTable) && tables.length) dbTable = tables[0].name;
+}
+async function refreshDbRows() {
+  await refreshDbTables();
+  const pg = await api(`/api/db/tables/${encodeURIComponent(dbTable)}?page=${dbPage}&page_size=${DB_SIZE}`);
+  $("db-head").innerHTML = pg.columns.map((c) => `<th>${esc(c)}</th>`).join("");
+  $("db-body").innerHTML = pg.data.length ? pg.data.map((row) =>
+    `<tr>${pg.columns.map((c) => `<td class="text-zinc-400 break-all">${esc(row[c] ?? "")}</td>`).join("")}</tr>`).join("")
+    : `<tr><td class="text-zinc-500">empty table.</td></tr>`;
+  const pages = Math.max(1, Math.ceil(pg.total / pg.page_size));
+  $("db-page").textContent = `${pg.page}/${pages} · ${pg.total}`;
+  $("db-count").textContent = `${pg.total} rows · ${pg.columns.length} columns`;
+  $("db-prev").disabled = pg.page <= 1; $("db-next").disabled = pg.page >= pages;
+}
+async function refreshLogs() {
+  const files = await api("/api/logs");
+  $("logs-list").innerHTML = files.length ? files.slice(0, 8).map((f) =>
+    `<div><a class="lnk" href="#" data-log="${esc(f.name)}">${esc(f.name)}</a>
+     <span class="text-zinc-600">· ${Math.round(f.size / 1024)}k</span></div>`).join("")
+    : `<span class="text-zinc-600">no logs yet — runs write one file each.</span>`;
+  $("logs-list").querySelectorAll("[data-log]").forEach((a) =>
+    a.addEventListener("click", (e) => { e.preventDefault(); viewLog(a.dataset.log); }));
+}
+async function viewLog(name) {
+  const r = await fetch(`/api/logs/${encodeURIComponent(name)}?max_lines=120`);
+  const pre = $("log-view");
+  pre.classList.remove("hidden");
+  pre.textContent = await r.text();
 }
 
 async function startScrape() {
@@ -309,9 +409,13 @@ $("btn-export").addEventListener("click", startExport);
 $("j-go").addEventListener("click", () => { jobPage = 1; refreshJobs(); });
 $("j-prev").addEventListener("click", () => { if (jobPage > 1) { jobPage--; refreshJobs(); } });
 $("j-next").addEventListener("click", () => { jobPage++; refreshJobs(); });
+$("db-tbl").addEventListener("change", () => { dbTable = $("db-tbl").value; dbPage = 1; refreshDbRows(); });
+$("db-prev").addEventListener("click", () => { if (dbPage > 1) { dbPage--; refreshDbRows(); } });
+$("db-next").addEventListener("click", () => { dbPage++; refreshDbRows(); });
 
 (async function boot() {
   await refreshHealth(); await refreshStats(); await refreshRuns(); await refreshJobs();
+  await refreshDbRows(); await refreshLogs();
   setInterval(refreshRuns, 3000);
 })();
 </script>
