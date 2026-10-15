@@ -45,6 +45,17 @@ log = logging.getLogger(__name__)
 
 BASE_SEARCH = "https://www.naukri.com/jobs"
 
+#: Naukri homepage + search-bar selectors (verified against the live DOM —
+#: keyword/location suggestor inputs, experience dropdown, search button).
+NAUKRI_HOME = "https://www.naukri.com/"
+SEARCHBAR = {
+    "keywords": ".nI-gNb-sb__keywords input.suggestor-input",
+    "location": ".nI-gNb-sb__locations input.suggestor-input",
+    "location_option": ".nI-gNb-sb__locations li.tuple-wrap",
+    "experience": "#experienceDD",
+    "search_btn": ".nI-gNb-sb__icon-wrapper",
+}
+
 BOT_WALL_PATTERNS = re.compile(
     r"verify you are (a )?human|captcha|access denied|pardon the interruption|"
     r"unusual traffic|are you a robot|cloudflare|perimeterx|datadome",
@@ -305,6 +316,16 @@ def scrape_search_page(page: Page, url: str) -> list[dict]:
     saved to ``output/debug_last_search.html`` for offline ``parse`` runs.
     """
     _safe_goto(page, url)
+    return extract_listing_cards(page)
+
+
+def extract_listing_cards(page: Page) -> list[dict]:
+    """Extract job cards from the CURRENT page (no navigation).
+
+    Used after search-bar submission lands on results. Same settle →
+    bot-wall → scroll → extract flow as :func:`scrape_search_page`, whose
+    goto step is skipped here.
+    """
     page.wait_for_timeout(2500)
     handle_possible_block(page)
     human_scroll(page)
@@ -324,6 +345,53 @@ def scrape_search_page(page: Page, url: str) -> list[dict]:
         except Exception:
             pass
     return jobs
+
+
+def with_page_param(url: str, pnum: int) -> str:
+    """Return ``url`` with its ``page`` query param set (for post-bar paging)."""
+    parts = urllib.parse.urlsplit(url)
+    q = dict(urllib.parse.parse_qsl(parts.query))
+    q["page"] = str(pnum)
+    return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(q)))
+
+
+def submit_searchbar(page: Page, keywords: str, location: str,
+                     experience: int) -> str:
+    """Drive Naukri's search bar like a human; return the landed results URL.
+
+    Fills the keyword suggestor, picks the location suggestion, sets the
+    experience dropdown, and clicks Search — the same inputs a human types
+    into ``ni-gnb-searchbar``. Raises on failure so the caller can fall back
+    to direct-URL navigation (which never breaks the run).
+    """
+    log.info("Skills search via search bar: %r in %s (%sy)", keywords,
+             location, experience)
+    _safe_goto(page, NAUKRI_HOME)
+    page.wait_for_timeout(2000)
+    handle_possible_block(page)
+    page.fill(SEARCHBAR["keywords"], keywords)
+    page.wait_for_timeout(800)
+    page.fill(SEARCHBAR["location"], location)
+    try:
+        page.wait_for_selector(SEARCHBAR["location_option"], timeout=8000)
+        page.click(SEARCHBAR["location_option"])  # first suggestion (e.g. Pune)
+    except Exception:
+        log.info("Location suggestion skipped — typed text kept")
+    try:
+        page.click(SEARCHBAR["experience"])
+        page.fill(SEARCHBAR["experience"], f"{experience} years")
+        page.keyboard.press("Enter")
+    except Exception:
+        log.info("Experience dropdown skipped — search continues without it")
+    page.click(SEARCHBAR["search_btn"])
+    page.wait_for_selector('a[href*="/job-listings-"]', timeout=15000)
+    log.info("Search bar landed: %s", page.url)
+    return page.url
+    """Return ``url`` with its ``page`` query param set (for post-bar paging)."""
+    parts = urllib.parse.urlsplit(url)
+    q = dict(urllib.parse.parse_qsl(parts.query))
+    q["page"] = str(pnum)
+    return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(q)))
 
 
 def enrich_job(page: Page, job: Job) -> Job:
@@ -538,13 +606,25 @@ def run_skills_scan(context: BrowserContext, keywords: str, location: str,
 
     page = context.new_page()
     found: dict[str, Job] = {}
+    landed = ""
     for pnum in range(1, pages + 1):
         if len(found) >= max_jobs or stopped():
             break
-        url = build_search_url(keywords, location, experience, days, pnum)
-        log.info("Skills search %s p%d: %s", keywords, pnum, url)
         try:
-            raw_jobs = scrape_search_page(page, url)
+            if pnum == 1:
+                # Human path first: drive the search bar (keywords + location
+                # + experience, like manual typing). Any failure falls back to
+                # the proven direct-URL navigation — the run never breaks here.
+                try:
+                    landed = submit_searchbar(page, keywords, location, experience)
+                    raw_jobs = extract_listing_cards(page)
+                except Exception as e:
+                    log.warning("Search-bar submit failed (%s) — URL fallback", e)
+                    raw_jobs = scrape_search_page(
+                        page, build_search_url(keywords, location,
+                                               experience, days, pnum))
+            else:
+                raw_jobs = scrape_search_page(page, with_page_param(landed, pnum))
         except Exception as e:
             log.error("Search page failed: %s", e)
             human_pause()

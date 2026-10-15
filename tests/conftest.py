@@ -99,6 +99,16 @@ class FakeMouse:
         self.moved.append((x, y))
 
 
+class FakeKeyboard:
+    """Keyboard double; records pressed keys."""
+
+    def __init__(self) -> None:
+        self.presses: list[str] = []
+
+    def press(self, key: str) -> None:
+        self.presses.append(key)
+
+
 class FakePage:
     """Scriptable Page fake.
 
@@ -128,7 +138,14 @@ class FakePage:
         self.goto_urls: list[str] = []
         self.close_fail = False
         self.mouse = FakeMouse()
+        self.keyboard = FakeKeyboard()
         self.timeouts: list[int] = []
+        self.fills: list[tuple[str, str]] = []
+        self.clicks: list[str] = []
+        #: Per-click failure plan (None = ok), mirroring ``goto_plan``.
+        self.click_plan: list = []
+        #: Current URL (search-bar submit returns this as the landed URL).
+        self.url = "https://www.naukri.com/"
 
     # -- navigation ------------------------------------------------------
     def goto(self, url: str, wait_until: str = "domcontentloaded"):
@@ -176,6 +193,17 @@ class FakePage:
     def close(self) -> None:
         if self.close_fail:
             raise RuntimeError("close failed")
+
+    # -- form interaction (search-bar driving) ----------------------------------
+    def fill(self, selector: str, value: str) -> None:
+        self.fills.append((selector, value))
+
+    def click(self, selector: str) -> None:
+        self.clicks.append(selector)
+        if self.click_plan:
+            exc = self.click_plan.pop(0)
+            if exc is not None:
+                raise exc
 
 
 class FakeContext:

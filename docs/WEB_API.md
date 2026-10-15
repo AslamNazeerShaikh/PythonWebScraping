@@ -99,9 +99,11 @@ unchanged. Browse via dashboard or `GET /api/logs[/{name}]`.
 ## Key-skills scan
 
 `POST /api/skills {keywords (comma titles), location, experience, days,
-pages, max_jobs (default 100, cap 200)}` starts a `skills` run: the full
-keyword string goes into ONE search (`?k=<all titles>`, Naukri matches
-across them), paged to `pages`, then detail enrichment for key skills
+pages, max_jobs (default 100, cap 200)}` starts a `skills` run: page 1 is
+submitted through Naukri's own search bar (keyword suggestor + location
+suggestion + experience dropdown, like manual typing; any failure falls
+back to `?k=<all titles>` URL navigation), then pages 2+ continue in the
+same session, then detail enrichment for key skills
 (no relevance filter — the titles are the query), then a frequency
 report (top 30, one vote per posting, case-folded). Every skill carries a
 company breakdown (`companies: [{name, count}]`, count desc) so a skill

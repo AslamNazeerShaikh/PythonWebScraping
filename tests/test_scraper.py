@@ -404,7 +404,7 @@ def test_run_skills_scan_cap_breaks_page_loop(monkeypatch):
                              6, 7, 3, 1)
     assert rep["jobs_scanned"] == 1
     searches = [u for u in page.goto_urls if "/jobs?" in u]
-    assert len(searches) == 1  # cap hit: page 2 never visited
+    assert searches == []  # p1 goes through the search bar (homepage), not /jobs?
 
 
 def test_run_skills_scan_stop_mid_pass_keeps_partial(monkeypatch):
@@ -440,7 +440,9 @@ def test_run_skills_scan_stop_before_first_title(monkeypatch):
 def test_run_skills_scan_search_error_continues(monkeypatch):
     _tune_skills(monkeypatch)
     page = FakePage()
-    page.goto_plan = [RuntimeError("boom"), None]
+    # p1: bar submit AND url fallback both fail -> outer handler continues;
+    # p2 succeeds.
+    page.goto_plan = [RuntimeError("boom"), RuntimeError("boom"), None]
     page.listing_queue = [[raw_card("11111111")]]
     rep = ns.run_skills_scan(FakeContext(page), "a", "pune", 6, 7, 2, 10)
     assert rep["jobs_scanned"] == 1
@@ -453,3 +455,42 @@ def test_run_skills_scan_close_failure_swallowed(monkeypatch):
     page.close_fail = True
     rep = ns.run_skills_scan(FakeContext(page), "a", "pune", 6, 7, 1, 10)
     assert rep["jobs_scanned"] == 0  # empty page -> empty report, close ignored
+
+
+# -- search-bar driving ----------------------------------------------------------------------------
+def test_submit_searchbar_drives_bar_inputs(monkeypatch):
+    _tune_skills(monkeypatch)
+    page = FakePage()
+    landed = ns.submit_searchbar(page, "C#, ASP.Net Core", "pune", 6)
+    assert landed == page.url == "https://www.naukri.com/"
+    assert (ns.SEARCHBAR["keywords"], "C#, ASP.Net Core") in page.fills
+    assert (ns.SEARCHBAR["location"], "pune") in page.fills
+    assert (ns.SEARCHBAR["experience"], "6 years") in page.fills
+    assert ns.SEARCHBAR["search_btn"] in page.clicks
+    assert "Enter" in page.keyboard.presses
+    assert page.goto_urls == ["https://www.naukri.com/"]
+
+
+def test_submit_searchbar_experience_fallback(monkeypatch):
+    _tune_skills(monkeypatch)
+    page = FakePage()
+    page.click_plan = [None, RuntimeError("dropdown stuck")]
+    landed = ns.submit_searchbar(page, "x", "pune", 6)
+    assert landed == page.url  # dropdown skipped, typed search still submitted
+    assert ns.SEARCHBAR["search_btn"] in page.clicks
+
+
+def test_skills_scan_bar_failure_uses_url_fallback(monkeypatch):
+    _tune_skills(monkeypatch)
+    page = FakePage()
+    page.listing_queue = [[raw_card("11111111")]]
+    page.selector_fail = True  # no suggestions, no cards -> submit raises
+    rep = ns.run_skills_scan(FakeContext(page), "a", "pune", 6, 7, 1, 10)
+    assert rep["jobs_scanned"] == 1  # fallback found the card, run survived
+    assert any("/jobs?" in u for u in page.goto_urls)  # URL fallback was taken
+
+
+def test_with_page_param_sets_page():
+    assert ns.with_page_param("https://www.naukri.com/x?k=a", 3) == \
+        "https://www.naukri.com/x?k=a&page=3"
+    assert ns.with_page_param("https://www.naukri.com/x?k=a&page=1", 3).endswith("page=3")
