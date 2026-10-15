@@ -15,12 +15,15 @@ polls ``record.should_stop()`` between pages/details and the scraper's
 """
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+
+log = logging.getLogger(__name__)
 
 from .errors import ApiError
 from .runlog import attached_run_log
@@ -169,12 +172,11 @@ def default_export_runner(record: RunRecord) -> dict:
     return {"file": dest.name, "path": str(dest)}
 
 
-def default_skills_runner(record: RunRecord) -> dict:
-    """Key-skills scan in the worker thread (browser → report + .txt).
+def browser_scan_skills(record: RunRecord) -> dict:
+    """Browser skills scan (fallback when the API fast path fails).
 
-    Analysis-only: scanned postings are NOT upserted to the DB — the
-    frequency report (and its text file) is the artifact. Params carry
-    explicit search fields so ``SETTINGS`` is never mutated here.
+    Same report shape as :func:`nkapi.api_scan_skills` — the caller cannot
+    tell which path produced it except via the ``source`` it stamps after.
     """
     from playwright.sync_api import sync_playwright
 
@@ -190,7 +192,6 @@ def default_skills_runner(record: RunRecord) -> dict:
     days = params.get("days") or 7
     pages = params.get("pages") or 5
     max_jobs = params.get("max_jobs") or 100
-    started = time.time()
     setup_logging(SETTINGS.log_level)
     with sync_playwright() as p:
         context = launch_context(p)
@@ -201,6 +202,32 @@ def default_skills_runner(record: RunRecord) -> dict:
                                      on_progress=record.push_progress)
         finally:
             context.close()
+    return report
+
+
+def default_skills_runner(record: RunRecord) -> dict:
+    """Key-skills scan in the worker thread (API fast path, browser fallback).
+
+    Tries the direct search API first (20 postings/request, no browser);
+    any failure (rate-limit, rotated key, network) falls back to the
+    polite browser scan. Analysis-only either way: scanned postings are
+    NOT upserted — the frequency report (and its text file) is the
+    artifact. Params carry explicit search fields so ``SETTINGS`` is
+    never mutated here.
+    """
+    from ..config import SETTINGS
+
+    try:
+        from .nkapi import api_scan_skills
+
+        report = api_scan_skills(record.params, record.should_stop,
+                                 record.push_progress)
+        source = "api"
+    except Exception as e:
+        log.warning("API fast-path failed (%s) — browser fallback", e)
+        report = browser_scan_skills(record)
+        source = "browser"
+    started = record.created_at
     duration = round(time.time() - started, 1)
     top = report["top"]
     if top:
@@ -213,9 +240,9 @@ def default_skills_runner(record: RunRecord) -> dict:
     out = SETTINGS.output_dir
     out.mkdir(parents=True, exist_ok=True)
     dest = out / f"skills_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-    dest.write_text(render_skills_text(report, params), encoding="utf-8")
+    dest.write_text(render_skills_text(report, record.params), encoding="utf-8")
     return {**report, "file": dest.name, "path": str(dest),
-            "duration_s": duration, "verdict": verdict,
+            "duration_s": duration, "verdict": verdict, "source": source,
             "cancelled": record.should_stop()}
 
 

@@ -96,7 +96,16 @@ Every run writes `logs/<kind>_<run-id>_YYYYMMDD_HHMMSS.log`
 `2026-10-15 19:02:11 INFO     src.web.orchestrator: message`. Console output
 unchanged. Browse via dashboard or `GET /api/logs[/{name}]`.
 
-## Key-skills scan
+## Key-skills scan (API fast path + browser fallback)
+
+`POST /api/skills` first tries Naukri's own search API — the JobSpy-port
+(`src/web/nkapi.py`): `GET jobapi/v3/search` with `appid: 109` and a fresh
+per-request RSA `nkparam` (`v0|<ms>|121_srp`, stdlib-only port of
+JobSpy's generator; HAR-captured tokens are time-bound and never replayed).
+Freshness-first (`jobAge` + `sort=f`), 20 rows/page, `tagsAndSkills` split
+per row through the same Pydantic gate. `406` (rate-limit/rotated key) or
+any network failure falls back to the polite browser scan; the summary
+stamps `"source": "api"|"browser"` so you can see which path served.
 
 `POST /api/skills {keywords (comma titles), location, experience, days,
 pages, max_jobs (default 100, cap 200)}` starts a `skills` run: page 1 is

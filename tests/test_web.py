@@ -627,10 +627,21 @@ def test_start_skills_shares_browser_lock():
     assert orch.wait_for(rec.run_id, timeout=10).status == "cancelled"
 
 
+def _force_browser_fallback(monkeypatch):
+    from src.web import nkapi as _nk
+    from src.web.nkapi import NkApiError as _NkErr
+
+    def _down(*a, **k):
+        raise _NkErr("rate limited", status=406)
+
+    monkeypatch.setattr(_nk, "fetch_search_page", _down)
+
+
 def test_default_skills_runner_full(fresh_db, tmp_path, monkeypatch):
     from src.config import SETTINGS
     from src.web.orchestrator import default_skills_runner
 
+    _force_browser_fallback(monkeypatch)
     monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
     _tune_web(monkeypatch, tmp_path)
     page = FakePage()
@@ -646,6 +657,7 @@ def test_default_skills_runner_full(fresh_db, tmp_path, monkeypatch):
     assert summary["top"][0]["skill"] == "C#" and summary["top"][0]["count"] == 2
     assert summary["top"][0]["companies"] == [{"name": "Acme", "count": 2}]
     assert summary["cancelled"] is False and "top: C#, SQL" in summary["verdict"]
+    assert summary["source"] == "browser"  # API refused -> browser fallback
     dest = tmp_path / summary["file"]
     assert dest.suffix == ".txt" and "2x (100.0%)  C#" in dest.read_text()
     assert "Acme x2" in dest.read_text()
@@ -656,6 +668,7 @@ def test_default_skills_runner_empty(fresh_db, tmp_path, monkeypatch):
     from src.web.orchestrator import default_skills_runner, render_skills_text
 
     monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    _force_browser_fallback(monkeypatch)
     _tune_web(monkeypatch, tmp_path)
     _wire_browser(monkeypatch, FakePage())
     rec = RunRecord(run_id="k", kind="skills", seq=1,
@@ -717,3 +730,181 @@ def test_skills_api_busy(fresh_db, tmp_path, monkeypatch):
 def test_dashboard_has_skills_section(web_env):
     client, _ = web_env
     assert "key skills" in client.get("/").text
+
+
+# ---------------------------------------------------------------------------
+# nkapi — direct search API fast path (mocked HTTP, no network)
+# ---------------------------------------------------------------------------
+def _api_job(job_id, skills="C#, SQL", title="Senior .NET Developer",
+             company="Acme"):
+    return {"jobId": job_id, "title": title, "companyName": company,
+            "experienceText": "6-8 Yrs", "tagsAndSkills": skills,
+            "jdURL": f"/job-listings-dev-{job_id}",
+            "jobDescription": "asp.net core c# fullstack"}
+
+
+class _Resp:
+    def __init__(self, status, payload=None):
+        self.status_code = status
+        self._payload = payload or {}
+
+    def json(self):
+        return self._payload
+
+
+def test_generate_nkparam_shape():
+    from src.web.nkapi import _read_der, generate_nkparam
+
+    tok = generate_nkparam()
+    assert len(tok) == 88  # 64-byte RSA-512 ciphertext, like the HAR value
+    import base64 as _b64
+    assert len(_b64.b64decode(tok)) == 64
+    assert generate_nkparam() != tok  # random PKCS#1 v1.5 padding
+    assert _read_der(b"\x30\x81\x05hello", 0) == (b"hello", 8)  # long form
+
+
+def test_fetch_search_page_outcomes(monkeypatch):
+    import src.web.nkapi as nk
+
+    calls = {}
+
+    def _ok(url, params=None, headers=None, timeout=None):
+        calls["params"] = params
+        assert headers["appid"] == "109" and len(headers["nkparam"]) == 88
+        assert params["pageNo"] == 1 and params["jobAge"] == 7
+        return _Resp(200, {"jobDetails": [_api_job("100001")], "noOfJobs": 45})
+
+    monkeypatch.setattr(nk.httpx, "get", _ok)
+    rows, total = nk.fetch_search_page("x", "pune", 6, 7, 1)
+    assert total == 45 and rows[0]["jobId"] == "100001"
+    monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(400))
+    assert nk.fetch_search_page("x", "pune", 6, 7, 9) == ([], None)
+    monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(406))
+    with pytest.raises(nk.NkApiError) as ei:
+        nk.fetch_search_page("x", "pune", 6, 7, 1)
+    assert ei.value.status == 406
+
+    def _down(*a, **k):
+        raise RuntimeError("net down")
+
+    monkeypatch.setattr(nk.httpx, "get", _down)
+    with pytest.raises(nk.NkApiError):
+        nk.fetch_search_page("x", "pune", 6, 7, 1)
+
+
+def test_api_job_to_raw_mapping():
+    from src.web.nkapi import api_job_to_raw
+
+    raw = api_job_to_raw(_api_job("11111111"))
+    assert raw["jobId"] == "11111111" and raw["company"] == "Acme"
+    assert raw["skills"] == ["C#", "SQL"]
+    assert raw["url"] == "https://www.naukri.com/job-listings-dev-11111111"
+    bare = api_job_to_raw({"jobId": "1"})
+    assert bare["url"] == "" and bare["skills"] == []  # missing -> droppable
+
+
+def _api_params(**over):
+    base = {"keywords": "asp.net core", "location": "pune", "experience": 6,
+            "days": 7, "pages": 5, "max_jobs": 100}
+    base.update(over)
+    return base
+
+
+def test_api_scan_skills_pages_and_caps(monkeypatch):
+    import src.web.nkapi as nk
+
+    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    seen = []
+
+    def _pages(url, params=None, headers=None, timeout=None):
+        n = params["pageNo"]
+        assert params["keyword"] == "asp.net core"
+        jobs = [_api_job(f"200{i:03d}", skills="C#, SQL") for i in range(20)] if n == 1 \
+            else [_api_job("200999", skills="Go")]
+        return _Resp(200, {"jobDetails": jobs, "noOfJobs": 100})
+
+    monkeypatch.setattr(nk.httpx, "get", _pages)
+    rec = RunRecord(run_id="k", kind="skills", seq=1,
+                    params=_api_params(max_jobs=25))
+    rep = nk.api_scan_skills(rec.params, rec.should_stop, seen.append)
+    assert rep["jobs_scanned"] == 21  # 20 + 1, then max reached
+    assert rep["top"][0]["skill"] == "C#" and rep["top"][0]["count"] == 20
+    assert seen[-1]["source"] == "api" and seen[-1]["found"] == 21
+
+
+def test_api_scan_skills_stops_and_breaks(monkeypatch):
+    import src.web.nkapi as nk
+
+    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    calls = []
+
+    def _one(url, params=None, headers=None, timeout=None):
+        calls.append(params["pageNo"])
+        return _Resp(200, {"jobDetails": [_api_job("100001")], "noOfJobs": 1})
+
+    monkeypatch.setattr(nk.httpx, "get", _one)
+    rec = RunRecord(run_id="k", kind="skills", seq=1, params=_api_params())
+    rep = nk.api_scan_skills(rec.params, rec.should_stop, lambda p: None)
+    assert rep["jobs_scanned"] == 1 and calls == [1]  # total hit: one request
+    stopped = RunRecord(run_id="k", kind="skills", seq=2, params=_api_params())
+    stopped._stop_event.set()
+    rep = nk.api_scan_skills(stopped.params, stopped.should_stop, lambda p: None)
+    assert rep["jobs_scanned"] == 0 and calls == [1]  # cancelled pre-fetch
+    monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(200, {"jobDetails": []}))
+    rep = nk.api_scan_skills(rec.params, rec.should_stop, lambda p: None)
+    assert rep["jobs_scanned"] == 0  # empty page ends the scan
+
+
+def test_api_scan_skills_skips_bad_rows(monkeypatch):
+    import src.web.nkapi as nk
+
+    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    rows = [_api_job("11111111"), _api_job("11111111"),  # dup skipped
+            {"jobId": "1", "title": "AB"}]  # invalid (short title) dropped
+    monkeypatch.setattr(nk.httpx, "get",
+                        lambda *a, **k: _Resp(200, {"jobDetails": rows,
+                                                    "noOfJobs": 3}))
+    rec = RunRecord(run_id="k", kind="skills", seq=1,
+                    params=_api_params(max_jobs=10))
+    rep = nk.api_scan_skills(rec.params, rec.should_stop, lambda p: None)
+    assert rep["jobs_scanned"] == 1
+
+
+def test_skills_runner_prefers_api(fresh_db, tmp_path, monkeypatch):
+    from src.config import SETTINGS
+    import src.web.nkapi as nk
+    from src.web.orchestrator import default_skills_runner
+
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(
+        200, {"jobDetails": [_api_job("11111111")], "noOfJobs": 1}))
+    rec = RunRecord(run_id="k", kind="skills", seq=1,
+                    params=_api_params(max_jobs=10))
+    summary = default_skills_runner(rec)
+    assert summary["source"] == "api" and summary["jobs_scanned"] == 1
+    assert summary["verdict"].startswith("2 unique skills across 1 postings")
+    assert (tmp_path / summary["file"]).exists()
+
+
+def test_api_scan_skills_cap_and_exhaustion(monkeypatch):
+    import src.web.nkapi as nk
+
+    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    calls = []
+
+    def _fresh(url, params=None, headers=None, timeout=None):
+        calls.append(params["pageNo"])
+        n = params["pageNo"]
+        return _Resp(200, {"jobDetails": [_api_job(f"90{n:04d}")],
+                           "noOfJobs": 10 ** 9})
+
+    monkeypatch.setattr(nk.httpx, "get", _fresh)
+    rec = RunRecord(run_id="k", kind="skills", seq=1,
+                    params=_api_params(max_jobs=1))
+    rep = nk.api_scan_skills(rec.params, rec.should_stop, lambda p: None)
+    assert rep["jobs_scanned"] == 1 and calls == [1]  # cap hit on first row
+    rec = RunRecord(run_id="k", kind="skills", seq=2,
+                    params=_api_params(max_jobs=100))
+    rep = nk.api_scan_skills(rec.params, rec.should_stop, lambda p: None)
+    assert rep["jobs_scanned"] == 7 and len(calls) == 1 + 7  # range exhausted
