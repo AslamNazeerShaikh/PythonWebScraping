@@ -66,6 +66,17 @@ def build_mcp(orch: Orchestrator):  # type: ignore[no-untyped-def]
             return {"error": str(e)}
 
     @mcp.tool
+    def collect_lane(keywords: str, location: str = "pune",
+                     days: int = 3, max_jobs: int = 50) -> dict:
+        """Collect one lane (last N days) into SQLite; returns its run id."""
+        try:
+            return orch.start_collect({"keywords": keywords,
+                                       "location": location, "days": days,
+                                       "max_jobs": max_jobs}).to_dict()
+        except BusyError as e:
+            return {"error": str(e)}
+
+    @mcp.tool
     def run_status(run_id: str) -> dict:
         """Live status + progress + result summary for one run."""
         try:

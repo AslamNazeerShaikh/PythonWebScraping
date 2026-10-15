@@ -453,7 +453,7 @@ def test_mcp_read_tools(fresh_db):
     mcp = build_mcp(orch)
     assert {t.name for t in asyncio.run(_tools(mcp))} == {
         "collector_stats", "search_jobs", "start_scrape", "start_skill_scan",
-        "run_status", "cancel_run"}
+        "collect_lane", "run_status", "cancel_run"}
     stats = _payload(_tool(mcp, "collector_stats", {}))
     assert stats["total_jobs"] == 1
     found = _payload(_tool(mcp, "search_jobs", {"query": "acme"}))
@@ -491,6 +491,12 @@ def test_mcp_start_and_cancel(fresh_db, tmp_path, monkeypatch):
     monkeypatch.setattr(orch, "start_skills",
                         lambda params: (_ for _ in ()).throw(BusyError("busy")))
     assert _payload(_tool(mcp, "start_skill_scan",
+                          {"keywords": "x"}))["error"] == "busy"
+    assert _payload(_tool(mcp, "collect_lane",
+                          {"keywords": "x"}))["run_id"].startswith("collect-")
+    monkeypatch.setattr(orch, "start_collect",
+                        lambda params: (_ for _ in ()).throw(BusyError("busy")))
+    assert _payload(_tool(mcp, "collect_lane",
                           {"keywords": "x"}))["error"] == "busy"
 
 
@@ -944,3 +950,87 @@ def test_skills_runner_postings_mode(fresh_db, tmp_path, monkeypatch):
     assert summary["count_mode"] == "postings"  # legacy toggle-off behavior
     assert summary["top"][0]["count"] == 2  # two postings, one company
     assert "per posting" in (tmp_path / summary["file"]).read_text()
+
+
+# ---------------------------------------------------------------------------
+# collect runs — API lane collection into SQLite + hyperlinked Excel
+# ---------------------------------------------------------------------------
+def test_api_collect_jobs_returns_jobs_and_pages(monkeypatch):
+    import src.web.nkapi as nk
+
+    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(
+        200, {"jobDetails": [_api_job("300001"), _api_job("300002")],
+              "noOfJobs": 2}))
+    jobs, pages = nk.api_collect_jobs(_api_params(max_jobs=10),
+                                      lambda: False, lambda p: None)
+    assert [j.job_id for j in jobs] == ["300001", "300002"] and pages == 1
+
+
+def test_default_collect_runner_api_and_fallback(fresh_db, tmp_path, monkeypatch):
+    from src.config import SETTINGS
+    import src.web.nkapi as nk
+    import src.web.orchestrator as orch_mod
+    from src.web.orchestrator import Orchestrator, default_collect_runner
+
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(
+        200, {"jobDetails": [_api_job("300001")], "noOfJobs": 1}))
+    rec = RunRecord(run_id="c", kind="collect", seq=1,
+                    params={"keywords": "x", "location": "pune", "days": 3})
+    summary = default_collect_runner(rec)
+    assert summary["source"] == "api" and summary["found"] == 1
+    assert summary["new"] == 1 and "via API" in summary["verdict"]
+    from src.db import count_jobs
+    assert count_jobs() == 1
+    monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(406))
+    monkeypatch.setattr(orch_mod, "default_scrape_runner",
+                        lambda rec: {"found": 1, "new": 1})
+    rec = RunRecord(run_id="c", kind="collect", seq=2,
+                    params={"keywords": "x"})
+    assert default_collect_runner(rec)["source"] == "browser"
+
+
+def test_collect_api_busy_and_validation(fresh_db, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from src.config import SETTINGS
+    from src.web.main import create_app
+
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    orch = Orchestrator(scrape_runner=_instant(), export_runner=_instant(),
+                        skills_runner=_instant(),
+                        collect_runner=_blocking())
+    with TestClient(create_app(orch)) as client:
+        first = client.post("/api/collect",
+                            json={"keywords": "x", "days": 3}).json()
+        assert first["kind"] == "collect"
+        busy = client.post("/api/collect", json={"keywords": "y"})
+        assert busy.status_code == 409
+        assert client.post("/api/collect", json={}).status_code == 422
+        orch.cancel(first["run_id"])
+        assert orch.wait_for(first["run_id"], timeout=10).status == "cancelled"
+
+
+def test_export_excel_hyperlinks(fresh_db, tmp_path, monkeypatch):
+    from openpyxl import load_workbook
+
+    from src.config import SETTINGS
+    from src.db import upsert_jobs
+    from src.export import export_jobs
+
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    hollow = make_job("99999999", title="No Links Here", url="", apply_url="",
+                      company="", location="", search_location="pune")
+    upsert_jobs([make_job("11111111"), hollow])
+    dest = export_jobs(fmt="excel")
+    sheet = load_workbook(dest).active
+    titles = {row[1].value: row[1].hyperlink for row in sheet.iter_rows(min_row=2)}
+    assert titles["Senior .NET Developer"].target.startswith("https://www.naukri.com/job-listings-")
+    assert titles["No Links Here"] is None  # no URL, no link
+
+
+def test_dashboard_has_collect_card(web_env):
+    client, _ = web_env
+    assert "btn-collect" in client.get("/").text

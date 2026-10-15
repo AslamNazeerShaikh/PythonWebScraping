@@ -172,6 +172,42 @@ def default_export_runner(record: RunRecord) -> dict:
     return {"file": dest.name, "path": str(dest)}
 
 
+def default_collect_runner(record: RunRecord) -> dict:
+    """API collection into SQLite (JobSpy-clone): fetch → upsert → audit.
+
+    Falls back to the browser scrape pipeline when the API refuses, so a
+    lane collection never comes home empty-handed without trying.
+    """
+    from ..config import SETTINGS
+    from ..db import init_db, record_run, upsert_jobs
+    from ..log import setup_logging
+
+    started = time.time()
+    try:
+        from .nkapi import api_collect_jobs
+
+        setup_logging(SETTINGS.log_level)
+        init_db()
+        jobs, pages = api_collect_jobs(record.params, record.should_stop,
+                                       record.push_progress)
+        source = "api"
+    except Exception as e:
+        log.warning("API collect failed (%s) — browser fallback", e)
+        summary = default_scrape_runner(record)
+        summary["source"] = "browser"
+        return summary
+    new, total = upsert_jobs(jobs)
+    params = record.params
+    record_run(str(params.get("keywords") or ""),
+               str(params.get("location") or ""), pages,
+               found=total, new_jobs=new)
+    duration = round(time.time() - started, 1)
+    verdict = (f"{new} new of {total} collected via API in {duration}s")
+    return {"found": total, "new": new, "source": source,
+            "duration_s": duration, "verdict": verdict,
+            "cancelled": record.should_stop()}
+
+
 def browser_scan_skills(record: RunRecord) -> dict:
     """Browser skills scan (fallback when the API fast path fails).
 
@@ -279,10 +315,12 @@ class Orchestrator:
     def __init__(self, scrape_runner: RunnerFunc | None = None,
                  export_runner: RunnerFunc | None = None,
                  skills_runner: RunnerFunc | None = None,
+                 collect_runner: RunnerFunc | None = None,
                  max_runs: int = 200) -> None:
         self._scrape_runner = scrape_runner or default_scrape_runner
         self._export_runner = export_runner or default_export_runner
         self._skills_runner = skills_runner or default_skills_runner
+        self._collect_runner = collect_runner or default_collect_runner
         self._max_runs = max_runs
         self._runs: dict[str, RunRecord] = {}
         self._threads: dict[str, threading.Thread] = {}
@@ -311,6 +349,14 @@ class Orchestrator:
             raise BusyError("a browser run is already in progress")
         record = self._new_record("skills", params or {})
         self._launch(record, self._skills_runner, release_lock=True)
+        return record
+
+    def start_collect(self, params: dict | None = None) -> RunRecord:
+        """Start an API lane collection into SQLite (lock-guarded)."""
+        if not self._scrape_lock.acquire(blocking=False):
+            raise BusyError("a browser run is already in progress")
+        record = self._new_record("collect", params or {})
+        self._launch(record, self._collect_runner, release_lock=True)
         return record
 
     # -- observing --------------------------------------------------------

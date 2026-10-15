@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse
 
 from ..dependencies import get_orchestrator
 from ..orchestrator import Orchestrator
-from ..schemas import ExportRequest, RunOut, ScrapeRequest, SkillsRequest
+from ..schemas import CollectRequest, ExportRequest, RunOut, ScrapeRequest, SkillsRequest
 
 router = APIRouter(prefix="/api", tags=["runs"])
 
@@ -44,6 +44,15 @@ def start_skills(body: SkillsRequest,
                  orch: Orchestrator = Depends(get_orchestrator)) -> RunOut:
     """Scan key skills across fresh postings (202 + run id; 409 when busy)."""
     record = orch.start_skills(body.model_dump())
+    return RunOut.from_record(record)
+
+
+@router.post("/collect", status_code=202, response_model=RunOut,
+             operation_id="start_collect")
+def start_collect(body: CollectRequest,
+                  orch: Orchestrator = Depends(get_orchestrator)) -> RunOut:
+    """Collect one lane into SQLite (202 + run id; 409 when busy)."""
+    record = orch.start_collect(body.model_dump())
     return RunOut.from_record(record)
 
 

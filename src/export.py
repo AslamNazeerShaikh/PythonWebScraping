@@ -71,7 +71,30 @@ def export_jobs(fmt: str = "csv", location: str = "",
         dest = out_dir / f"naukri_export_{ts}.{suffix}"
     if fmt == "excel":
         df.to_excel(dest, index=False)
+        _hyperlink_titles(dest)
     else:
         df.to_csv(dest, index=False)
     log.info("Exported %d rows -> %s", len(df), dest)
     return dest
+
+
+def _hyperlink_titles(path: Path) -> None:
+    """Turn title cells into clickable apply hyperlinks (Excel-ready).
+
+    Display text stays the job title; the link target is the apply URL
+    (falling back to the listing URL). Plain-text URL columns already
+    auto-linkify in Excel/Calc; this makes the title itself the link.
+    """
+    from openpyxl import load_workbook
+
+    workbook = load_workbook(path)
+    sheet = workbook.active
+    headers = [cell.value for cell in sheet[1]]
+    title_idx = headers.index("title") + 1
+    url_idx = headers.index("apply_url") + 1
+    for row in sheet.iter_rows(min_row=2):
+        target = row[url_idx - 1].value or ""
+        if target:
+            row[title_idx - 1].hyperlink = target
+            row[title_idx - 1].style = "Hyperlink"
+    workbook.save(path)

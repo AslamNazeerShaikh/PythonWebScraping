@@ -136,12 +136,23 @@ meta + .txt link. Shares the single browser lock (409 when busy) and the
 cancel twin. Sort order inside Naukri pages is Naukri's own; the freshness
 window (`days`) is what keeps the pool recent.
 
+## Lane collection → Excel with hyperlinks
+
+`POST /api/collect {keywords, location, experience, days (default 3),
+max_jobs}` fetches a lane straight from the search API (JobSpy-clone:
+`nkparam` + `tagsAndSkills`, no browser) and upserts into SQLite, with the
+browser scrape as fallback. Then `POST /api/exports {format: excel}` writes
+a snapshot whose title cells are true clickable hyperlinks (openpyxl
+`Hyperlink` → apply URL); CSV keeps plain URL text (Excel auto-linkifies).
+Flow for apply-links day: collect lane 1 + lane 2 → one excel export →
+open, click titles, apply.
+
 ## MCP tools (curated) + harness wiring
 
 `collector_stats`, `search_jobs(query, location, page_size)`,
 `start_scrape(keywords, locations)`, `start_skill_scan(keywords, location,
-max_jobs)`, `run_status(run_id)`, `cancel_run(run_id)`. Errors return
-`{"error": ...}` dicts (never raise).
+max_jobs)`, `collect_lane(keywords, location, days)`, `run_status(run_id)`,
+`cancel_run(run_id)`. Errors return `{"error": ...}` dicts (never raise).
 
 The agent harness talks to the **running** server: `.opencode/opencode.json`
 declares `mcp.servers["naukri-collector"]` → `http://127.0.0.1:8000/mcp/`

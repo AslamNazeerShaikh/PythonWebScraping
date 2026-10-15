@@ -152,29 +152,32 @@ def api_job_to_raw(api_job: dict) -> dict:
             "url": url, "skills": tags}
 
 
-def api_scan_skills(params: dict, should_stop: StopHook,
-                    on_progress: ProgressHook) -> dict:
-    """Full skills report over the API (no browser): page until cap/empty.
+def api_collect_jobs(params: dict, should_stop: StopHook,
+                     on_progress: ProgressHook) -> list[Job]:
+    """Collect postings over the API (no browser): page until cap/empty.
 
-    Polite 2–5s pauses between pages (JobSpy sleeps 3–7s). Stops at
-    ``max_jobs``, an empty page, the reported total, or cancellation.
+    Shared by skills scans (which aggregate) and collect runs (which
+    persist). Polite 2–5s pauses between pages (JobSpy sleeps 3–7s).
+    Stops at ``max_jobs``, an empty page, the reported total, or cancel.
+    Returns ``(jobs, pages_fetched)``.
     """
     keywords = str(params.get("keywords") or "").strip()
     location = str(params.get("location") or "pune").strip().lower()
     experience = params.get("experience") or 6
     days = params.get("days") or 7
     max_jobs = params.get("max_jobs") or 100
-    by_company = company_mode(params)
-    found: dict[str, object] = {}
+    found: dict[str, Job] = {}
     # Bounded page range: caps API requests even when every page is fresh.
     max_pages = max_jobs // JOBS_PER_API_PAGE + 2
     total = None
+    pages_fetched = 0
     for page_no in range(1, max_pages + 1):
         if should_stop():
             log.info("Skills API scan cancel requested — stopping")
             break
         rows, total = fetch_search_page(keywords, location, experience,
                                         days, page_no)
+        pages_fetched = page_no
         if not rows:
             break
         for raw in rows:
@@ -192,4 +195,12 @@ def api_scan_skills(params: dict, should_stop: StopHook,
         if total is not None and page_no * JOBS_PER_API_PAGE >= total:
             break
         human_pause()  # politeness between API pages
-    return build_skills_report(list(found.values()), by_company=by_company)
+    return list(found.values()), pages_fetched
+
+
+def api_scan_skills(params: dict, should_stop: StopHook,
+                    on_progress: ProgressHook) -> dict:
+    """Full skills report over the API (no browser): collect then aggregate."""
+    by_company = company_mode(params)
+    jobs, _ = api_collect_jobs(params, should_stop, on_progress)
+    return build_skills_report(jobs, by_company=by_company)

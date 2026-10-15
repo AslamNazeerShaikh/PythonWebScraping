@@ -50,6 +50,16 @@ class SkillTop(BaseModel):
     pct: float
 
 
+class CollectRequest(BaseModel):
+    """Collect one lane (last N days) into SQLite via the API fast path."""
+
+    keywords: str = Field(min_length=1)
+    location: str = "pune"
+    experience: int | None = Field(default=6, gt=0)
+    days: int | None = Field(default=3, gt=0)
+    max_jobs: int | None = Field(default=100, gt=0, le=200)
+
+
 class RunOut(BaseModel):
     """One background run: scrape or export, with live progress + result."""
 
