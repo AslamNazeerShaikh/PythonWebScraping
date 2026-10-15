@@ -185,7 +185,10 @@ def browser_scan_skills(record: RunRecord) -> dict:
     from ..naukri_scraper import run_skills_scan
     from ..stealth_browser import launch_context
 
+    from .nkapi import company_mode
+
     params = record.params
+    by_company = company_mode(params)
     keywords = str(params.get("keywords") or "").strip()
     location = str(params.get("location") or "pune").strip().lower()
     experience = params.get("experience") or 6
@@ -198,6 +201,7 @@ def browser_scan_skills(record: RunRecord) -> dict:
         try:
             report = run_skills_scan(context, keywords, location, experience,
                                      days, pages, max_jobs,
+                                     by_company=by_company,
                                      should_stop=record.should_stop,
                                      on_progress=record.push_progress)
         finally:
@@ -218,7 +222,7 @@ def default_skills_runner(record: RunRecord) -> dict:
     from ..config import SETTINGS
 
     try:
-        from .nkapi import api_scan_skills
+        from .nkapi import api_scan_skills, company_mode
 
         report = api_scan_skills(record.params, record.should_stop,
                                  record.push_progress)
@@ -241,15 +245,21 @@ def default_skills_runner(record: RunRecord) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     dest = out / f"skills_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     dest.write_text(render_skills_text(report, record.params), encoding="utf-8")
+    mode = "companies" if company_mode(record.params) else "postings"
     return {**report, "file": dest.name, "path": str(dest),
             "duration_s": duration, "verdict": verdict, "source": source,
-            "cancelled": record.should_stop()}
+            "count_mode": mode, "cancelled": record.should_stop()}
+
+
+_MODE_LABEL = {"companies": "distinct companies", "postings": "per posting"}
 
 
 def render_skills_text(report: dict, params: dict) -> str:
     """Render the frequency report as a plain-text file (the .txt export)."""
+    mode = _MODE_LABEL.get(report.get("count_mode") or "companies", "distinct companies")
     lines = [f"Key skills across {report['jobs_scanned']} postings "
-             f"({params.get('keywords') or ''} | {params.get('location') or ''} | "
+             f"(counting: {mode}; "
+             f"{params.get('keywords') or ''} | {params.get('location') or ''} | "
              f"exp {params.get('experience') or ''}y | last {params.get('days') or ''}d)",
              ""]
     for t in report["top"]:

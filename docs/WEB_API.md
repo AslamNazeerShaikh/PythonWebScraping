@@ -108,8 +108,11 @@ any network failure falls back to the polite browser scan; the summary
 stamps `"source": "api"|"browser"` so you can see which path served.
 
 `POST /api/skills {keywords (comma titles), location, experience, days,
-pages, max_jobs (default 100, cap 200)}` starts a `skills` run: page 1 is
-submitted through Naukri's own search bar (keyword/location suggestor
+pages, max_jobs (default 100, cap 200), count_mode}` — `companies`
+(default): each skill counts DISTINCT companies (`C#` in 20 Capgemini +
+10 TCS postings scores 2, over `companies_total`); `postings` keeps the
+legacy one-vote-per-posting count. The dashboard switch defaults ON.
+Page 1 is submitted through Naukri's own search bar (keyword/location suggestor
 fills resolved variant-tolerantly, location + `<N> years` options picked
 by visible text per ankitbaghel01's text-selector discipline, submitted
 with Enter — proven live to land the clean manual-style slug). Any bar

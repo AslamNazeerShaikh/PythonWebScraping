@@ -234,9 +234,9 @@
     "semantic_hash": ""
   },
   "src/web/orchestrator.py": {
-    "mtime": 1792080282.0411904,
-    "seen": 1792080317.5913448,
-    "ast_hash": "0e6c9d4449bf83cd208b7d3544800cc6",
+    "mtime": 1792081233.3643835,
+    "seen": 1792081527.913496,
+    "ast_hash": "9dc3ca73df92771679a7f4be432df6f8",
     "semantic_hash": ""
   },
   "src/web/schemas.py": {
@@ -246,15 +246,15 @@
     "semantic_hash": ""
   },
   "tests/test_web.py": {
-    "mtime": 1792075961.3310127,
-    "seen": 1792075984.365797,
-    "ast_hash": "02e0d4f78eff57c16ffb6f5be287d5f9",
+    "mtime": 1792081455.8547468,
+    "seen": 1792081527.9136572,
+    "ast_hash": "611d051680599ccb8c79bd3dfd3f2ab7",
     "semantic_hash": ""
   },
   "docs/WEB_API.md": {
-    "mtime": 1792080312.8307598,
-    "seen": 1792080317.592061,
-    "ast_hash": "93d5fd202448afde8fe2ec1baabcccf3",
+    "mtime": 1792081523.541752,
+    "seen": 1792081527.9142342,
+    "ast_hash": "1cf39429da5a08690da0fa04e7a537af",
     "semantic_hash": ""
   },
   "src/web/templates/dashboard.html": {
@@ -549,6 +549,12 @@
     "mtime": 1792071516.9977224,
     "seen": 1792074777.391404,
     "ast_hash": "05fe5402ed96bf608ae4ab746772e926",
+    "semantic_hash": ""
+  },
+  "src/web/nkapi.py": {
+    "mtime": 1792081475.5573807,
+    "seen": 1792081527.913496,
+    "ast_hash": "cedad25e37f84fe0007aeb3e01c4146a",
     "semantic_hash": ""
   }
 }

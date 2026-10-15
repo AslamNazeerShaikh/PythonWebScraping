@@ -353,18 +353,27 @@ def test_build_skills_report_counts_postings_once(monkeypatch):
 
     _tune_skills(monkeypatch)
     jobs = [make_job("11111111", skills=["C#", "c#", "ASP.NET", "C#", "", "  "]),  # dupes + blanks collapse
-            make_job("22222222", company="Globex", skills=["c#", "SQL"]),
-            make_job("33333333", company="Initech")]  # no skills
-    rep = ns.build_skills_report(jobs)
-    assert rep["jobs_scanned"] == 3 and rep["with_skills"] == 2
+            make_job("22222222", skills=["c#", "SQL"]),  # same company (Acme)
+            make_job("33333333", company="Initech"),  # no skills
+            make_job("44444444", company="Globex", skills=["C#"])]
+    rep = ns.build_skills_report(jobs)  # default: distinct companies
+    assert rep["jobs_scanned"] == 4 and rep["with_skills"] == 3
     assert rep["without_skills"] == 1  # card-only reads surface here, not silently
-    assert rep["unique_skills"] == 3
+    assert rep["unique_skills"] == 3 and rep["companies_total"] == 3
+    assert rep["count_mode"] == "companies"
     top = {t["skill"]: t for t in rep["top"]}
     assert top["C#"]["count"] == 2 and top["C#"]["pct"] == round(200 / 3, 1)
-    assert top["C#"]["companies"] == [{"name": "Acme", "count": 1},
-                                      {"name": "Globex", "count": 1}]  # tie -> alpha
-    assert top["SQL"]["companies"] == [{"name": "Globex", "count": 1}]
+    assert top["C#"]["companies"] == [{"name": "Acme", "count": 2},
+                                      {"name": "Globex", "count": 1}]
+    assert top["SQL"] == {"skill": "SQL", "count": 1, "pct": round(100 / 3, 1),
+                          "companies": [{"name": "Acme", "count": 1}]}
     assert len(rep["top"]) <= 30
+    old = ns.build_skills_report(jobs, by_company=False)  # legacy: per posting
+    assert old["count_mode"] == "postings" and old["companies_total"] == 3
+    old_top = {t["skill"]: t for t in old["top"]}
+    assert old_top["C#"]["count"] == 3 and old_top["C#"]["pct"] == 75.0
+    assert old_top["C#"]["companies"] == [{"name": "Acme", "count": 2},
+                                          {"name": "Globex", "count": 1}]
 
 
 def test_build_skills_report_unknown_company():
@@ -378,7 +387,9 @@ def test_build_skills_report_unknown_company():
 def test_build_skills_report_empty():
     assert ns.build_skills_report([]) == {"jobs_scanned": 0, "with_skills": 0,
                                           "without_skills": 0,
-                                          "unique_skills": 0, "top": []}
+                                          "unique_skills": 0,
+                                          "companies_total": 0,
+                                          "count_mode": "companies", "top": []}
 
 
 def test_run_skills_scan_full_flow(monkeypatch):

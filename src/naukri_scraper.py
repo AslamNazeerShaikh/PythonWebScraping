@@ -600,8 +600,14 @@ def save_results(jobs: list[Job], output_dir: Path | None = None) -> tuple[Path,
 # ---------------------------------------------------------------------------
 # Key-skills scan (analysis-only: aggregates "Key Skills" across postings)
 # ---------------------------------------------------------------------------
-def build_skills_report(jobs: list[Job]) -> dict:
+def build_skills_report(jobs: list[Job], by_company: bool = True) -> dict:
     """Aggregate key-skill frequencies across enriched jobs.
+
+    ``by_company=True`` (default): each skill counts DISTINCT companies
+    (``C#`` in 20 Capgemini + 10 TCS postings scores 2, over
+    ``companies_total``). ``False`` keeps the legacy one-vote-per-posting
+    count. Per-company posting breakdowns ship in both modes.
+
 
     Each posting votes once per skill (case-insensitive, dupes collapsed);
     display casing follows the most common raw form. Every skill also carries
@@ -612,9 +618,11 @@ def build_skills_report(jobs: list[Job]) -> dict:
     """
     if not jobs:
         return {"jobs_scanned": 0, "with_skills": 0, "without_skills": 0,
-                "unique_skills": 0, "top": []}
+                "unique_skills": 0, "companies_total": 0,
+                "count_mode": "companies" if by_company else "postings",
+                "top": []}
     forms: dict[str, Counter] = {}
-    by_company: dict[str, Counter] = {}
+    company_votes: dict[str, Counter] = {}
     for job in jobs:
         seen: set[str] = set()
         for raw in job.skills:
@@ -628,27 +636,37 @@ def build_skills_report(jobs: list[Job]) -> dict:
                 counts = forms[key] = Counter()
             counts[name] += 1
             company = (job.company or "").strip() or "Unknown"
-            cc = by_company.get(key)
+            cc = company_votes.get(key)
             if cc is None:
-                cc = by_company[key] = Counter()
+                cc = company_votes[key] = Counter()
             cc[company] += 1
-    ranked = Counter({k: sum(c.values()) for k, c in forms.items()}).most_common(30)
+    posting_counts = {k: sum(c.values()) for k, c in forms.items()}
+    if by_company:
+        scores = {k: len(company_votes[k]) for k in forms}  # distinct companies
+    else:
+        scores = posting_counts  # legacy: one vote per posting
+    ranked = Counter(scores).most_common(30)
     total = len(jobs)
+    companies_total = len({(j.company or "").strip() or "Unknown" for j in jobs})
+    denom = companies_total if by_company else total
     top = []
     for key, count in ranked:
-        cos = sorted(by_company[key].items(), key=lambda kv: (-kv[1], kv[0]))
+        cos = sorted(company_votes[key].items(), key=lambda kv: (-kv[1], kv[0]))
         top.append({"skill": forms[key].most_common(1)[0][0], "count": count,
-                    "pct": round(100 * count / total, 1),
+                    "pct": round(100 * count / denom, 1),
                     "companies": [{"name": n, "count": c} for n, c in cos]})
     with_skills = sum(1 for j in jobs if j.skills)
     return {"jobs_scanned": total, "with_skills": with_skills,
             "without_skills": total - with_skills,
-            "unique_skills": len(forms), "top": top}
+            "unique_skills": len(forms), "companies_total": companies_total,
+            "count_mode": "companies" if by_company else "postings",
+            "top": top}
 
 
 def run_skills_scan(context: BrowserContext, keywords: str, location: str,
                     experience: int, days: int, pages: int,
-                    max_jobs: int, should_stop: StopHook | None = None,
+                    max_jobs: int, by_company: bool = True,
+                    should_stop: StopHook | None = None,
                     on_progress: ProgressHook | None = None) -> dict:
     """Scan detail pages for key skills: one search → enriched → report.
 
@@ -718,6 +736,6 @@ def run_skills_scan(context: BrowserContext, keywords: str, location: str,
         page.close()
     except Exception:
         pass
-    report = build_skills_report(jobs_list)
+    report = build_skills_report(jobs_list, by_company=by_company)
     _report("done", found=len(jobs_list))
     return report

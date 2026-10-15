@@ -654,13 +654,14 @@ def test_default_skills_runner_full(fresh_db, tmp_path, monkeypatch):
                             "days": 7, "pages": 2, "max_jobs": 10})
     summary = default_skills_runner(rec)
     assert summary["jobs_scanned"] == 2 and summary["unique_skills"] == 2
-    assert summary["top"][0]["skill"] == "C#" and summary["top"][0]["count"] == 2
+    assert summary["count_mode"] == "companies"  # new default
+    assert summary["top"][0]["skill"] == "C#" and summary["top"][0]["count"] == 1
     assert summary["top"][0]["companies"] == [{"name": "Acme", "count": 2}]
     assert summary["cancelled"] is False and "top: C#, SQL" in summary["verdict"]
     assert summary["source"] == "browser"  # API refused -> browser fallback
     dest = tmp_path / summary["file"]
-    assert dest.suffix == ".txt" and "2x (100.0%)  C#" in dest.read_text()
-    assert "Acme x2" in dest.read_text()
+    assert dest.suffix == ".txt" and "1x (100.0%)  C#" in dest.read_text()
+    assert "Acme x2" in dest.read_text() and "distinct companies" in dest.read_text()
 
 
 def test_default_skills_runner_empty(fresh_db, tmp_path, monkeypatch):
@@ -707,6 +708,9 @@ def test_skills_api_flow(fresh_db, tmp_path, monkeypatch):
         assert client.post("/api/skills", json={}).status_code == 422
         assert client.post("/api/skills",
                            json={"keywords": "x", "max_jobs": 0}).status_code == 422
+        assert client.post("/api/skills",
+                           json={"keywords": "x",
+                                 "count_mode": "bogus"}).status_code == 422
 
 
 def test_skills_api_busy(fresh_db, tmp_path, monkeypatch):
@@ -729,7 +733,10 @@ def test_skills_api_busy(fresh_db, tmp_path, monkeypatch):
 
 def test_dashboard_has_skills_section(web_env):
     client, _ = web_env
-    assert "key skills" in client.get("/").text
+    page = client.get("/").text
+    assert "key skills" in page
+    assert 'role="switch"' in page and 'aria-checked="true"' in page  # default on
+    assert "distinct companies" in page
 
 
 # ---------------------------------------------------------------------------
@@ -820,7 +827,7 @@ def test_api_scan_skills_pages_and_caps(monkeypatch):
         n = params["pageNo"]
         assert params["keyword"] == "asp.net core"
         jobs = [_api_job(f"200{i:03d}", skills="C#, SQL") for i in range(20)] if n == 1 \
-            else [_api_job("200999", skills="Go")]
+            else [_api_job("200999", skills="Go", company="Globex")]
         return _Resp(200, {"jobDetails": jobs, "noOfJobs": 100})
 
     monkeypatch.setattr(nk.httpx, "get", _pages)
@@ -828,8 +835,14 @@ def test_api_scan_skills_pages_and_caps(monkeypatch):
                     params=_api_params(max_jobs=25))
     rep = nk.api_scan_skills(rec.params, rec.should_stop, seen.append)
     assert rep["jobs_scanned"] == 21  # 20 + 1, then max reached
-    assert rep["top"][0]["skill"] == "C#" and rep["top"][0]["count"] == 20
+    assert rep["count_mode"] == "companies" and rep["companies_total"] == 2
+    assert rep["top"][0] == {"skill": "C#", "count": 1, "pct": 50.0,
+                             "companies": [{"name": "Acme", "count": 20}]}
     assert seen[-1]["source"] == "api" and seen[-1]["found"] == 21
+    rep = nk.api_scan_skills({**rec.params, "count_mode": "postings"},
+                             rec.should_stop, lambda p: None)
+    assert rep["count_mode"] == "postings"  # legacy behavior kept
+    assert rep["top"][0]["count"] == 20 and rep["top"][0]["pct"] == 95.2
 
 
 def test_api_scan_skills_stops_and_breaks(monkeypatch):
@@ -908,3 +921,23 @@ def test_api_scan_skills_cap_and_exhaustion(monkeypatch):
                     params=_api_params(max_jobs=100))
     rep = nk.api_scan_skills(rec.params, rec.should_stop, lambda p: None)
     assert rep["jobs_scanned"] == 7 and len(calls) == 1 + 7  # range exhausted
+
+
+def test_skills_runner_postings_mode(fresh_db, tmp_path, monkeypatch):
+    from src.config import SETTINGS
+    from src.web.orchestrator import default_skills_runner
+
+    _force_browser_fallback(monkeypatch)
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    _tune_web(monkeypatch, tmp_path)
+    page = FakePage()
+    page.listing_queue = [[raw_card("11111111")], [raw_card("22222222")]]
+    page.detail_result = {"skills": ["C#"]}
+    _wire_browser(monkeypatch, page)
+    rec = RunRecord(run_id="k", kind="skills", seq=1,
+                    params={"keywords": "x", "count_mode": "postings",
+                            "pages": 2, "max_jobs": 10})
+    summary = default_skills_runner(rec)
+    assert summary["count_mode"] == "postings"  # legacy toggle-off behavior
+    assert summary["top"][0]["count"] == 2  # two postings, one company
+    assert "per posting" in (tmp_path / summary["file"]).read_text()

@@ -54,12 +54,14 @@ def build_mcp(orch: Orchestrator):  # type: ignore[no-untyped-def]
 
     @mcp.tool
     def start_skill_scan(keywords: str, location: str = "pune",
-                         max_jobs: int = 20) -> dict:
+                         max_jobs: int = 20,
+                         count_mode: str = "companies") -> dict:
         """Scan key skills across fresh postings; returns its run id."""
         try:
             return orch.start_skills({"keywords": keywords,
                                       "location": location,
-                                      "max_jobs": max_jobs}).to_dict()
+                                      "max_jobs": max_jobs,
+                                      "count_mode": count_mode}).to_dict()
         except BusyError as e:
             return {"error": str(e)}
 

@@ -46,6 +46,11 @@ NK_PUBLIC_KEY = (
 )
 
 
+def company_mode(params: dict) -> bool:
+    """True unless the caller explicitly asked for per-posting counts."""
+    return (params.get("count_mode") or "companies") != "postings"
+
+
 class NkApiError(Exception):
     """The API fast path failed (rate-limit, rotated key, network)."""
 
@@ -159,6 +164,7 @@ def api_scan_skills(params: dict, should_stop: StopHook,
     experience = params.get("experience") or 6
     days = params.get("days") or 7
     max_jobs = params.get("max_jobs") or 100
+    by_company = company_mode(params)
     found: dict[str, object] = {}
     # Bounded page range: caps API requests even when every page is fresh.
     max_pages = max_jobs // JOBS_PER_API_PAGE + 2
@@ -186,4 +192,4 @@ def api_scan_skills(params: dict, should_stop: StopHook,
         if total is not None and page_no * JOBS_PER_API_PAGE >= total:
             break
         human_pause()  # politeness between API pages
-    return build_skills_report(list(found.values()))
+    return build_skills_report(list(found.values()), by_company=by_company)

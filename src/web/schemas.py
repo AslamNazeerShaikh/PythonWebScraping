@@ -39,6 +39,7 @@ class SkillsRequest(BaseModel):
     days: int | None = Field(default=7, gt=0)
     pages: int | None = Field(default=5, gt=0, le=10)
     max_jobs: int | None = Field(default=100, gt=0, le=200)
+    count_mode: str = Field(default="companies", pattern="^(companies|postings)$")
 
 
 class SkillTop(BaseModel):

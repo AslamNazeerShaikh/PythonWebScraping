@@ -46,6 +46,12 @@
   .bar { height: 0.55rem; border-radius: 9999px; background: #10b981; min-width: 2px; }
   .bar-track { background: #1c1c1f; border-radius: 9999px; }
   .dot { width: 0.55rem; height: 0.55rem; border-radius: 9999px; display: inline-block; }
+  .switch { width: 2.1rem; height: 1.15rem; border-radius: 9999px; background: #3f3f46;
+            border: 1px solid #52525b; position: relative; cursor: pointer; flex: none; }
+  .switch::after { content: ""; position: absolute; top: 1px; left: 2px; width: 0.8rem; height: 0.8rem;
+                   border-radius: 9999px; background: #a1a1aa; transition: left .15s; }
+  .switch[aria-checked="true"] { background: #065f46; border-color: #10b981; }
+  .switch[aria-checked="true"]::after { left: 1rem; background: #34d399; }
   .dot-ok { background: #10b981; box-shadow: 0 0 8px #10b98188; }
   .dot-bad { background: #f87171; }
   .prog { height: 0.5rem; border-radius: 9999px; background: #1c1c1f; overflow: hidden; }
@@ -138,6 +144,10 @@
       <div><label class="lbl" for="s-max">max jobs</label><input id="s-max" class="inp" type="number" min="1" max="200" value="100"></div>
     </div>
     <button id="btn-skills" class="btn btn-go" type="button">scan key skills →</button>
+    <span class="inline-flex items-center gap-2 ms-3 text-xs text-zinc-400">
+      <button id="s-mode" role="switch" aria-checked="true" type="button" class="switch" aria-label="count distinct companies"></button>
+      <span id="s-mode-lbl">distinct companies</span>
+    </span>
     <span id="skills-meta" class="text-xs text-zinc-500 ms-2"></span>
     <div id="skills-top5" class="flex flex-wrap gap-2 mt-3"></div>
     <div id="skills-bars" class="mt-3 space-y-2 text-xs"></div>
@@ -343,20 +353,27 @@ function renderActive(r) {
 
 async function startSkills() {
   const num = (id, fb) => { const v = $(id).value.trim(); return v === "" ? fb : Number(v); };
+  const byCompany = $("s-mode").getAttribute("aria-checked") === "true";
   try {
     $("btn-skills").disabled = true; $("skills-meta").textContent = "scanning…";
     const r = await api("/api/skills", { method: "POST", body: JSON.stringify({
       keywords: $("s-kw").value.trim(), location: $("s-loc").value.trim() || "pune",
-      experience: num("s-exp", 6), days: num("s-days", 7), max_jobs: num("s-max", 100) }) });
+      experience: num("s-exp", 6), days: num("s-days", 7), max_jobs: num("s-max", 100),
+      count_mode: byCompany ? "companies" : "postings" }) });
     trackedRun = r.run_id; renderActive(r);
   } catch (e) { $("skills-meta").textContent = "start failed: " + e.message; }
   finally { $("btn-skills").disabled = false; refreshRuns(); }
 }
+function setMode(on) {
+  $("s-mode").setAttribute("aria-checked", on ? "true" : "false");
+  $("s-mode-lbl").textContent = on ? "distinct companies" : "per posting";
+}
 
 function renderSkills(r) {
   const s = r.summary || {}, top = s.top || [];
+  const companies = s.count_mode !== "postings";
   $("skills-meta").textContent =
-    `${s.jobs_scanned ?? 0} postings · ${s.with_skills ?? 0} with skills · ${s.unique_skills ?? 0} unique · ${s.without_skills ?? 0} without skills` +
+    `${s.jobs_scanned ?? 0} postings · ${companies ? (s.companies_total ?? 0) + " companies" : (s.with_skills ?? 0) + " with skills"} · ${s.unique_skills ?? 0} unique · ${s.without_skills ?? 0} without skills` +
     (s.verdict ? ` — ${s.verdict}` : "") + (s.cancelled ? " (cancelled, partials)" : "");
   $("skills-top5").innerHTML = top.slice(0, 5).map((t, i) =>
     `<span class="pill st-running">#${i + 1} ${esc(t.skill)} · ${t.count}</span>`).join("");
@@ -462,6 +479,8 @@ async function refreshJobs() {
 $("btn-scrape").addEventListener("click", startScrape);
 $("btn-export").addEventListener("click", startExport);
 $("btn-skills").addEventListener("click", startSkills);
+$("s-mode").addEventListener("click", () =>
+  setMode($("s-mode").getAttribute("aria-checked") !== "true"));
 $("j-go").addEventListener("click", () => { jobPage = 1; refreshJobs(); });
 $("j-prev").addEventListener("click", () => { if (jobPage > 1) { jobPage--; refreshJobs(); } });
 $("j-next").addEventListener("click", () => { jobPage++; refreshJobs(); });
