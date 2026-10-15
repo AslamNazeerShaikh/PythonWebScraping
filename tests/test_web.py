@@ -738,6 +738,7 @@ def test_dashboard_has_skills_section(web_env):
     assert "key skills" in page
     assert 'role="switch"' in page and 'aria-checked="true"' in page  # default on
     assert "distinct companies" in page and "skillsView" in page
+    assert "e.details" in page  # validation failures name the field, not just 422
     assert resp.headers["cache-control"] == "no-store"
 
 
