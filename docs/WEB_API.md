@@ -102,9 +102,12 @@ unchanged. Browse via dashboard or `GET /api/logs[/{name}]`.
 `cancel_run(run_id)`. Errors return `{"error": ...}` dicts (never raise).
 
 The agent harness talks to the **running** server: `.opencode/opencode.json`
-declares `mcp.servers["naukri-collector"]` → `http://127.0.0.1:8000/mcp`
-(Streamable HTTP). Start the server first (`python -m src.main web`), then
-the harness gets the same 5 tools.
+declares `mcp.servers["naukri-collector"]` → `http://127.0.0.1:8000/mcp/`
+(Streamable HTTP; trailing slash is required — the mount answers the
+canonical path and plain `/mcp` only 307-redirects, which strict MCP
+clients do not follow). Start the server first (`python -m src.main web`),
+then restart the harness session so it reconnects; verify with
+`opencode mcp debug naukri-collector`.
 
 ## Boundaries
 

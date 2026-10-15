@@ -27,7 +27,7 @@
       },
       "naukri-collector": {
         "type": "remote",
-        "url": "http://127.0.0.1:8000/mcp"
+        "url": "http://127.0.0.1:8000/mcp/"
       }
     }
   }
