@@ -22,6 +22,7 @@ from __future__ import annotations
 import base64
 import functools
 import logging
+import random
 import secrets
 import time
 
@@ -29,9 +30,17 @@ import httpx
 
 from ..models import Job
 from ..naukri_scraper import ProgressHook, StopHook, build_skills_report, coerce_job
-from ..stealth_browser import human_pause
 
 log = logging.getLogger(__name__)
+
+
+def api_pause() -> None:
+    """Politeness pause between API pages (JobSpy sleeps 3–7s here).
+
+    The endpoint 406s fast repeat hitters — this is the rate-limit lever.
+    Separated for tests (patched to no-op there).
+    """
+    time.sleep(random.uniform(3, 7))
 
 #: Search API + token inputs (JobSpy ``jobspy/naukri/constant.py``).
 SEARCH_URL = "https://www.naukri.com/jobapi/v3/search"
@@ -194,7 +203,8 @@ def api_collect_jobs(params: dict, should_stop: StopHook,
             break
         if total is not None and page_no * JOBS_PER_API_PAGE >= total:
             break
-        human_pause()  # politeness between API pages
+        # JobSpy sleeps 3-7s here; the endpoint 406s fast repeat hitters.
+        api_pause()
     return list(found.values()), pages_fetched
 
 

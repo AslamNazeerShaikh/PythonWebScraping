@@ -829,7 +829,7 @@ def _api_params(**over):
 def test_api_scan_skills_pages_and_caps(monkeypatch):
     import src.web.nkapi as nk
 
-    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    monkeypatch.setattr(nk, "api_pause", lambda: None)
     seen = []
 
     def _pages(url, params=None, headers=None, timeout=None):
@@ -857,7 +857,7 @@ def test_api_scan_skills_pages_and_caps(monkeypatch):
 def test_api_scan_skills_stops_and_breaks(monkeypatch):
     import src.web.nkapi as nk
 
-    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    monkeypatch.setattr(nk, "api_pause", lambda: None)
     calls = []
 
     def _one(url, params=None, headers=None, timeout=None):
@@ -880,7 +880,7 @@ def test_api_scan_skills_stops_and_breaks(monkeypatch):
 def test_api_scan_skills_skips_bad_rows(monkeypatch):
     import src.web.nkapi as nk
 
-    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    monkeypatch.setattr(nk, "api_pause", lambda: None)
     rows = [_api_job("11111111"), _api_job("11111111"),  # dup skipped
             {"jobId": "1", "title": "AB"}]  # invalid (short title) dropped
     monkeypatch.setattr(nk.httpx, "get",
@@ -898,7 +898,7 @@ def test_skills_runner_prefers_api(fresh_db, tmp_path, monkeypatch):
     from src.web.orchestrator import default_skills_runner
 
     monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
-    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    monkeypatch.setattr(nk, "api_pause", lambda: None)
     monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(
         200, {"jobDetails": [_api_job("11111111")], "noOfJobs": 1}))
     rec = RunRecord(run_id="k", kind="skills", seq=1,
@@ -912,7 +912,7 @@ def test_skills_runner_prefers_api(fresh_db, tmp_path, monkeypatch):
 def test_api_scan_skills_cap_and_exhaustion(monkeypatch):
     import src.web.nkapi as nk
 
-    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    monkeypatch.setattr(nk, "api_pause", lambda: None)
     calls = []
 
     def _fresh(url, params=None, headers=None, timeout=None):
@@ -958,7 +958,7 @@ def test_skills_runner_postings_mode(fresh_db, tmp_path, monkeypatch):
 def test_api_collect_jobs_returns_jobs_and_pages(monkeypatch):
     import src.web.nkapi as nk
 
-    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    monkeypatch.setattr(nk, "api_pause", lambda: None)
     monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(
         200, {"jobDetails": [_api_job("300001"), _api_job("300002")],
               "noOfJobs": 2}))
@@ -974,7 +974,7 @@ def test_default_collect_runner_api_and_fallback(fresh_db, tmp_path, monkeypatch
     from src.web.orchestrator import Orchestrator, default_collect_runner
 
     monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
-    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    monkeypatch.setattr(nk, "api_pause", lambda: None)
     monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(
         200, {"jobDetails": [_api_job("300001")], "noOfJobs": 1}))
     rec = RunRecord(run_id="c", kind="collect", seq=1,
@@ -1034,3 +1034,13 @@ def test_export_excel_hyperlinks(fresh_db, tmp_path, monkeypatch):
 def test_dashboard_has_collect_card(web_env):
     client, _ = web_env
     assert "btn-collect" in client.get("/").text
+
+
+def test_api_pause_uses_jobspy_window(monkeypatch):
+    import src.web.nkapi as nk
+
+    slept = []
+    monkeypatch.setattr(nk.time, "sleep", slept.append)
+    monkeypatch.setattr(nk.random, "uniform", lambda a, b: (a, b))
+    nk.api_pause()
+    assert slept == [(3, 7)]
