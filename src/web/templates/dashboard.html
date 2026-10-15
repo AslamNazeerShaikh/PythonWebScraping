@@ -369,11 +369,34 @@ function setMode(on) {
   $("s-mode-lbl").textContent = on ? "distinct companies" : "per posting";
 }
 
+function curSkillsMode() {
+  return $("s-mode").getAttribute("aria-checked") === "true" ? "companies" : "postings";
+}
+function skillsView(s, mode) {
+  // Recount the other mode client-side from per-company breakdowns (exact:
+  // postings = sum of company counts; companies = breakdown length). Lets
+  // the switch re-render already-fetched results without re-running.
+  const top = s.top || [];
+  if (!top.length || s.count_mode === mode || !top.some((t) => (t.companies || []).length)) return top;
+  const conv = top.map((t) => {
+    const cos = t.companies || [];
+    if (mode === "postings") {
+      const c = cos.reduce((a, x) => a + x.count, 0);
+      return { ...t, count: c, pct: Math.round(1000 * c / Math.max(1, s.jobs_scanned)) / 10 };
+    }
+    const c = cos.length;
+    return { ...t, count: c, pct: Math.round(1000 * c / Math.max(1, s.companies_total)) / 10 };
+  });
+  conv.sort((a, b) => b.count - a.count);
+  return conv;
+}
+let lastSkillsRun = null;
 function renderSkills(r) {
-  const s = r.summary || {}, top = s.top || [];
-  const companies = s.count_mode !== "postings";
+  lastSkillsRun = r;
+  const s = r.summary || {};
+  const mode = curSkillsMode(), top = skillsView(s, mode);
   $("skills-meta").textContent =
-    `${s.jobs_scanned ?? 0} postings · ${companies ? (s.companies_total ?? 0) + " companies" : (s.with_skills ?? 0) + " with skills"} · ${s.unique_skills ?? 0} unique · ${s.without_skills ?? 0} without skills` +
+    `${s.jobs_scanned ?? 0} postings · ${mode === "companies" ? (s.companies_total ?? 0) + " companies" : (s.with_skills ?? 0) + " with skills"} · ${s.unique_skills ?? 0} unique · ${s.without_skills ?? 0} without skills · showing ${mode === "companies" ? "distinct companies" : "per posting"}` +
     (s.verdict ? ` — ${s.verdict}` : "") + (s.cancelled ? " (cancelled, partials)" : "");
   $("skills-top5").innerHTML = top.slice(0, 5).map((t, i) =>
     `<span class="pill st-running">#${i + 1} ${esc(t.skill)} · ${t.count}</span>`).join("");
@@ -479,8 +502,10 @@ async function refreshJobs() {
 $("btn-scrape").addEventListener("click", startScrape);
 $("btn-export").addEventListener("click", startExport);
 $("btn-skills").addEventListener("click", startSkills);
-$("s-mode").addEventListener("click", () =>
-  setMode($("s-mode").getAttribute("aria-checked") !== "true"));
+$("s-mode").addEventListener("click", () => {
+  setMode($("s-mode").getAttribute("aria-checked") !== "true");
+  if (lastSkillsRun) renderSkills(lastSkillsRun);  // recount visible results now
+});
 $("j-go").addEventListener("click", () => { jobPage = 1; refreshJobs(); });
 $("j-prev").addEventListener("click", () => { if (jobPage > 1) { jobPage--; refreshJobs(); } });
 $("j-next").addEventListener("click", () => { jobPage++; refreshJobs(); });

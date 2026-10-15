@@ -733,10 +733,12 @@ def test_skills_api_busy(fresh_db, tmp_path, monkeypatch):
 
 def test_dashboard_has_skills_section(web_env):
     client, _ = web_env
-    page = client.get("/").text
+    resp = client.get("/")
+    page = resp.text
     assert "key skills" in page
     assert 'role="switch"' in page and 'aria-checked="true"' in page  # default on
-    assert "distinct companies" in page
+    assert "distinct companies" in page and "skillsView" in page
+    assert resp.headers["cache-control"] == "no-store"
 
 
 # ---------------------------------------------------------------------------

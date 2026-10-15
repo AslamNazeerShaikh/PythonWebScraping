@@ -93,8 +93,9 @@ def create_app(orch: Orchestrator | None = None) -> FastAPI:
 
     @app.get("/", include_in_schema=False)
     def dashboard() -> FileResponse:
-        """Serve the control-plane dashboard (single HTML file)."""
-        return FileResponse(DASHBOARD_HTML, media_type="text/html")
+        """Serve the control-plane dashboard (single HTML file, never cached)."""
+        return FileResponse(DASHBOARD_HTML, media_type="text/html",
+                            headers={"Cache-Control": "no-store"})
 
     _mount_scalar(app)
     return app
