@@ -303,3 +303,36 @@ def test_save_results_writes_json_and_csv(tmp_path):
     rows = list(_csv.DictReader(cp.read_text().splitlines()))
     assert [r["job_id"] for r in rows] == ["11111111", "22222222"]
     assert "apply_url" in rows[0]
+
+
+# -- cooperative hooks (web orchestrator: cancel + progress) -----------------------------------
+def test_run_scrape_stop_during_enrich_keeps_partial(monkeypatch):
+    _tune(monkeypatch, max_pages_per_search=3, enrich_details=True)
+    page = FakePage()
+    page.listing_queue = [[raw_card("11111111")], [raw_card("22222222")],
+                          [raw_card("33333333")]]
+    page.detail_result = {"skills": ["C#"]}
+    calls = [0]
+
+    def _stop():
+        calls[0] += 1
+        return calls[0] > 3  # three page polls pass; enrich poll stops it
+
+    seen: list = []
+    jobs = ns.run_scrape(FakeContext(page), should_stop=_stop,
+                         on_progress=seen.append)
+    assert sorted(j.job_id for j in jobs) == ["11111111", "22222222", "33333333"]
+    assert all(j.skills == [] for j in jobs)  # details skipped after stop
+    assert [s["stage"] for s in seen] == ["search", "search", "search", "done"]
+
+
+def test_run_scrape_stop_before_first_page_reports_done(monkeypatch):
+    _tune(monkeypatch, max_pages_per_search=2, enrich_details=False)
+    page = FakePage()
+    page.listing_queue = [[raw_card("11111111")]]
+    seen: list = []
+    jobs = ns.run_scrape(FakeContext(page), should_stop=lambda: True,
+                         on_progress=seen.append)
+    assert jobs == []  # cancelled early: nothing collected, nothing lost
+    assert [s["stage"] for s in seen] == ["done"]
+    assert page.goto_urls == []  # no navigation happened

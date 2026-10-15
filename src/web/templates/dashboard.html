@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Naukri Collector — Control Plane</title>
+<!-- Tailwind CSS v4 browser build (UNVERIFIED vs official docs: tailwindcss.com
+     and npmjs.com blocked this sandbox's fetcher; this is the documented v4
+     browser pattern. The <style> block below keeps the UI usable offline.) -->
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; }
+  html, body { background: #09090b; }
+  body { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .card { background: #101013; border: 1px solid #27272a; border-radius: 0.625rem; }
+  .lbl { font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: #a1a1aa; }
+  .inp { background: #09090b; border: 1px solid #3f3f46; border-radius: 0.375rem;
+         padding: 0.4rem 0.6rem; font-size: 0.78rem; width: 100%; color: #e4e4e7; }
+  .inp:focus { outline: none; border-color: #34d399; }
+  .btn { border-radius: 0.375rem; font-size: 0.75rem; font-weight: 600;
+         padding: 0.5rem 0.9rem; transition: opacity .15s; cursor: pointer; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-go { background: #10b981; color: #022c22; }
+  .btn-go:hover:not(:disabled) { background: #34d399; }
+  .btn-stop { background: transparent; border: 1px solid #f87171; color: #f87171; }
+  .btn-stop:hover:not(:disabled) { background: #3f1d1d; }
+  .btn-ghost { background: transparent; border: 1px solid #3f3f46; color: #d4d4d8; }
+  .btn-ghost:hover { border-color: #71717a; }
+  table.grid { width: 100%; font-size: 0.72rem; border-collapse: collapse; }
+  table.grid th { text-align: left; color: #71717a; font-weight: 500; text-transform: uppercase;
+                  font-size: 0.62rem; letter-spacing: .06em; padding: 0.45rem 0.6rem;
+                  border-bottom: 1px solid #27272a; white-space: nowrap; }
+  table.grid td { padding: 0.45rem 0.6rem; border-bottom: 1px solid #18181b;
+                  vertical-align: top; }
+  table.grid tr:hover td { background: #141417; }
+  .pill { font-size: 0.62rem; font-weight: 600; padding: 0.1rem 0.5rem; border-radius: 9999px;
+          border: 1px solid; white-space: nowrap; }
+  .st-running { color: #34d399; border-color: #065f46; background: #022c22; }
+  .st-cancelling { color: #fbbf24; border-color: #92400e; background: #2a1a05; }
+  .st-cancelled { color: #fbbf24; border-color: #52525b; background: transparent; }
+  .st-succeeded { color: #a1a1aa; border-color: #3f3f46; background: transparent; }
+  .st-failed { color: #f87171; border-color: #7f1d1d; background: #2a1215; }
+  .bar { height: 0.55rem; border-radius: 9999px; background: #10b981; min-width: 2px; }
+  .bar-track { background: #1c1c1f; border-radius: 9999px; }
+  .dot { width: 0.55rem; height: 0.55rem; border-radius: 9999px; display: inline-block; }
+  .dot-ok { background: #10b981; box-shadow: 0 0 8px #10b98188; }
+  .dot-bad { background: #f87171; }
+  .prog { height: 0.5rem; border-radius: 9999px; background: #1c1c1f; overflow: hidden; }
+  .prog > div { height: 100%; background: #10b981; transition: width .4s; }
+  a.lnk { color: #34d399; text-decoration: none; }
+  a.lnk:hover { text-decoration: underline; }
+</style>
+</head>
+<body class="text-zinc-200 min-h-screen">
+<div class="max-w-7xl mx-auto px-4 py-5">
+
+  <!-- ══ top bar ══ -->
+  <header class="flex flex-wrap items-center gap-3 mb-5">
+    <div>
+      <h1 class="text-lg font-bold tracking-tight text-zinc-50">NAUKRI<span class="text-emerald-400">_</span>COLLECTOR</h1>
+      <p class="text-xs text-zinc-500">control plane · python brain · playwright hands · sqlite truth</p>
+    </div>
+    <div class="ms-auto flex items-center gap-2 text-xs">
+      <span id="health-dot" class="dot dot-bad" role="status" aria-label="server status"></span>
+      <span id="health-txt" class="text-zinc-400">connecting…</span>
+      <span class="text-zinc-700">|</span>
+      <a class="lnk" href="/scalar" target="_blank" rel="noopener">scalar</a>
+      <a class="lnk" href="/openapi.json" target="_blank" rel="noopener">openapi</a>
+      <a class="lnk" href="/docs" target="_blank" rel="noopener">swagger</a>
+      <a class="lnk" href="/mcp" target="_blank" rel="noopener">mcp</a>
+    </div>
+  </header>
+
+  <!-- ══ KPI row ══ -->
+  <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4" aria-label="key metrics">
+    <div class="card p-4"><div class="lbl">jobs in db</div><div id="kpi-total" class="text-2xl font-bold text-zinc-50 mt-1">–</div><div id="kpi-new" class="text-xs text-emerald-400 mt-1">– new / 24h</div></div>
+    <div class="card p-4"><div class="lbl">active runs</div><div id="kpi-runs" class="text-2xl font-bold text-zinc-50 mt-1">–</div><div class="text-xs text-zinc-500 mt-1">scrape lock: <span id="kpi-lock">–</span></div></div>
+    <div class="card p-4"><div class="lbl">locations</div><div id="kpi-locs" class="text-2xl font-bold text-zinc-50 mt-1">–</div><div id="kpi-locs-top" class="text-xs text-zinc-500 mt-1 truncate">–</div></div>
+    <div class="card p-4"><div class="lbl">last run</div><div id="kpi-last" class="text-2xl font-bold text-zinc-50 mt-1">–</div><div id="kpi-last-sub" class="text-xs text-zinc-500 mt-1">–</div></div>
+  </section>
+
+  <!-- ══ actions ══ -->
+  <section class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4">
+    <div class="card p-4">
+      <h2 class="text-sm font-semibold text-zinc-100 mb-1">◉ scrape</h2>
+      <p class="text-xs text-zinc-500 mb-3">browser pass → validate → sqlite. blank = configured default.</p>
+      <div class="grid grid-cols-2 gap-2 mb-2">
+        <div class="col-span-2"><label class="lbl" for="f-kw">keywords</label><input id="f-kw" class="inp" placeholder="asp.net core c# .net fullstack"></div>
+        <div class="col-span-2"><label class="lbl" for="f-loc">locations (comma)</label><input id="f-loc" class="inp" placeholder="pune,hyderabad"></div>
+        <div><label class="lbl" for="f-exp">exp yrs</label><input id="f-exp" class="inp" type="number" min="0" placeholder="6"></div>
+        <div><label class="lbl" for="f-days">last n days</label><input id="f-days" class="inp" type="number" min="1" placeholder="7"></div>
+        <div><label class="lbl" for="f-pages">pages/search</label><input id="f-pages" class="inp" type="number" min="1" placeholder="3"></div>
+        <div><label class="lbl" for="f-max">max jobs</label><input id="f-max" class="inp" type="number" min="1" placeholder="60"></div>
+      </div>
+      <label class="flex items-center gap-2 text-xs text-zinc-400 mb-3"><input id="f-enrich" type="checkbox" checked class="accent-emerald-500"> enrich details (visit each job page)</label>
+      <button id="btn-scrape" class="btn btn-go w-full" type="button">start scrape →</button>
+    </div>
+
+    <div class="card p-4">
+      <h2 class="text-sm font-semibold text-zinc-100 mb-1">▤ export</h2>
+      <p class="text-xs text-zinc-500 mb-3">sqlite snapshot → csv/xlsx. tracked run, cancellable.</p>
+      <div class="mb-2"><label class="lbl" for="f-fmt">format</label>
+        <select id="f-fmt" class="inp"><option value="csv">csv</option><option value="excel">excel (.xlsx)</option></select></div>
+      <div class="mb-3"><label class="lbl" for="f-eloc">location filter</label><input id="f-eloc" class="inp" placeholder="pune (blank = all)"></div>
+      <button id="btn-export" class="btn btn-ghost w-full" type="button">start export →</button>
+      <div id="dl-zone" class="mt-3 text-xs"></div>
+    </div>
+
+    <div class="card p-4" aria-live="polite">
+      <h2 class="text-sm font-semibold text-zinc-100 mb-1">◎ active run</h2>
+      <p class="text-xs text-zinc-500 mb-3">live progress · cancel keeps partials.</p>
+      <div id="active-box" class="text-xs text-zinc-500">no run in flight. start a scrape or export.</div>
+      <div id="active-prog" class="prog mt-3 hidden"><div id="active-bar" style="width:0%"></div></div>
+      <button id="btn-cancel" class="btn btn-stop w-full mt-3 hidden" type="button">■ cancel run</button>
+      <div id="active-log" class="text-xs text-zinc-500 mt-2"></div>
+    </div>
+  </section>
+
+  <!-- ══ runs ══ -->
+  <section class="card p-4 mb-4">
+    <div class="flex items-center mb-2"><h2 class="text-sm font-semibold text-zinc-100">runs</h2><span class="text-xs text-zinc-500 ms-2">newest first · auto-refresh 3s</span></div>
+    <div class="overflow-x-auto"><table class="grid" id="runs-tbl">
+      <thead><tr><th>run id</th><th>kind</th><th>status</th><th>progress</th><th>result</th><th></th></tr></thead>
+      <tbody id="runs-body"><tr><td colspan="6" class="text-zinc-500">loading…</td></tr></tbody>
+    </table></div>
+  </section>
+
+  <!-- ══ charts ══ -->
+  <section class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-4">
+    <div class="card p-4"><h2 class="text-sm font-semibold text-zinc-100 mb-3">jobs by location</h2><div id="chart-loc" class="space-y-2 text-xs"></div></div>
+    <div class="card p-4"><h2 class="text-sm font-semibold text-zinc-100 mb-3">top companies</h2><div id="chart-co" class="space-y-2 text-xs"></div></div>
+  </section>
+
+  <!-- ══ jobs ══ -->
+  <section class="card p-4 mb-4">
+    <div class="flex flex-wrap items-end gap-2 mb-2">
+      <h2 class="text-sm font-semibold text-zinc-100 me-2">jobs</h2>
+      <div class="flex-1 min-w-40"><label class="lbl" for="j-q">search</label><input id="j-q" class="inp" placeholder="title, company, skill…"></div>
+      <div class="w-36"><label class="lbl" for="j-loc">location</label><input id="j-loc" class="inp" placeholder="pune"></div>
+      <button id="j-go" class="btn btn-ghost" type="button">filter</button>
+      <div class="ms-auto flex items-center gap-2 text-xs text-zinc-400">
+        <button id="j-prev" class="btn btn-ghost" type="button">←</button>
+        <span id="j-page">1</span>
+        <button id="j-next" class="btn btn-ghost" type="button">→</button>
+      </div>
+    </div>
+    <div class="overflow-x-auto"><table class="grid" id="jobs-tbl">
+      <thead><tr><th>title</th><th>company</th><th>location</th><th>exp</th><th>salary</th><th>posted</th><th>apply</th></tr></thead>
+      <tbody id="jobs-body"><tr><td colspan="7" class="text-zinc-500">loading…</td></tr></tbody>
+    </table></div>
+    <div id="jobs-count" class="text-xs text-zinc-500 mt-2"></div>
+  </section>
+
+  <footer class="text-xs text-zinc-600 pb-6">polite collector · capped pages · manual apply · sqlite is truth ·
+    <span id="foot-runs"></span></footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let trackedRun = null, jobPage = 1;
+const PAGE_SIZE = 15;
+
+async function api(path, opts) {
+  const r = await fetch(path, { headers: { "content-type": "application/json" }, ...opts });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((body.error && body.error.message) || ("http " + r.status));
+  return body;
+}
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const pill = (s) => `<span class="pill st-${esc(s)}">${esc(s)}</span>`;
+
+function fmtRun(r) {
+  const p = r.progress || {}, s = r.summary || {};
+  let prog = "–";
+  if (p.stage === "search") prog = `search ${esc(p.location || "")} p${p.page ?? "?"}/${p.pages ?? "?"} · ${p.found ?? 0} found`;
+  else if (p.stage === "detail") prog = `detail ${p.index ?? "?"}/${p.total ?? "?"} · ${p.found ?? ""}`;
+  else if (p.stage === "done") prog = "done";
+  const res = r.status === "succeeded" ? esc(JSON.stringify(s)) : (r.error ? esc(r.error) : "–");
+  const can = (r.status === "running" || r.status === "cancelling")
+    ? `<button class="btn btn-stop" data-cancel="${esc(r.run_id)}" type="button">cancel</button>` : "";
+  const dl = (r.kind === "export" && r.status === "succeeded")
+    ? ` <a class="lnk" href="/api/runs/${esc(r.run_id)}/download">↓ ${esc(s.file || "file")}</a>` : "";
+  return `<tr><td class="text-zinc-400">${esc(r.run_id)}</td><td>${esc(r.kind)}</td><td>${pill(r.status)}</td><td class="text-zinc-400">${prog}</td><td class="text-zinc-400 break-all">${res}${dl}</td><td>${can}</td></tr>`;
+}
+
+async function refreshHealth() {
+  try {
+    const h = await api("/api/health");
+    $("health-dot").className = "dot dot-ok";
+    $("health-txt").textContent = `live · ${h.jobs} jobs · ${h.runs} runs`;
+  } catch (e) { $("health-dot").className = "dot dot-bad"; $("health-txt").textContent = "offline"; }
+}
+
+async function refreshStats() {
+  const s = await api("/api/stats");
+  $("kpi-total").textContent = s.total_jobs;
+  $("kpi-new").textContent = `+${s.new_last_24h} new / 24h`;
+  $("kpi-runs").textContent = s.active_runs;
+  $("kpi-locs").textContent = s.by_location.length;
+  $("kpi-locs-top").textContent = s.by_location.slice(0, 3).map((x) => x.name).join(" · ") || "–";
+  const bar = (items, el) => {
+    const max = Math.max(1, ...items.map((x) => x.count));
+    $(el).innerHTML = items.length ? items.map((x) => `
+      <div class="grid grid-cols-[9rem_1fr_3rem] items-center gap-2">
+        <span class="truncate text-zinc-400">${esc(x.name)}</span>
+        <div class="bar-track"><div class="bar" style="width:${Math.max(2, Math.round(100 * x.count / max))}%"></div></div>
+        <span class="text-right text-zinc-300">${x.count}</span>
+      </div>`).join("") : `<span class="text-zinc-600">no data yet — run a scrape.</span>`;
+  };
+  bar(s.by_location, "chart-loc"); bar(s.by_company, "chart-co");
+}
+
+async function refreshRuns() {
+  const runs = await api("/api/runs");
+  $("runs-body").innerHTML = runs.length ? runs.slice(0, 12).map(fmtRun).join("")
+    : `<tr><td colspan="6" class="text-zinc-500">no runs yet.</td></tr>`;
+  $("runs-body").querySelectorAll("[data-cancel]").forEach((b) =>
+    b.addEventListener("click", () => cancelRun(b.dataset.cancel)));
+  const last = runs[0];
+  if (last) {
+    $("kpi-last").textContent = last.run_id;
+    const s = last.summary || {};
+    $("kpi-last-sub").textContent = `${last.kind} · ${last.status}` + (s.found != null ? ` · ${s.new ?? 0} new / ${s.found} found` : "");
+    $("kpi-lock").textContent = runs.some((r) => r.kind === "scrape" && (r.status === "running" || r.status === "cancelling")) ? "held" : "free";
+  } else { $("kpi-last").textContent = "–"; $("kpi-last-sub").textContent = "–"; $("kpi-lock").textContent = "free"; }
+  $("foot-runs").textContent = `${runs.length} runs tracked`;
+  if (trackedRun) {
+    const r = runs.find((x) => x.run_id === trackedRun);
+    if (r) renderActive(r);
+    else { trackedRun = null; renderIdle(); }
+  }
+}
+
+function renderIdle() {
+  $("active-box").innerHTML = `no run in flight. start a scrape or export.`;
+  $("active-prog").classList.add("hidden");
+  $("btn-cancel").classList.add("hidden");
+}
+function renderActive(r) {
+  const p = r.progress || {};
+  $("btn-cancel").classList.toggle("hidden", !(r.status === "running" || r.status === "cancelling"));
+  $("btn-cancel").disabled = r.status !== "running";
+  $("btn-cancel").onclick = () => cancelRun(r.run_id);
+  let pct = 4, txt = `${r.kind} · ${r.status}`;
+  if (p.stage === "search" && p.pages) { pct = Math.min(70, Math.round(100 * (p.page || 0) / p.pages * 0.7)); txt = `searching ${p.location || ""} · page ${p.page}/${p.pages} · ${p.found || 0} found`; }
+  else if (p.stage === "detail" && p.total) { pct = 70 + Math.round(30 * (p.index || 0) / p.total); txt = `enriching ${p.index}/${p.total}`; }
+  else if (r.status === "succeeded") { pct = 100; txt = `done · ${JSON.stringify(r.summary || {})}`; }
+  else if (r.status === "failed") { pct = 100; txt = `failed · ${r.error}`; }
+  else if (r.status === "cancelled") { pct = 100; txt = `cancelled · partials kept`; }
+  $("active-box").innerHTML = `<span class="text-zinc-200">${esc(r.run_id)}</span> — ${esc(txt)}`;
+  $("active-prog").classList.remove("hidden");
+  $("active-bar").style.width = pct + "%";
+  if (r.kind === "export" && r.status === "succeeded" && (r.summary || {}).file)
+    $("dl-zone").innerHTML = `ready → <a class="lnk" href="/api/runs/${esc(r.run_id)}/download">↓ ${esc(r.summary.file)}</a>`;
+  if (["succeeded", "failed", "cancelled"].includes(r.status)) { refreshStats(); refreshJobs(); }
+}
+
+async function startScrape() {
+  const num = (id) => { const v = $(id).value.trim(); return v === "" ? null : Number(v); };
+  const body = { keywords: $("f-kw").value.trim(), locations: $("f-loc").value.trim(),
+    experience: num("f-exp"), days: num("f-days"), pages: num("f-pages"),
+    max_jobs: num("f-max"), enrich: $("f-enrich").checked ? null : false };
+  if (body.enrich === null) delete body.enrich;
+  try {
+    $("btn-scrape").disabled = true;
+    const r = await api("/api/scrape", { method: "POST", body: JSON.stringify(body) });
+    trackedRun = r.run_id; renderActive(r);
+  } catch (e) { $("active-box").textContent = "start failed: " + e.message; }
+  finally { $("btn-scrape").disabled = false; refreshRuns(); }
+}
+
+async function startExport() {
+  try {
+    $("btn-export").disabled = true; $("dl-zone").textContent = "working…";
+    const r = await api("/api/exports", { method: "POST",
+      body: JSON.stringify({ format: $("f-fmt").value, location: $("f-eloc").value.trim() }) });
+    trackedRun = r.run_id; renderActive(r);
+  } catch (e) { $("dl-zone").textContent = "start failed: " + e.message; }
+  finally { $("btn-export").disabled = false; refreshRuns(); }
+}
+
+async function cancelRun(id) {
+  try { const r = await api(`/api/runs/${encodeURIComponent(id)}/cancel`, { method: "POST" }); renderActive(r); }
+  catch (e) { $("active-log").textContent = "cancel failed: " + e.message; }
+  refreshRuns();
+}
+
+async function refreshJobs() {
+  const q = new URLSearchParams({ q: $("j-q").value.trim(), location: $("j-loc").value.trim(),
+    page: String(jobPage), page_size: String(PAGE_SIZE) });
+  const pg = await api("/api/jobs?" + q.toString());
+  $("jobs-body").innerHTML = pg.data.length ? pg.data.map((j) => `
+    <tr><td class="text-zinc-100">${esc(j.title)}</td><td class="text-zinc-400">${esc(j.company)}</td>
+    <td class="text-zinc-400">${esc(j.location || j.search_location)}</td><td class="text-zinc-500">${esc(j.experience)}</td>
+    <td class="text-zinc-500">${esc(j.salary)}</td><td class="text-zinc-500 whitespace-nowrap">${esc(j.posted)}</td>
+    <td><a class="lnk" href="${esc(j.apply_url || j.url)}" target="_blank" rel="noopener">apply ↗</a></td></tr>`).join("")
+    : `<tr><td colspan="7" class="text-zinc-500">no jobs match — run a scrape.</td></tr>`;
+  const pages = Math.max(1, Math.ceil(pg.total / pg.page_size));
+  $("j-page").textContent = `${pg.page}/${pages} · ${pg.total}`;
+  $("jobs-count").textContent = `${pg.total} match · page ${pg.page} of ${pages}`;
+  $("j-prev").disabled = pg.page <= 1; $("j-next").disabled = pg.page >= pages;
+}
+
+$("btn-scrape").addEventListener("click", startScrape);
+$("btn-export").addEventListener("click", startExport);
+$("j-go").addEventListener("click", () => { jobPage = 1; refreshJobs(); });
+$("j-prev").addEventListener("click", () => { if (jobPage > 1) { jobPage--; refreshJobs(); } });
+$("j-next").addEventListener("click", () => { jobPage++; refreshJobs(); });
+
+(async function boot() {
+  await refreshHealth(); await refreshStats(); await refreshRuns(); await refreshJobs();
+  setInterval(refreshRuns, 3000);
+})();
+</script>
+</body>
+</html>

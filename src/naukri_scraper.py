@@ -18,6 +18,7 @@ import logging
 import random
 import re
 import urllib.parse
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -34,6 +35,10 @@ from tenacity import (
 from .config import SETTINGS
 from .models import Job
 from .stealth_browser import human_pause
+
+# Progress/cancel hook types (web orchestrator passes bound methods here).
+StopHook = Callable[[], bool]
+ProgressHook = Callable[[dict], None]
 
 log = logging.getLogger(__name__)
 
@@ -354,14 +359,30 @@ def enrich_job(page: Page, job: Job) -> Job:
         return job
 
 
-def run_scrape(context: BrowserContext) -> list[Job]:
+def run_scrape(context: BrowserContext,
+               should_stop: Callable[[], bool] | None = None,
+               on_progress: Callable[[dict], None] | None = None) -> list[Job]:
     """Run the full collection pass: all locations × pages → enriched Jobs.
 
     Stages: (1) per search+page: goto, extract, coerce to Job, relevance
     filter, dedupe by job_id (stops early at MAX_JOBS_TOTAL); (2) optional
     per-job detail enrichment with polite pauses. Pure collection — the
     caller (CLI/scheduler) handles persistence. Returns validated Jobs.
+
+    Args:
+        context: Playwright browser context (the hands).
+        should_stop: Optional poll hook — when it returns True the pass ends
+            early and whatever was collected so far is returned (the web
+            orchestrator wires this to its cancel event; CLI passes None).
+        on_progress: Optional sink for ``{"stage": ...}`` dicts (``"search"``
+            per page, ``"done"`` at the end) for live UI progress bars.
     """
+    stopped = should_stop or (lambda: False)
+
+    def _report(stage: str, **extra: object) -> None:
+        if on_progress is not None:
+            on_progress({"stage": stage, **extra})
+
     page = context.new_page()
     all_jobs: dict[str, Job] = {}
 
@@ -374,6 +395,9 @@ def run_scrape(context: BrowserContext) -> list[Job]:
     for keywords, location in searches:
         for pnum in range(1, SETTINGS.max_pages_per_search + 1):
             if len(all_jobs) >= SETTINGS.max_jobs_total:
+                break
+            if stopped():
+                log.info("Scrape cancel requested — stopping after %d jobs", len(all_jobs))
                 break
             url = build_search_url(keywords, location, SETTINGS.experience,
                                    SETTINGS.date_filter, pnum)
@@ -394,6 +418,8 @@ def run_scrape(context: BrowserContext) -> list[Job]:
                 all_jobs[job.job_id] = job
                 if len(all_jobs) >= SETTINGS.max_jobs_total:
                     break
+            _report("search", location=location, page=pnum,
+                    pages=SETTINGS.max_pages_per_search, found=len(all_jobs))
             human_pause()  # politeness between pages
 
     jobs_list = list(all_jobs.values())
@@ -402,14 +428,19 @@ def run_scrape(context: BrowserContext) -> list[Job]:
 
     if SETTINGS.enrich_details:
         for i, job in enumerate(jobs_list, 1):
+            if stopped():
+                log.info("Scrape cancel requested — skipping remaining details")
+                break
             log.info("Detail %d/%d: %s", i, len(jobs_list), job.title[:70])
             jobs_list[i - 1] = enrich_job(page, job)
+            _report("detail", index=i, total=len(jobs_list))
             human_pause(1.5, 3.5)  # extra polite on detail pages
 
     try:
         page.close()
     except Exception:
         pass
+    _report("done", found=len(jobs_list))
     return jobs_list
 
 

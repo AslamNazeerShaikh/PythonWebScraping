@@ -27,6 +27,12 @@ extensions); headless runs fall back to the built-in tracker-blocker.
 ```bash
 source .venv/bin/activate
 
+# Web control plane (one process, one port — recommended):
+python -m src.main web                      # dashboard :8000 + /scalar + /mcp
+python -m src.main web --port 8123          # custom port
+# open http://127.0.0.1:8000  → trigger/cancel scrapes + exports from the UI
+# (REST: POST /api/scrape → 202 run id → POST /api/runs/<id>/cancel)
+
 # Full pipeline: browser -> Pydantic -> SQLite + timestamped JSON/CSV
 python -m src.main scrape
 python -m src.main scrape --keywords "asp.net core c# .net" --locations "pune,hyderabad" --days 7 --pages 3
@@ -44,8 +50,10 @@ python -m src.main parse output/debug_last_search.html
 # Daily runs at 08:05 + 20:05 (blocking; or use cron/launchd)
 python -m src.main schedule --hours 8,20
 
-# Tests: 93 tests, 100% coverage gate (no browser/network needed)
+# Tests: 120 tests, 100% coverage gate (no browser/network needed)
 pytest
+
+# Web control plane spec: docs/WEB_API.md (REST + dashboard + MCP + Scalar)
 
 # Live practice suite: TESTING.md Tests 1-7 on real sandboxes (Chrome + uBOL)
 .venv/bin/python scripts/practice_tests.py

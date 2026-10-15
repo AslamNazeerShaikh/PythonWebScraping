@@ -172,6 +172,27 @@ def parse(html_path: str) -> None:
 
 
 @app.command()
+def web(
+    host: str = typer.Option("127.0.0.1", help="Bind host"),
+    port: int = typer.Option(8000, help="Bind port"),
+) -> None:
+    """Serve the FastAPI control plane (dashboard + REST + MCP + Scalar).
+
+    One process, one port: the dashboard (``/``), Scalar API UI
+    (``/scalar``), REST (``/api/...``), and MCP (``/mcp``). Playwright stays
+    the hands — every browser pass runs as a cancellable background run.
+    """
+    _ensure_env()
+    import uvicorn
+
+    from .web.app import app as web_app
+
+    console.print(f"[bold]Serving control plane[/bold] on http://{host}:{port} "
+                  f"(dashboard + /scalar + /mcp)")
+    uvicorn.run(web_app, host=host, port=port)
+
+
+@app.command()
 def schedule(
     hours: str = typer.Option("8,20", help="Comma-separated hours, e.g. '8,12,20'"),
 ) -> None:
