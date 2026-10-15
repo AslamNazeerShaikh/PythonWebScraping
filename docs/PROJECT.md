@@ -5,7 +5,7 @@
 > collect job apply links into a local database on a schedule, review a short
 > list, apply fast.
 >
-> **Stack.** Python + Playwright + Chrome (+ uBlock Origin Lite) for collection;
+> **Stack.** Python + Playwright (bundled Chromium, persistent context) + uBlock Origin Lite for collection;
 > BeautifulSoup + lxml for offline parsing; Pydantic for validation;
 > SQLAlchemy + SQLite for storage; Pandas + openpyxl for export; APScheduler
 > for scheduling; tenacity for transient retries; Typer + Rich for the CLI;
@@ -23,7 +23,7 @@
 Scheduler (APScheduler, `schedule --hours 8,20`)
         │  one polite pass per trigger, max_instances=1
         ▼
-Browser (Playwright → Chrome + uBO Lite)            stealth_browser.py
+Browser (Playwright → bundled Chromium + uBO Lite)   stealth_browser.py
         │  persistent profile · stealth init JS · uBlock + fallback blocker
         │  human pauses/scrolls · manual-solve bot-wall handling
         ▼
@@ -57,7 +57,7 @@ CLI (Typer) · output (Rich) · retries (tenacity, transient-only) · logging
 | Module | Responsibility | Key functions |
 |---|---|---|
 | `config.py` | `.env`-driven `SETTINGS` singleton | `_get*` readers, `Settings`, `SETTINGS` |
-| `stealth_browser.py` | Chrome-only launcher + uBO Lite wiring | `launch_context`, `_launch_chromium`, `_extension_args`, `human_pause` |
+| `stealth_browser.py` | Chromium-only launcher + uBO Lite wiring | `launch_context`, `_launch_chromium`, `_extension_args`, `human_pause` |
 | `naukri_scraper.py` | Search URLs, extractors, pipeline | `build_search_url`, `scrape_search_page`, `enrich_job`, `run_scrape`, `save_results`, `coerce_job`, `normalize_raw` |
 | `parser.py` | Offline BS4+lxml twin of the JS extractors | `parse_search_html`, `parse_detail_html` |
 | `models.py` | Pydantic `Job` + ORM `JobRow`/`ScrapeRun` | `Job.skill_text`, `JobRow.from_job/to_job` |
@@ -74,7 +74,7 @@ CLI (Typer) · output (Rich) · retries (tenacity, transient-only) · logging
 | `KEYWORDS` | `asp.net core c# .net fullstack` | Search keywords (`k`) |
 | `LOCATIONS` | `pune,hyderabad` | One search per location (`l`) |
 | `EXPERIENCE` / `DATE_FILTER` | `6` / `7` | Years exp · posted last N days |
-| `MAX_PAGES_PER_SEARCH` / `MAX_JOBS_TOTAL` | `3` / `60` | Politeness caps |
+| `MAX_PAGES_PER_SEARCH` / `MAX_JOBS_TOTAL` | `3` / `60` | Politeness caps (pages per search; one search per location) |
 | `ENRICH_DETAILS` | `true` | Visit each job page (`--no-enrich` skips) |
 | `BROWSER` / `HEADLESS` | `chromium` / `false` | Engine (chromium-only) · background |
 | `USER_DATA_DIR` | `.pw-profile` | Persistent profile (cookies, uBO) |
@@ -105,7 +105,7 @@ posted, url, apply_url, snippet, description, skills, first_seen, last_seen)` ·
 
 ## 6. Known environment notes (verified)
 
-- Chrome-only by decision: no Firefox engine (stable 155, Nightly 1543)
+- Chromium-only by decision (Playwright-bundled build, no `channel:`): no Firefox engine (stable 155, Nightly 1543)
   starts in this environment — both die spawning the profile/content
   process (`Operation not permitted` on helper exec). Chromium works.
 - uBO Lite loads headed-only (headless-shell can't load extensions);

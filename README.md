@@ -1,5 +1,5 @@
 # Secure Naukri.com Jobs Collector
-### Playwright + Chrome + uBlock Origin Lite | Pydantic + SQLite | Typer + Rich | personal use
+### Playwright (bundled Chromium) + uBlock Origin Lite | Pydantic + SQLite | Typer + Rich | personal use
 
 Built for you: **.NET 6+ yrs, ASP.NET Core / C# / Fullstack, Pune + Hyderabad** — collects job **apply links** into a local DB so a busy schedule only needs minutes.
 
@@ -9,7 +9,7 @@ Built for you: **.NET 6+ yrs, ASP.NET Core / C# / Fullstack, Pune + Hyderabad** 
 cd /Users/aslamshaikh/Projects/PythonWebScraping
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-playwright install chromium   # Chrome-only stack (Firefox engines don't start here)
+playwright install chromium   # Chromium-only stack (Firefox engines don't start here)
 cp .env.example .env
 bash vendor/download-ubol.sh  # fetch uBlock Origin Lite (unpacked, gitignored)
 ```
@@ -65,7 +65,7 @@ pytest
 
 > **Heads-up (verified on this Mac):** Naukri blocks **headless** browsers — always do the
 > **first run headful** (default) so you can solve the CAPTCHA / log in once. The persistent
-> profile keeps cookies; later runs succeed. Chrome-only by decision: no Firefox
+> profile keeps cookies; later runs succeed. Chromium-only by decision (Playwright-bundled build): no Firefox
 > engine starts in this environment (stable 155 and Nightly both die on profile spawn).
 
 ## 3. Architecture (your proposed stack, as built)
@@ -73,7 +73,7 @@ pytest
 Scheduler (APScheduler) ── schedule --hours 8,20
         │
         ▼
-Browser (Playwright → Chrome + uBO Lite)        src/stealth_browser.py
+Browser (Playwright → bundled Chromium + uBO Lite)  src/stealth_browser.py
         │  persistent profile, stealth init JS, uBlock + fallback blocker,
         │  human pauses/scrolls, manual-solve bot-wall handling
         ▼
@@ -97,7 +97,7 @@ SQLite is the source of truth — set `DATABASE_URL` to Postgres later with no c
 
 ```
 src/config.py            env-driven settings (your defaults pre-filled)
-src/stealth_browser.py   Chrome-only launcher + uBO Lite wiring
+src/stealth_browser.py   Chromium-only launcher + uBO Lite wiring
 src/naukri_scraper.py    search URLs, JS extractors, tenacity goto, Pydantic coercion
 src/parser.py            BS4+lxml offline parser (debug without re-hitting Naukri)
 src/models.py            Pydantic Job + SQLAlchemy JobRow / ScrapeRun
