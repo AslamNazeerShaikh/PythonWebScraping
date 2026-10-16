@@ -1,132 +1,154 @@
-# Secure Naukri.com Jobs Collector
-### Playwright (bundled Chromium) + uBlock Origin Lite | Pydantic + SQLite | Typer + Rich | personal use
+# Jobs Collector
 
-Built for you: **.NET 6+ yrs, ASP.NET Core / C# / Fullstack, Pune + Hyderabad** — collects job **apply links** into a local DB so a busy schedule only needs minutes.
+A polite, extensible job-listings collector with a FastAPI control plane. It gathers public job postings into a local SQLite database, analyzes skill demand across them, and exports hyperlinked Excel/CSV snapshots — driven from a dashboard, REST API, CLI, scheduler, or any MCP-compatible AI client.
 
-## 1. Setup (one time)
+The default board adapter targets Naukri.com (direct search-API fast path with a Playwright browser fallback), but the pipeline — collect → validate → store → analyze → export — is board-agnostic and open to new adapters.
+
+## What it can do
+
+- **Collect listings** into SQLite (deduplicated by posting id, with first/last-seen tracking) via a direct search-API fast path, falling back to a polite Playwright/Chromium pass with human-like pacing.
+- **Filter at every stage** — relevance gating plus a configurable stack filter (e.g. drop pure-Java postings while keeping mixed-stack ones) applied at collect time and again at export time.
+- **Analyze skill demand** across fresh postings: top skills ranked by distinct-company or per-posting counts, each with a per-company breakdown, rendered in the dashboard and as a downloadable report.
+- **Export snapshots** — CSV or Excel where each job title is a true clickable hyperlink to the apply page.
+- **Serve a control plane** (one process, one port): dashboard UI, REST endpoints with cancel twins for every long run, live progress with stage timelines, run logs, and a DB explorer.
+- **Talk to AI agents** over Streamable HTTP MCP (curated tools: stats, search, start scrape/skill-scan/collect, run status, cancel) with an interactive Scalar API reference alongside Swagger/OpenAPI.
+- **Run on a schedule** (APScheduler cron) or headlessly from the CLI with Rich tables.
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Web framework | FastAPI (bigger-applications layout: routers, dependencies, internal ops) |
+| AI / agent interface | FastMCP (Streamable HTTP, curated tools), Scalar API reference |
+| Collection | Playwright (bundled Chromium, persistent profile) + uBlock Origin Lite, `httpx` API client |
+| Parsing | In-page JS extractors + BeautifulSoup/lxml offline twin |
+| Validation | Pydantic v2 |
+| Storage | SQLAlchemy 2 → SQLite (Postgres-ready via `DATABASE_URL`) |
+| Analysis / export | Pandas + openpyxl |
+| Scheduling / retries | APScheduler, tenacity (transient-only) |
+| CLI / UX | Typer + Rich, std `logging`, python-dotenv |
+| Tests | pytest + pytest-cov, 100% coverage gate, no browser/network in tests |
+
+Deliberately **not** included: Selenium/Scrapy, fingerprint-spoofing or undetected-driver packages, proxy rotation, CAPTCHA solvers. Polite rate limits, honeypot-safe extraction, and manual-solve bot-wall handling are built in.
+
+## Quickstart
 
 ```bash
-cd /Users/aslamshaikh/Projects/PythonWebScraping
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-playwright install chromium   # Chromium-only stack (Firefox engines don't start here)
+playwright install chromium
 cp .env.example .env
-bash vendor/download-ubol.sh  # fetch uBlock Origin Lite (unpacked, gitignored)
+bash vendor/download-ubol.sh   # fetch uBlock Origin Lite (unpacked, gitignored)
 ```
 
-### uBlock Origin Lite (real MV3 blocking, verified live)
-`vendor/download-ubol.sh` downloads the official build from Mozilla AMO and
-patches its manifest for Chromium (`service_worker`). Set
-`UBLOCK_UNPACKED_DIR=vendor/ubol-chrome` (default). Verified: 13/13
-tracker/ad requests `ERR_BLOCKED_BY_CLIENT` on forbes.com — incl. DataDome's
-fingerprinting tag. Loaded headed-only (headless-shell can't load
-extensions); headless runs fall back to the built-in tracker-blocker.
+Start the control plane (recommended — dashboard + REST + MCP):
 
-## 2. Usage
+```bash
+python -m src.main web
+# open http://127.0.0.1:8000        → dashboard: collect lanes, skill scans, exports, runs, charts
+# open http://127.0.0.1:8000/scalar → interactive API reference (/docs has Swagger UI)
+```
+
+Or use the CLI:
 
 ```bash
 source .venv/bin/activate
 
-# Web control plane (one process, one port — recommended):
-python -m src.main web                      # dashboard :8000 + /scalar + /mcp
-uvicorn src.web.main:app --port 8000        # same, without the CLI wrapper
-python -m src.main web --port 8123          # custom port
-# open http://127.0.0.1:8000  → trigger/cancel scrapes + exports from the UI
-# key-skills scan lives in the dashboard ("key skills" card) + POST /api/skills
-# (REST: POST /api/scrape → 202 run id → POST /api/runs/<id>/cancel)
+# Full pipeline: browser/API → validated jobs → SQLite + timestamped JSON/CSV
+python -m src.main scrape --keywords "python backend api" --locations "remote" --days 7 --pages 3
+python -m src.main scrape --no-enrich --pages 2   # fast link sweep without detail visits
 
-# Full pipeline: browser -> Pydantic -> SQLite + timestamped JSON/CSV
-python -m src.main scrape
-python -m src.main scrape --keywords "asp.net core c# .net" --locations "pune,hyderabad" --days 7 --pages 3
-python -m src.main scrape --no-enrich --pages 2        # fast link sweep (<2 min)
-python -m src.main scrape --browser chromium --headless # background (after 1 headful run)
-
-# DB overview / exports (Pandas)
+# Inspect and export
 python -m src.main stats
-python -m src.main export --format csv --location pune
 python -m src.main export --format excel
+python -m src.main export --format csv --location remote
+python -m src.main export --format excel --include-java   # opt out of the stack filter
 
 # Offline re-parse of a saved page (no browser needed)
 python -m src.main parse output/debug_last_search.html
 
-# Daily runs at 08:05 + 20:05 (blocking; or use cron/launchd)
+# Daily runs at 08:05 + 20:05 (blocking; or use cron/systemd)
 python -m src.main schedule --hours 8,20
-
-# Tests: 167 tests, 100% coverage gate (no browser/network needed)
-pytest
-
-# Daily apply-links recipe: docs/LANES_RUNBOOK.md (2 lanes → hyperlinked Excel)
-
-# Web control plane spec: docs/WEB_API.md (REST + dashboard + MCP + Scalar)
-
-# Live practice suite: TESTING.md Tests 1-7 on real sandboxes (Chrome + uBOL)
-.venv/bin/python scripts/practice_tests.py
-
-# E-commerce spot test: few products from Amazon.in + Flipkart (validated)
-.venv/bin/python scripts/practice_ecommerce.py
 ```
 
-## 2b. Docs, knowledge graph & testing phase
+Typical dashboard flow: collect one lane per search profile (`POST /api/collect` with `keywords`, `location`, `experience`, `days`, `max_jobs`) → repeat for other profiles → `POST /api/exports {format: excel}` → open the spreadsheet and click titles to apply. See `docs/LANES_RUNBOOK.md` for a worked multi-lane example.
 
-- `docs/PROJECT.md` — detailed project document (pipeline, modules, config, data model)
-- `docs/GRAPHIFY.md` — queryable knowledge graph ([Graphify-Labs/graphify](https://github.com/Graphify-Labs/graphify)): `graphify query "<q>"`, `graphify path "<A>" "<B>"`, open `graphify-out/graph.html`
-- `docs/TESTING.md` — practice progression (Books → Quotes → … → Naukri), failure taxonomy, suite guide
-- `docs/BOT_DETECTION.md` — Test A/B/C signal matrix (measure exposure, never spoof)
-- `docs/LINKEDIN_RESEARCH.md` — LinkedIn expansion research (skills catalog, MCP servers, R1–R4 repo mapping, phased plan)
-- `docs/OPENCODE_SETUP.md` — opencode v2 config (plugin, skills, MCP servers, verify commands)
+## Configuration
 
-> **Heads-up (verified on this Mac):** Naukri blocks **headless** browsers — always do the
-> **first run headful** (default) so you can solve the CAPTCHA / log in once. The persistent
-> profile keeps cookies; later runs succeed. Chromium-only by decision (Playwright-bundled build): no Firefox
-> engine starts in this environment (stable 155 and Nightly both die on profile spawn).
+Everything is `.env`-driven (see `.env.example`); CLI flags and API fields override per run. The knobs that matter most:
 
-## 3. Architecture (your proposed stack, as built)
-```
-Scheduler (APScheduler) ── schedule --hours 8,20
-        │
-        ▼
-Browser (Playwright → bundled Chromium + uBO Lite)  src/stealth_browser.py
-        │  persistent profile, stealth init JS, uBlock + fallback blocker,
-        │  human pauses/scrolls, manual-solve bot-wall handling
-        ▼
-Extraction ── live: in-page JS (computed-style honeypot guards)
-             offline: BeautifulSoup + lxml twin                   src/parser.py
-        │  skips display:none / aria-hidden / href traps, dedupes by job id
-        ▼
-Validation (Pydantic Job)                    src/models.py
-        │  one contract; bad cards dropped with a named-field warning
-        ▼
-Persistence (SQLAlchemy → SQLite)            src/db.py, jobs.db (gitignored)
-        │  upsert by job_id, first_seen/last_seen, scrape_runs log
-        ├──► Pandas → CSV / Excel            src/export.py
-        └──► JSON/CSV snapshots              output/ (gitignored)
-CLI (Typer) + output (Rich) + retries (tenacity, transient-only) + logging (std)
-```
+| Var | Default | Meaning |
+|---|---|---|
+| `KEYWORDS` | `asp.net core c# .net fullstack` | Default search keywords |
+| `LOCATIONS` | `pune,hyderabad` | Default search locations |
+| `EXPERIENCE` / `DATE_FILTER` | `6` / `7` | Years of experience · posted within last N days |
+| `MAX_PAGES_PER_SEARCH` / `MAX_JOBS_TOTAL` | `3` / `60` | Politeness caps |
+| `ENRICH_DETAILS` | `true` | Visit each posting page for full text/skills |
+| `DATABASE_URL` | `sqlite:///jobs.db` | SQLite file (or any SQLAlchemy URL) |
+| `WEB_HOST` / `WEB_PORT` | `127.0.0.1` / `8000` | Control-plane bind |
+| `HEADLESS` | `false` | Background runs (do the first run headful) |
 
-SQLite is the source of truth — set `DATABASE_URL` to Postgres later with no code change.
+SQLite is the source of truth; every export is a disposable snapshot.
 
-## 4. Files
+## Architecture
 
 ```
-src/config.py            env-driven settings (your defaults pre-filled)
-src/stealth_browser.py   Chromium-only launcher + uBO Lite wiring
-src/naukri_scraper.py    search URLs, JS extractors, tenacity goto, Pydantic coercion
-src/parser.py            BS4+lxml offline parser (debug without re-hitting Naukri)
-src/models.py            Pydantic Job + SQLAlchemy JobRow / ScrapeRun
-src/db.py                engine, init, upsert (dedupe), fetch, run log
-src/export.py            Pandas CSV/Excel exports
-src/scheduler.py         APScheduler daily runs
-src/main.py              Typer commands: scrape | export | stats | parse | schedule
-src/log.py               logging setup (LOG_LEVEL)
-jobs.db                  local DB (gitignored)        output/  snapshots (gitignored)
-.pw-profile*/            browser profiles (gitignored) .env    your secrets (gitignored)
+Trigger (dashboard / REST / MCP / CLI / scheduler)
+         │  one polite pass at a time, cancellable, progress + stage timeline
+         ▼
+Collect ── fast path: board search API (RSA request token, 20/page)
+          fallback: Playwright Chromium + uBO Lite + stealth init JS
+         │  polite delays · honeypot-safe extraction · manual-solve walls
+         ▼
+Validate (Pydantic Job — one contract; bad cards dropped with field name)
+         ▼
+Filter (relevance gate + stack filter, e.g. pure-Java exclusion)
+         ▼
+Persist (SQLAlchemy → SQLite: upsert by posting id, first/last seen, run audit)
+         ├──► Analyze (skill frequencies with per-company breakdowns)
+         ├──► Export (Pandas → CSV / hyperlinked Excel)
+         └──► Snapshots (timestamped JSON/CSV/TXT in output/)
 ```
 
-Deliberately **not** included: Selenium/Scrapy, undetected-chromedriver, fingerprint-spoofing
-packages, proxy rotation, CAPTCHA solvers — Playwright covers the browser side; the latter group
-is redundant or aimed at circumventing anti-abuse controls.
+Key modules: `src/web/` (FastAPI app, routers, orchestrator, MCP tools), `src/naukri_scraper.py` (collection pipeline + filters), `src/web/nkapi.py` (search-API client), `src/models.py` (Pydantic + ORM contract), `src/db.py`, `src/export.py`, `src/parser.py` (offline twin), `src/stealth_browser.py`, `src/scheduler.py`, `src/main.py` (CLI).
 
-## 5. Fair-use note
-Public listings only, rate-limited, for your personal job search. Respect Naukri's ToS and
-`robots.txt`; don't share/sell scraped data or run at high concurrency. If a block page appears,
-back off and retry later.
+## API & MCP sketch
+
+```
+POST /api/collect   → 202 {run_id}   collect one search profile into SQLite
+POST /api/scrape    → 202 {run_id}   full browser pass (409 when one already runs)
+POST /api/skills    → 202 {run_id}   skill-demand scan (report + .txt artifact)
+POST /api/exports   → 202 {run_id}   CSV/Excel snapshot
+GET  /api/runs/{id} → live progress + events[] + verdict
+POST /api/runs/{id}/cancel → cooperative cancel (partials kept)
+GET  /api/runs/{id}/download → the finished artifact
+GET  /api/health | /api/stats | /api/jobs… | /api/db/tables… | /api/logs…
+/mcp                → Streamable HTTP MCP (trailing slash required)
+```
+
+Full contract: `docs/WEB_API.md` (kept alongside the code as the living spec).
+
+## Testing
+
+```bash
+pytest   # 181 tests, 100% coverage gate — no browser or network needed (fakes included)
+```
+
+Live browser/network probes live in `scripts/` (practice suite, e-commerce spot checks) and are separate from the unit gate by design.
+
+## Docs
+
+- `docs/PROJECT.md` — pipeline, modules, config, data model, reference-repo survey
+- `docs/WEB_API.md` — control-plane spec (REST + dashboard + MCP + Scalar)
+- `docs/LANES_RUNBOOK.md` — reproducible multi-lane collect → Excel recipe
+- `docs/CODE_EXPLANATION.md` — code style, patterns, module-by-module guide
+- `docs/TESTING.md`, `docs/BOT_DETECTION.md` — practice progression, measurement-first bot-wall notes
+- `docs/GRAPHIFY.md` — queryable knowledge graph of the repo (`graphify query "<q>"`)
+
+## Fair use
+
+Collect public listings only, at polite rates, for personal research. Respect each board's Terms of Service and `robots.txt`; never share or sell scraped data, and never run concurrent workers against a site. On a block page: back off and retry later — this tool does not bypass access controls.
+
+## Contributing
+
+Issues and pull requests are welcome. Keep the gates green: `pytest` must stay at 100% coverage, SQLite stays the source of truth, and new collectors should follow the existing extract → validate → filter → persist shape. Please don't commit secrets, browser profiles, or database/output artifacts (all gitignored).

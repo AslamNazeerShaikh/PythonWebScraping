@@ -29,6 +29,34 @@ Why these strings: Lane 1 mirrors the current Senior Software Engineer
 history. Scanned 2026-10-15, they overlapped ~90% — both lanes swim in one
 pool, so one combined file is correct (no per-lane split needed).
 
+## 1b. Pure-Java exclusion (always on)
+
+Naukri's search is fuzzy: both lanes pull Java/Spring/Selenium postings.
+Every collect and every export now drops **pure-Java** jobs by default
+(`exclude_java: true` on `POST /api/collect` and `POST /api/exports`;
+`--exclude-java/--include-java` on the `export` CLI):
+
+- **Exclude** iff a Java-stack signal appears in the title, key skills,
+  snippet, or description — `java` (never `javascript`), `spring( boot)`,
+  `hibernate`, `selenium`, `gradle`, `maven`, `kotlin`, `groovy`, `scala`,
+  `jsp`, `servlet`, `struts`, `j2ee/j2se`, `junit`, `testng`, `micronaut`,
+  `quarkus` — **and** no `.NET` anchor is present.
+- **Keep** when a `.NET` anchor co-occurs (`c#`, `.net`, `dotnet`,
+  `asp.net`, `blazor`, `entity framework`, `vb.net`) — so `java + .NET`,
+  `AI + C#`, and `Selenium + C#` test roles stay, while `AI + Java`
+  (no .NET) and pure-Java go.
+- `React` / `Angular` / `Microservices` are deliberately **not** anchors
+  (they appear in pure-Java postings too).
+
+Implementation: `should_exclude_java_job()` in `src/naukri_scraper.py`
+(ports the title keyword/blocklist idea from
+ankitbaghel01/naukri_update's auto-apply runner) — applied at API-collect
+time, at browser-collect time (pre- and post-enrichment), and as a final
+gate at export time (so older DB rows are filtered from the Excel too).
+2026-10-16 proof: Lane 1 excluded 17, Lane 2 excluded 83 at collect;
+the Excel carried 325 of 371 DB rows with **0** pure-Java leaks.
+Opt out per-run with `"exclude_java": false` if you ever want the raw pool.
+
 ## 2. Collect (API path, ~25s per lane, no browser)
 
 Run **sequentially** (one browser/API lock; the second `POST` while busy

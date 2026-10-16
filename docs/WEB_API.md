@@ -143,7 +143,11 @@ window (`days`) is what keeps the pool recent.
 `POST /api/collect {keywords, location, experience, days (default 3),
 max_jobs}` fetches a lane straight from the search API (JobSpy-clone:
 `nkparam` + `tagsAndSkills`, no browser) and upserts into SQLite, with the
-browser scrape as fallback. Then `POST /api/exports {format: excel}` writes
+browser scrape as fallback. Both `POST /api/collect` and
+`POST /api/exports {format: excel}` take `exclude_java` (default `true`):
+pure-Java postings (Java/Spring/Selenium/… signal, no `c#/.NET` anchor —
+see `should_exclude_java_job` in `src/naukri_scraper.py`) are skipped at
+collect time and gated again at export time. Then `POST /api/exports {format: excel}` writes
 a snapshot whose title cells are true clickable hyperlinks (openpyxl
 `Hyperlink` → apply URL); CSV keeps plain URL text (Excel auto-linkifies).
 Flow for apply-links day: collect lane 1 + lane 2 → one excel export →
