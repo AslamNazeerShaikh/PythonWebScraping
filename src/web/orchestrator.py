@@ -169,7 +169,8 @@ def default_export_runner(record: RunRecord) -> dict:
     from ..export import export_jobs
 
     dest = export_jobs(fmt=record.params.get("format") or "csv",
-                       location=record.params.get("location") or "")
+                       location=record.params.get("location") or "",
+                       exclude_java=record.params.get("exclude_java", True))
     return {"file": dest.name, "path": str(dest)}
 
 
@@ -207,8 +208,6 @@ def default_collect_runner(record: RunRecord) -> dict:
     return {"found": total, "new": new, "source": source,
             "duration_s": duration, "verdict": verdict,
             "cancelled": record.should_stop()}
-
-
 def browser_scan_skills(record: RunRecord) -> dict:
     """Browser skills scan (fallback when the API fast path fails).
 

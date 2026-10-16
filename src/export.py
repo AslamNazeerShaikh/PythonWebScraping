@@ -26,7 +26,8 @@ COLUMNS = ["job_id", "title", "company", "location", "search_location",
            "skills", "first_seen", "last_seen"]
 
 
-def load_frame(location: str = "", limit: int = 5000) -> pd.DataFrame:
+def load_frame(location: str = "", limit: int = 5000,
+             exclude_java: bool = True) -> pd.DataFrame:
     """Load jobs from SQLite into a :class:`~pandas.DataFrame`.
 
     Args:
@@ -34,6 +35,9 @@ def load_frame(location: str = "", limit: int = 5000) -> pd.DataFrame:
             job's own ``location`` and the ``search_location`` it was found
             under (e.g. ``"pune"``). Empty string disables filtering.
         limit: Max rows, freshest first (mirrors :func:`src.db.fetch_all_jobs`).
+        exclude_java: Drop pure-Java postings (Java stack, no .NET anchor —
+            see :func:`src.naukri_scraper.should_exclude_java_job`) so the
+            Excel never carries them. ``False`` keeps every row.
     """
     engine = get_engine()
     stmt = select(JobRow).order_by(JobRow.last_seen.desc()).limit(limit)
@@ -44,11 +48,24 @@ def load_frame(location: str = "", limit: int = 5000) -> pd.DataFrame:
         mask = df["location"].str.contains(location, case=False, na=False) | \
             df["search_location"].str.contains(location, case=False, na=False)
         df = df[mask]
+    if exclude_java and not df.empty:
+        from .naukri_scraper import should_exclude_java_job
+
+        def _keep(row) -> bool:  # type: ignore[no-untyped-def]
+            skills = [s.strip() for s in
+                      str(row.get("skills") or "").split(",")]
+            return not should_exclude_java_job(
+                str(row.get("title") or ""), skills,
+                str(row.get("snippet") or ""),
+                str(row.get("description") or ""))
+
+        df = df[df.apply(_keep, axis=1)]
     return df[COLUMNS]
 
 
 def export_jobs(fmt: str = "csv", location: str = "",
-                out_path: str | None = None) -> Path:
+                out_path: str | None = None,
+                exclude_java: bool = True) -> Path:
     """Export the current DB snapshot to CSV or Excel.
 
     Args:
@@ -56,11 +73,12 @@ def export_jobs(fmt: str = "csv", location: str = "",
         location: Forwarded to :func:`load_frame` for pre-export filtering.
         out_path: Explicit destination; otherwise a timestamped file under
             ``OUTPUT_DIR`` (``naukri_export_<ts>.csv|.xlsx``).
+        exclude_java: Forwarded to :func:`load_frame` (pure-Java filter).
 
     Returns:
         Path of the written file.
     """
-    df = load_frame(location=location)
+    df = load_frame(location=location, exclude_java=exclude_java)
     out_dir = SETTINGS.output_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     if out_path:

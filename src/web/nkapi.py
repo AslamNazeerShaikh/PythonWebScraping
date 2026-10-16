@@ -29,7 +29,13 @@ import time
 import httpx
 
 from ..models import Job
-from ..naukri_scraper import ProgressHook, StopHook, build_skills_report, coerce_job
+from ..naukri_scraper import (
+    ProgressHook,
+    StopHook,
+    build_skills_report,
+    coerce_job,
+    job_should_exclude,
+)
 
 log = logging.getLogger(__name__)
 
@@ -162,12 +168,15 @@ def api_job_to_raw(api_job: dict) -> dict:
 
 
 def api_collect_jobs(params: dict, should_stop: StopHook,
-                     on_progress: ProgressHook) -> list[Job]:
+                     on_progress: ProgressHook) -> tuple[list[Job], int]:
     """Collect postings over the API (no browser): page until cap/empty.
 
     Shared by skills scans (which aggregate) and collect runs (which
     persist). Polite 2–5s pauses between pages (JobSpy sleeps 3–7s).
     Stops at ``max_jobs``, an empty page, the reported total, or cancel.
+    Pure-Java postings (Java stack, no .NET anchor — see
+    :func:`src.naukri_scraper.should_exclude_java_job`) are skipped unless
+    ``params["exclude_java"]`` is explicitly ``False``.
     Returns ``(jobs, pages_fetched)``.
     """
     keywords = str(params.get("keywords") or "").strip()
@@ -175,7 +184,9 @@ def api_collect_jobs(params: dict, should_stop: StopHook,
     experience = params.get("experience") or 6
     days = params.get("days") or 7
     max_jobs = params.get("max_jobs") or 100
+    exclude_java = params.get("exclude_java", True)
     found: dict[str, Job] = {}
+    excluded = 0
     # Bounded page range: caps API requests even when every page is fresh.
     max_pages = max_jobs // JOBS_PER_API_PAGE + 2
     total = None
@@ -194,11 +205,15 @@ def api_collect_jobs(params: dict, should_stop: StopHook,
                                          search_location=location)
             if job is None or job.job_id in found:
                 continue
+            if exclude_java and job_should_exclude(job):
+                excluded += 1
+                log.info("Skipping pure-Java posting: %s", job.title[:70])
+                continue
             found[job.job_id] = job
             if len(found) >= max_jobs:
                 break
         on_progress({"stage": "search", "location": location, "page": page_no,
-                     "found": len(found), "source": "api"})
+                     "found": len(found), "excluded": excluded, "source": "api"})
         if len(found) >= max_jobs:
             break
         if total is not None and page_no * JOBS_PER_API_PAGE >= total:

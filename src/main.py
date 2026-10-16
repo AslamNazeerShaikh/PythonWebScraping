@@ -131,13 +131,16 @@ def export(
     fmt: str = typer.Option("csv", "--format", help="csv or excel"),
     location: str = typer.Option("", help="Filter, e.g. 'pune'"),
     out: Optional[str] = typer.Option(None, help="Output path"),
+    exclude_java: bool = typer.Option(True, "--exclude-java/--include-java",
+                                      help="Drop pure-Java postings (default on)"),
 ) -> None:
     """Export SQLite -> CSV/Excel snapshot (Pandas)."""
     _ensure_env()
     if fmt not in ("csv", "excel"):
         console.print("[red]--format must be csv or excel[/red]")
         raise typer.Exit(code=2)
-    dest = export_jobs(fmt=fmt, location=location, out_path=out)
+    dest = export_jobs(fmt=fmt, location=location, out_path=out,
+                       exclude_java=exclude_java)
     console.print(f"[green]Exported ->[/green] {dest}")
 
 

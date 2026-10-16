@@ -752,11 +752,11 @@ def test_dashboard_has_skills_section(web_env):
 # nkapi — direct search API fast path (mocked HTTP, no network)
 # ---------------------------------------------------------------------------
 def _api_job(job_id, skills="C#, SQL", title="Senior .NET Developer",
-             company="Acme"):
+             company="Acme", desc="asp.net core c# fullstack"):
     return {"jobId": job_id, "title": title, "companyName": company,
             "experienceText": "6-8 Yrs", "tagsAndSkills": skills,
             "jdURL": f"/job-listings-dev-{job_id}",
-            "jobDescription": "asp.net core c# fullstack"}
+            "jobDescription": desc}
 
 
 class _Resp:
@@ -965,6 +965,30 @@ def test_api_collect_jobs_returns_jobs_and_pages(monkeypatch):
     jobs, pages = nk.api_collect_jobs(_api_params(max_jobs=10),
                                       lambda: False, lambda p: None)
     assert [j.job_id for j in jobs] == ["300001", "300002"] and pages == 1
+
+
+def test_api_collect_jobs_excludes_pure_java(monkeypatch):
+    import src.web.nkapi as nk
+
+    monkeypatch.setattr(nk, "api_pause", lambda: None)
+    rows = [_api_job("300001"),  # .NET default -> kept
+            _api_job("300002", skills="Java, Spring Boot",
+                     title="Java Developer",
+                     desc="spring boot microservices java backend"),  # dropped
+            _api_job("300003", skills="Java, C#",
+                     title="Sr java/.net Developer")]  # anchor -> kept
+    monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(
+        200, {"jobDetails": rows, "noOfJobs": 3}))
+    seen = []
+    jobs, _ = nk.api_collect_jobs(_api_params(max_jobs=10),
+                                  lambda: False, seen.append)
+    assert sorted(j.job_id for j in jobs) == ["300001", "300003"]
+    assert seen[-1]["excluded"] == 1
+    # Opt-out keeps everything (contract flag for callers that want raw data).
+    jobs, _ = nk.api_collect_jobs({**_api_params(max_jobs=10),
+                                   "exclude_java": False},
+                                  lambda: False, lambda p: None)
+    assert sorted(j.job_id for j in jobs) == ["300001", "300002", "300003"]
 
 
 def test_default_collect_runner_api_and_fallback(fresh_db, tmp_path, monkeypatch):

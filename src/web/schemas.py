@@ -28,6 +28,7 @@ class ExportRequest(BaseModel):
 
     format: str = Field(default="csv", pattern="^(csv|excel)$")
     location: str = ""
+    exclude_java: bool = True
 
 
 class SkillsRequest(BaseModel):
@@ -58,6 +59,7 @@ class CollectRequest(BaseModel):
     experience: int | None = Field(default=6, gt=0)
     days: int | None = Field(default=3, gt=0)
     max_jobs: int | None = Field(default=100, gt=0, le=200)
+    exclude_java: bool = True
 
 
 class RunOut(BaseModel):

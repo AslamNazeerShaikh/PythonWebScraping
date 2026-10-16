@@ -47,3 +47,43 @@ def test_export_excel_and_explicit_path(fresh_db, tmp_path, monkeypatch):
     explicit = tmp_path / "custom.csv"
     assert export.export_jobs(fmt="csv", out_path=str(explicit)) == explicit
     assert explicit.exists()
+
+
+def _seed_java(fresh_db):
+    from src.db import upsert_jobs
+    _seed(fresh_db)
+    upsert_jobs([make_job("33333333", title="Java Developer",
+                          skills=["Java", "Spring Boot"],
+                          snippet="spring boot microservices",
+                          search_location="pune"),
+                 make_job("44444444", title="Sr java/.net Full Stack Developer",
+                          skills=["Java", "C#"],
+                          snippet="java plus dotnet team",
+                          search_location="pune")])
+
+
+def test_load_frame_excludes_pure_java_by_default(fresh_db):
+    _seed_java(fresh_db)
+    titles = set(export.load_frame()["title"])
+    assert "Java Developer" not in titles  # pure-Java dropped
+    assert "Sr java/.net Full Stack Developer" in titles  # anchor rescues it
+    assert "Senior .NET Developer" in titles
+
+
+def test_load_frame_include_java_keeps_everything(fresh_db):
+    _seed_java(fresh_db)
+    assert len(export.load_frame(exclude_java=False)) == 4
+
+
+def test_load_frame_empty_db_with_filter(fresh_db):
+    assert export.load_frame().empty  # no rows: filter is a no-op, still COLUMNS
+    assert list(export.load_frame().columns) == export.COLUMNS
+
+
+def test_export_jobs_respects_include_java(fresh_db, tmp_path, monkeypatch):
+    _seed_java(fresh_db)
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    import pandas as pd
+    assert len(pd.read_csv(export.export_jobs(fmt="csv"))) == 3
+    assert len(pd.read_csv(export.export_jobs(fmt="csv",
+                                              exclude_java=False))) == 4

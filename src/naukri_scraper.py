@@ -274,6 +274,64 @@ def is_relevant(title: str, desc: str = "") -> bool:
         return False
     return True
 
+#: Java-stack signal for the pure-Java exclusion gate (see
+#: :func:`should_exclude_java_job`). Word-boundary guarded so ``JavaScript``
+#: (and the spaced variant ``Java Script``) never counts as Java — port of
+#: the title keyword/blocklist idea from ankitbaghel01's auto-apply runner,
+#: adapted from Node to a single stdlib regex here.
+JAVA_STACK_RE = re.compile(
+    r"(?<![a-zA-Z#.\w])"
+    r"(?:java(?!\s*script)|spring(?:\s*boot)?|hibernate|selenium|gradle|maven"
+    r"|kotlin|groovy|scala|jsp|servlet|struts|j2ee|j2se|junit|testng"
+    r"|micronaut|quarkus)"
+    r"(?![a-zA-Z])",
+    re.I,
+)
+
+#: .NET anchor that rescues a Java-signal job (mixed stacks stay: the user
+#: wants AI/.NET-relevant postings, only *pure*-Java ones go). ``React`` /
+#: ``Angular`` / ``Microservices`` are deliberately NOT anchors — they appear
+#: in pure-Java postings too, so they cannot prove .NET relevance.
+DOTNET_ANCHOR_RE = re.compile(
+    r"(?<![a-zA-Z#.\w])c\s*#"
+    r"|\.net\b"
+    r"|(?<![a-zA-Z])dotnet(?![a-zA-Z])"
+    r"|asp\.?net"
+    r"|(?<![a-zA-Z])blazor(?![a-zA-Z])"
+    r"|entity\s*framework"
+    r"|vb\.?net",
+    re.I,
+)
+
+
+def should_exclude_java_job(title: str = "", skills: list[str] | tuple[str, ...] = (),
+                            snippet: str = "", description: str = "") -> bool:
+    """True when a posting is pure-Java and must stay out of the Excel.
+
+    Exclude iff a Java-stack signal (``JAVA_STACK_RE``) appears anywhere in
+    the title, key skills, snippet, or description AND no .NET anchor
+    (``DOTNET_ANCHOR_RE``) is present in the same text. Truth table:
+
+    * pure AI / AI+C# / pure .NET / Java+C# / pure Python / AI+Python → keep
+    * pure Java / AI+Java (no .NET) / Selenium-only → exclude
+
+    Pure function — unit-tested against every row of that table.
+    """
+    parts = [title or ""]
+    parts.extend(s for s in (skills or []) if s)
+    parts.append(snippet or "")
+    parts.append(description or "")
+    blob = "\n".join(parts)
+    if not JAVA_STACK_RE.search(blob):
+        return False
+    return DOTNET_ANCHOR_RE.search(blob) is None
+
+
+def job_should_exclude(job: Job) -> bool:
+    """Thin :class:`Job` wrapper over :func:`should_exclude_java_job`."""
+    return should_exclude_java_job(job.title, job.skills, job.snippet,
+                                   job.description)
+
 def normalize_raw(raw: dict, search_location: str = "") -> dict:
     """Map extractor output (in-page JS camelCase) to Job snake_case fields.
 
@@ -547,6 +605,9 @@ def run_scrape(context: BrowserContext,
                     continue
                 if not is_relevant(job.title, job.snippet):
                     continue
+                if job_should_exclude(job):
+                    log.info("Skipping pure-Java posting: %s", job.title[:70])
+                    continue
                 all_jobs[job.job_id] = job
                 if len(all_jobs) >= SETTINGS.max_jobs_total:
                     break
@@ -567,6 +628,13 @@ def run_scrape(context: BrowserContext,
             jobs_list[i - 1] = enrich_job(page, job)
             _report("detail", index=i, total=len(jobs_list))
             human_pause(1.5, 3.5)  # extra polite on detail pages
+        # Detail pages reveal skills/descriptions: re-check the Java gate so
+        # postings that only show their Java stack in the full text still drop.
+        kept = [j for j in jobs_list if not job_should_exclude(j)]
+        if len(kept) != len(jobs_list):
+            log.info("Excluded %d pure-Java postings after enrichment",
+                     len(jobs_list) - len(kept))
+        jobs_list = kept
 
     try:
         page.close()

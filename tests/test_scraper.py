@@ -35,6 +35,81 @@ def test_is_relevant():
     assert ns.is_relevant("Fullstack Engineer (Angular, .NET)") is True
 
 
+# -- java-stack exclusion (pure-java jobs stay out of the Excel) -----------------
+# Ports the title keyword/blocklist idea from ankitbaghel01's auto-apply
+# runner (Node): filter by keywords before persisting/exporting. Rule here:
+# a Java-stack signal (java/spring/selenium/gradle/...) excludes the job
+# UNLESS a .NET anchor (c#/.net/asp.net/...) is also present.
+def test_should_exclude_pure_java_stack():
+    assert ns.should_exclude_java_job("Java Developer", ["Java", "Spring Boot"]) is True
+    assert ns.should_exclude_java_job("Springboot Developer", ["Java", "J2EE"]) is True
+    assert ns.should_exclude_java_job("Selenium Tester", ["Selenium", "TestNG"]) is True
+    assert ns.should_exclude_java_job("Kotlin Engineer", ["Kotlin", "Android"]) is True
+    assert ns.should_exclude_java_job("JAVA DEVELOPER", ["MAVEN", "Gradle"]) is True
+
+
+def test_should_exclude_keeps_dotnet_anchored():
+    assert ns.should_exclude_java_job("Sr java/.net Full Stack Developer",
+                                      ["Java", "C#", "React.js"]) is False
+    assert ns.should_exclude_java_job("Automation Test Engineer",
+                                      ["Java", "Selenium", "C#"]) is False
+    assert ns.should_exclude_java_job("Senior .NET Developer",
+                                      ["C#", ".NET Core"]) is False
+    assert ns.should_exclude_java_job("AI Engineer",
+                                      ["C#", ".NET", "Python"]) is False
+
+
+def test_should_exclude_ai_python_without_java():
+    assert ns.should_exclude_java_job("AI Engineer",
+                                      ["Python", "LangChain", "LLM"]) is False
+    assert ns.should_exclude_java_job("AI/ML Developer",
+                                      ["Python", "PyTorch"]) is False
+    assert ns.should_exclude_java_job("Python Developer", ["Python", "Django"]) is False
+    assert ns.should_exclude_java_job("Python Developer",
+                                      ["Python", ".NET", "C#"]) is False
+
+
+def test_should_exclude_ai_plus_java_without_dotnet():
+    assert ns.should_exclude_java_job("Java Developer with AI",
+                                      ["Java", "Spring Boot", "Python"]) is True
+    assert ns.should_exclude_java_job("Forward Deployed Engineer",
+                                      ["Java Backend", "Spring Boot", "AI/LLM"]) is True
+    assert ns.should_exclude_java_job("Java Full Stack - AI",
+                                      ["Java", "Spring", "generative ai"]) is True
+
+
+def test_should_exclude_javascript_is_not_java():
+    assert ns.should_exclude_java_job("Frontend Developer",
+                                      ["JavaScript", "React"]) is False
+    assert ns.should_exclude_java_job("Senior Software Engineer",
+                                      ["Java Script", ".NET", "React"]) is False
+    assert ns.should_exclude_java_job(".Net FSD", ["Angular", "JavaScript"]) is False
+
+
+def test_should_exclude_checks_snippet_and_description():
+    assert ns.should_exclude_java_job("Backend Developer", ["Python"],
+                                      "rest apis", "must know Spring Boot") is True
+    assert ns.should_exclude_java_job("Backend Developer", ["Python"],
+                                      "hibernate experts wanted") is True
+    assert ns.should_exclude_java_job(".NET Developer", ["C#"],
+                                      "", "spring boot plus dotnet team") is False
+    assert ns.should_exclude_java_job("Data Engineer", ["Pyspark", "SQL"],
+                                      "night shift", "") is False
+    assert ns.should_exclude_java_job("", [], "", "") is False
+
+
+def test_job_should_exclude_wraps_job():
+    from tests.conftest import make_job
+
+    pure = make_job("11111111", title="Java Developer",
+                    skills=["Java", "Spring Boot"],
+                    snippet="spring boot java backend")
+    assert ns.job_should_exclude(pure) is True
+    mixed = make_job("22222222", title="Sr java/.net Developer",
+                     skills=["Java", "C#"])
+    assert ns.job_should_exclude(mixed) is False
+
+
 def test_normalize_raw_camel_and_snake_shapes():
     n = ns.normalize_raw(raw_card("12345678"), "pune")
     assert n["job_id"] == "12345678"
@@ -251,6 +326,28 @@ def test_run_scrape_full_flow(monkeypatch):
     assert sorted(j.job_id for j in jobs) == ["11111111", "22222222"]
     assert all(j.skills == ["C#"] for j in jobs)  # enriched
     assert len(page.goto_urls) == 2 + 2  # 2 searches + 2 details
+
+
+def test_run_scrape_skips_pure_java_listing_card(monkeypatch):
+    _tune(monkeypatch, enrich_details=False, max_pages_per_search=1)
+    page = FakePage()
+    java_card = raw_card("99999991", "Java Network Engineer")
+    java_card["snippet"] = "spring boot networking team"  # relevant via "net", pure-Java
+    mixed_card = raw_card("99999992", "Sr java/.net Full Stack Developer")
+    mixed_card["snippet"] = "java plus c# dotnet team"  # Java signal + anchor -> kept
+    page.listing_queue = [[raw_card("11111111"), java_card, mixed_card]]
+    jobs = ns.run_scrape(FakeContext(page))
+    assert sorted(j.job_id for j in jobs) == ["11111111", "99999992"]
+
+
+def test_run_scrape_excludes_java_revealed_by_enrichment(monkeypatch):
+    _tune(monkeypatch, max_pages_per_search=1)
+    page = FakePage()
+    card = raw_card("11111111", "Fullstack Engineer (Angular)")
+    card["snippet"] = "fullstack angular team"  # relevant, no Java signal yet
+    page.listing_queue = [[card]]
+    page.detail_result = {"skills": ["Java", "Spring Boot"]}  # detail reveals Java
+    assert ns.run_scrape(FakeContext(page)) == []
 
 
 def test_run_scrape_no_enrich_and_cap(monkeypatch):
