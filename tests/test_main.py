@@ -95,6 +95,11 @@ def test_export_command_ok(monkeypatch, fresh_db, tmp_path):
     assert seen["days"] is None  # no --days: whole DB (back-compat)
     windowed = runner.invoke(main.app, ["export", "--days", "1"])
     assert windowed.exit_code == 0 and seen["days"] == 1
+    strict = runner.invoke(main.app, ["export", "--location", "pune",
+                                      "--location-match", "exact"])
+    assert strict.exit_code == 0 and seen["location_match"] == "exact"
+    bad = runner.invoke(main.app, ["export", "--location-match", "fuzzy"])
+    assert bad.exit_code == 2  # rejected before export_jobs runs
 
 
 def test_stats_command(fresh_db):

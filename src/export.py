@@ -39,7 +39,8 @@ def fresh_cutoff(days: int) -> datetime:
 
 def load_frame(location: str = "", limit: int = 5000,
               exclude_java: bool = True,
-              days: int | None = None) -> pd.DataFrame:
+              days: int | None = None,
+              location_match: str = "contains") -> pd.DataFrame:
     """Load jobs from SQLite into a :class:`~pandas.DataFrame`.
 
     Args:
@@ -53,6 +54,10 @@ def load_frame(location: str = "", limit: int = 5000,
         days: Freshness window — keep only rows whose ``first_seen`` falls
             within the last N days (``days=1`` → the last 24h, i.e. what a
             ``days: 1`` collect just brought in). ``None`` keeps the whole DB.
+        location_match: ``"contains"`` (default) treats ``location`` as a
+            substring, so ``"pune"`` also matches the combined
+            ``"pune,hyderabad,bengaluru"`` search string; ``"exact"`` keeps
+            only rows whose city equals the needle (the "Pune-only" sheet).
     """
     engine = get_engine()
     stmt = select(JobRow).order_by(JobRow.last_seen.desc())
@@ -63,8 +68,17 @@ def load_frame(location: str = "", limit: int = 5000,
         df = pd.read_sql(stmt, conn)
     if location:
         # Match either column — a Hyderabad-found job may list "Pune" and v.v.
-        mask = df["location"].str.contains(location, case=False, na=False) | \
-            df["search_location"].str.contains(location, case=False, na=False)
+        if location_match == "exact":
+            # City equality: "pune" must NOT pass "pune,hyderabad,bengaluru"
+            # (the 3-city search_location), which substring matching lets through.
+            needle = location.strip().casefold()
+            own = df["location"].fillna("").astype(str).str.strip()
+            where = df["search_location"].fillna("").astype(str).str.strip()
+            mask = (own.str.casefold() == needle) | \
+                (where.str.casefold() == needle)
+        else:
+            mask = df["location"].str.contains(location, case=False, na=False) | \
+                df["search_location"].str.contains(location, case=False, na=False)
         df = df[mask]
     if exclude_java and not df.empty:
         from .naukri_scraper import should_exclude_java_job
@@ -84,7 +98,8 @@ def load_frame(location: str = "", limit: int = 5000,
 def export_jobs(fmt: str = "csv", location: str = "",
                 out_path: str | None = None,
                 exclude_java: bool = True,
-                days: int | None = None) -> Path:
+                days: int | None = None,
+                location_match: str = "contains") -> Path:
     """Export the current DB snapshot to CSV or Excel.
 
     Args:
@@ -95,11 +110,14 @@ def export_jobs(fmt: str = "csv", location: str = "",
         exclude_java: Forwarded to :func:`load_frame` (pure-Java filter).
         days: Forwarded to :func:`load_frame` — only rows first seen within
             the last N days (``None`` exports everything).
+        location_match: Forwarded to :func:`load_frame` — ``"contains"``
+            (default) or ``"exact"`` city equality.
 
     Returns:
         Path of the written file.
     """
-    df = load_frame(location=location, exclude_java=exclude_java, days=days)
+    df = load_frame(location=location, exclude_java=exclude_java, days=days,
+                    location_match=location_match)
     out_dir = SETTINGS.output_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     if out_path:

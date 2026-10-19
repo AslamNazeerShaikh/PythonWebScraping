@@ -227,6 +227,41 @@ def test_export_days_filter_reaches_the_file(fresh_db, tmp_path, monkeypatch):
         assert frame["job_id"].astype(str).tolist() == ["11111111"]  # only <24h
 
 
+def test_export_location_match_contract(fresh_db, tmp_path, monkeypatch):
+    """``location_match: exact`` keeps only exact ``search_location`` hits."""
+    import io
+
+    import pandas as pd
+
+    from src.config import SETTINGS
+    from src.db import upsert_jobs
+
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    upsert_jobs([make_job("55555555", location="",
+                          search_location="pune"),
+                 make_job("66666666", location="",
+                          search_location="pune,hyderabad,bengaluru")])
+    orch = Orchestrator(scrape_runner=_instant(),
+                        export_runner=default_export_runner)
+    with TestClient(create_app(orch)) as client:
+        bad = client.post("/api/exports",
+                          json={"location": "pune",
+                                "location_match": "fuzzy"})
+        assert bad.status_code == 422  # pattern: ^(contains|exact)$
+        run_id = client.post("/api/exports",
+                             json={"format": "csv", "location": "pune",
+                                   "location_match": "exact"}
+                             ).json()["run_id"]
+        orch.wait_for(run_id, timeout=10)
+        done = client.get(f"/api/runs/{run_id}").json()
+        assert done["status"] == "succeeded"
+        assert done["params"]["location_match"] == "exact"
+        dl = client.get(f"/api/runs/{run_id}/download")
+        assert dl.status_code == 200
+        frame = pd.read_csv(io.StringIO(dl.text))
+        assert frame["job_id"].astype(str).tolist() == ["55555555"]
+
+
 class _FakePW:
     """sync_playwright() stand-in yielding a dummy handle."""
 

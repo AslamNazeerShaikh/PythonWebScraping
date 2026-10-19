@@ -171,7 +171,9 @@ def default_export_runner(record: RunRecord) -> dict:
     dest = export_jobs(fmt=record.params.get("format") or "csv",
                        location=record.params.get("location") or "",
                        exclude_java=record.params.get("exclude_java", True),
-                       days=record.params.get("days"))
+                       days=record.params.get("days"),
+                       location_match=record.params.get("location_match")
+                       or "contains")
     return {"file": dest.name, "path": str(dest)}
 
 

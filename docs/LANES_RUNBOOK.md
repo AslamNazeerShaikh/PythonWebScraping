@@ -120,6 +120,11 @@ which Excel auto-linkifies on open.)
 - Last-24h-only sheet: send `days: 1` to **both** the collect and the export
   (`{"format":"excel","days":1}`) — the collect sets Naukri's `jobAge`, the
   export is what actually filters the rows written to the file.
+- City-pure sheet: `{"format":"excel","days":3,"location":"pune","location_match":"exact"}`.
+  Without `location_match` the `location` value is a **substring** match, so
+  `"pune"` also matches an earlier `pune,hyderabad,bengaluru` search —
+  API-collected rows have a blank job `location`, so `search_location` is
+  the only city signal.
 - More volume: `max_jobs` up to `200` per lane.
 - New lane: add a third `POST /api/collect` with its own titles — no code
   changes needed. If a lane becomes permanent, tell me and I'll pin it in

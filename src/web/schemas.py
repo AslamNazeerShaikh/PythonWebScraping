@@ -28,6 +28,10 @@ class ExportRequest(BaseModel):
 
     format: str = Field(default="csv", pattern="^(csv|excel)$")
     location: str = ""
+    #: Match mode for ``location``: substring (default — ``"pune"`` also
+    #: matches the combined ``"pune,hyderabad,bengaluru"`` search string) or
+    #: exact city equality (a "Pune-only" sheet).
+    location_match: str = Field(default="contains", pattern="^(contains|exact)$")
     exclude_java: bool = True
     #: Freshness window: only rows first seen in the last N days (whole DB
     #: when omitted) — ``1`` is the "posted in the last 24h" slice.

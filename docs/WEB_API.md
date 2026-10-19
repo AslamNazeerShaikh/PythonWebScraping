@@ -157,6 +157,16 @@ cutoff is computed in **UTC** (`fresh_cutoff()` in `src/export.py`) because
 would shrink the window by the machine's UTC offset. CLI mirrors it:
 `python3 -m src.main export --format excel --days 1`.
 
+`location` is interpreted through `location_match` (default `contains`):
+substring matching, so `"pune"` also passes the combined
+`"pune,hyderabad,bengaluru"` `search_location` written by a multi-city
+search. Send `location_match: "exact"` for a city-pure sheet — equality
+against the job's own `location` **or** its `search_location`, case- and
+whitespace-insensitive (`^(contains|exact)$`, 422 otherwise; CLI
+`--location-match exact`). Exact matters because API-collected rows leave
+the job's `location` blank — `search_location` is the only city signal, and
+`pune` alone would smuggle in 3-city results.
+
 Then `POST /api/exports {format: excel}` writes
 a snapshot whose title cells are true clickable hyperlinks (openpyxl
 `Hyperlink` → apply URL); CSV keeps plain URL text (Excel auto-linkifies).

@@ -28,6 +28,37 @@ def test_load_frame_location_matches_either_column(fresh_db):
     assert len(export.load_frame(location="chennai")) == 0
 
 
+def _seed_search_locations(fresh_db):
+    """Realistic API-collected mix: a Pune-only search hit vs a 3-city hit.
+
+    ``location`` is blank on both — the search fast path never captures the
+    job's own city, so ``search_location`` is the only city signal.
+    """
+    from src.db import upsert_jobs
+    upsert_jobs([make_job("55555555", location="",
+                          search_location="pune"),
+                 make_job("66666666", location="",
+                          search_location="pune,hyderabad,bengaluru")])
+
+
+def test_load_frame_location_match_exact(fresh_db):
+    _seed_search_locations(fresh_db)
+    # default stays substring: the multi-city search passes "pune" too
+    assert len(export.load_frame(location="pune")) == 2
+    strict = export.load_frame(location="pune", location_match="exact")
+    assert len(strict) == 1
+    assert strict["job_id"].tolist() == ["55555555"]
+    # exact stays case- and whitespace-insensitive, and still checks both cols
+    assert len(export.load_frame(location=" PUNE ",
+                                 location_match="exact")) == 1
+    assert len(export.load_frame(location="pune", location_match="exact")) == \
+        len(export.load_frame(location="pune", location_match="contains")) - 1
+    assert len(export.load_frame(location="chennai",
+                                 location_match="exact")) == 0
+    # no needle: the mode never filters (back-compat)
+    assert len(export.load_frame(location_match="exact")) == 2
+
+
 def _seed_backdated(fresh_db):
     """Two rows: ``11111111`` seen now, ``22222222`` first seen 3 days ago.
 
@@ -59,6 +90,18 @@ def test_export_jobs_days_forwarded(fresh_db, tmp_path, monkeypatch):
 
     assert len(pd.read_csv(export.export_jobs(fmt="csv"))) == 2
     assert len(pd.read_csv(export.export_jobs(fmt="csv", days=1))) == 1
+
+
+def test_export_jobs_location_match_forwarded(fresh_db, tmp_path, monkeypatch):
+    _seed_search_locations(fresh_db)
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    import pandas as pd
+
+    broad = pd.read_csv(export.export_jobs(fmt="csv", location="pune"))
+    strict = pd.read_csv(export.export_jobs(fmt="csv", location="pune",
+                                            location_match="exact"))
+    assert len(broad) == 2 and len(strict) == 1
+    assert strict["job_id"].astype(str).tolist() == ["55555555"]
 
 
 def test_export_csv_default_path(fresh_db, tmp_path, monkeypatch):

@@ -136,14 +136,21 @@ def export(
     days: Optional[int] = typer.Option(
         None, "--days",
         help="Only rows first seen in the last N days (default: whole DB)"),
+    location_match: str = typer.Option(
+        "contains", "--location-match",
+        help="contains (default, substring) or exact city equality"),
 ) -> None:
     """Export SQLite -> CSV/Excel snapshot (Pandas)."""
     _ensure_env()
     if fmt not in ("csv", "excel"):
         console.print("[red]--format must be csv or excel[/red]")
         raise typer.Exit(code=2)
+    if location_match not in ("contains", "exact"):
+        console.print("[red]--location-match must be contains or exact[/red]")
+        raise typer.Exit(code=2)
     dest = export_jobs(fmt=fmt, location=location, out_path=out,
-                       exclude_java=exclude_java, days=days)
+                       exclude_java=exclude_java, days=days,
+                       location_match=location_match)
     console.print(f"[green]Exported ->[/green] {dest}")
 
 
