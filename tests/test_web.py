@@ -193,6 +193,40 @@ def test_default_export_runner_writes_files(fresh_db, tmp_path, monkeypatch):
     assert out["file"].endswith(".csv")
 
 
+def test_export_days_filter_reaches_the_file(fresh_db, tmp_path, monkeypatch):
+    """POST /api/exports {days:1} must export only the last-24h rows."""
+    import io
+
+    import pandas as pd
+    from sqlalchemy import text
+
+    from src.config import SETTINGS
+    from src.db import upsert_jobs
+
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    upsert_jobs([make_job("11111111"), make_job("22222222")])
+    with fresh_db.get_engine().begin() as conn:
+        conn.execute(text("UPDATE jobs SET first_seen = "
+                          "datetime('now','-3 day') "
+                          "WHERE job_id = '22222222'"))
+    orch = Orchestrator(scrape_runner=_instant(),
+                        export_runner=default_export_runner)
+    with TestClient(create_app(orch)) as client:
+        assert client.post("/api/exports",
+                           json={"days": 0}).status_code == 422  # gt=0
+        run_id = client.post("/api/exports",
+                             json={"format": "csv", "days": 1}
+                             ).json()["run_id"]
+        orch.wait_for(run_id, timeout=10)
+        done = client.get(f"/api/runs/{run_id}").json()
+        assert done["status"] == "succeeded"
+        assert done["params"]["days"] == 1  # kept on the run record
+        dl = client.get(f"/api/runs/{run_id}/download")
+        assert dl.status_code == 200
+        frame = pd.read_csv(io.StringIO(dl.text))
+        assert frame["job_id"].astype(str).tolist() == ["11111111"]  # only <24h
+
+
 class _FakePW:
     """sync_playwright() stand-in yielding a dummy handle."""
 

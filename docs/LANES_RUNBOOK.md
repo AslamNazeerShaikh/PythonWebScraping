@@ -86,9 +86,13 @@ log in `logs/`.
 
 ## 3. Export the Excel (titles are real hyperlinks)
 
+Add `"days":1` to the body for a **last-24-hours-only** file (it filters the
+export on `first_seen`, so older DB rows never reach the sheet — the collect
+`days` alone does NOT filter the export):
+
 ```bash
 curl -s -X POST http://127.0.0.1:8000/api/exports \
-  -H 'content-type: application/json' -d '{"format":"excel"}'
+  -H 'content-type: application/json' -d '{"format":"excel","days":1}'
 # poll the run, then:
 curl -s -OJ http://127.0.0.1:8000/api/runs/export-NNNN/download
 # file lands in output/naukri_export_<ts>.xlsx
@@ -113,6 +117,9 @@ which Excel auto-linkifies on open.)
 ## 5. Changing the recipe
 
 - Different freshness: `days: 7` (weekly sweep) or `days: 1` (daily top-up).
+- Last-24h-only sheet: send `days: 1` to **both** the collect and the export
+  (`{"format":"excel","days":1}`) — the collect sets Naukri's `jobAge`, the
+  export is what actually filters the rows written to the file.
 - More volume: `max_jobs` up to `200` per lane.
 - New lane: add a third `POST /api/collect` with its own titles — no code
   changes needed. If a lane becomes permanent, tell me and I'll pin it in

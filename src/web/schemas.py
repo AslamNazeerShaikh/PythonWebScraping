@@ -29,6 +29,9 @@ class ExportRequest(BaseModel):
     format: str = Field(default="csv", pattern="^(csv|excel)$")
     location: str = ""
     exclude_java: bool = True
+    #: Freshness window: only rows first seen in the last N days (whole DB
+    #: when omitted) — ``1`` is the "posted in the last 24h" slice.
+    days: int | None = Field(default=None, gt=0)
 
 
 class SkillsRequest(BaseModel):

@@ -28,6 +28,39 @@ def test_load_frame_location_matches_either_column(fresh_db):
     assert len(export.load_frame(location="chennai")) == 0
 
 
+def _seed_backdated(fresh_db):
+    """Two rows: ``11111111`` seen now, ``22222222`` first seen 3 days ago.
+
+    ``first_seen`` is written by SQLite's ``CURRENT_TIMESTAMP`` (UTC), so the
+    backdate uses ``datetime('now','-3 day')`` to stay in the same clock.
+    """
+    from sqlalchemy import text
+
+    _seed(fresh_db)
+    with fresh_db.get_engine().begin() as conn:
+        conn.execute(text("UPDATE jobs SET first_seen = "
+                          "datetime('now','-3 day') "
+                          "WHERE job_id = '22222222'"))
+
+
+def test_load_frame_days_window(fresh_db):
+    _seed_backdated(fresh_db)
+    assert len(export.load_frame()) == 2  # no window: the whole DB
+    fresh = export.load_frame(days=1)
+    assert len(fresh) == 1  # only the <24h posting
+    assert fresh["job_id"].tolist() == ["11111111"]
+    assert len(export.load_frame(days=7)) == 2  # 3-day-old row is inside
+
+
+def test_export_jobs_days_forwarded(fresh_db, tmp_path, monkeypatch):
+    _seed_backdated(fresh_db)
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    import pandas as pd
+
+    assert len(pd.read_csv(export.export_jobs(fmt="csv"))) == 2
+    assert len(pd.read_csv(export.export_jobs(fmt="csv", days=1))) == 1
+
+
 def test_export_csv_default_path(fresh_db, tmp_path, monkeypatch):
     _seed(fresh_db)
     monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)

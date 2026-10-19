@@ -83,9 +83,18 @@ def test_export_command_rejects_bad_format(fresh_db):
 
 
 def test_export_command_ok(monkeypatch, fresh_db, tmp_path):
-    monkeypatch.setattr(main, "export_jobs", lambda **k: tmp_path / "e.csv")
+    seen: dict = {}
+
+    def _fake(**kwargs):
+        seen.update(kwargs)
+        return tmp_path / "e.csv"
+
+    monkeypatch.setattr(main, "export_jobs", _fake)
     result = runner.invoke(main.app, ["export", "--format", "csv"])
     assert result.exit_code == 0
+    assert seen["days"] is None  # no --days: whole DB (back-compat)
+    windowed = runner.invoke(main.app, ["export", "--days", "1"])
+    assert windowed.exit_code == 0 and seen["days"] == 1
 
 
 def test_stats_command(fresh_db):

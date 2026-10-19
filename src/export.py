@@ -7,7 +7,7 @@ export never touches the database.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -26,8 +26,20 @@ COLUMNS = ["job_id", "title", "company", "location", "search_location",
            "skills", "first_seen", "last_seen"]
 
 
+def fresh_cutoff(days: int) -> datetime:
+    """Naive UTC cutoff for "first seen within the last ``days`` days".
+
+    ``first_seen``/``last_seen`` are written by SQLite's
+    ``CURRENT_TIMESTAMP``, which is UTC — so the comparison must be UTC too.
+    A local-time cutoff would shift every window by the machine's UTC offset
+    (18.5h instead of 24h from IST).
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=days)
+
+
 def load_frame(location: str = "", limit: int = 5000,
-             exclude_java: bool = True) -> pd.DataFrame:
+              exclude_java: bool = True,
+              days: int | None = None) -> pd.DataFrame:
     """Load jobs from SQLite into a :class:`~pandas.DataFrame`.
 
     Args:
@@ -38,9 +50,15 @@ def load_frame(location: str = "", limit: int = 5000,
         exclude_java: Drop pure-Java postings (Java stack, no .NET anchor —
             see :func:`src.naukri_scraper.should_exclude_java_job`) so the
             Excel never carries them. ``False`` keeps every row.
+        days: Freshness window — keep only rows whose ``first_seen`` falls
+            within the last N days (``days=1`` → the last 24h, i.e. what a
+            ``days: 1`` collect just brought in). ``None`` keeps the whole DB.
     """
     engine = get_engine()
-    stmt = select(JobRow).order_by(JobRow.last_seen.desc()).limit(limit)
+    stmt = select(JobRow).order_by(JobRow.last_seen.desc())
+    if days:
+        stmt = stmt.where(JobRow.first_seen >= fresh_cutoff(days))
+    stmt = stmt.limit(limit)
     with engine.connect() as conn:
         df = pd.read_sql(stmt, conn)
     if location:
@@ -65,7 +83,8 @@ def load_frame(location: str = "", limit: int = 5000,
 
 def export_jobs(fmt: str = "csv", location: str = "",
                 out_path: str | None = None,
-                exclude_java: bool = True) -> Path:
+                exclude_java: bool = True,
+                days: int | None = None) -> Path:
     """Export the current DB snapshot to CSV or Excel.
 
     Args:
@@ -74,11 +93,13 @@ def export_jobs(fmt: str = "csv", location: str = "",
         out_path: Explicit destination; otherwise a timestamped file under
             ``OUTPUT_DIR`` (``naukri_export_<ts>.csv|.xlsx``).
         exclude_java: Forwarded to :func:`load_frame` (pure-Java filter).
+        days: Forwarded to :func:`load_frame` — only rows first seen within
+            the last N days (``None`` exports everything).
 
     Returns:
         Path of the written file.
     """
-    df = load_frame(location=location, exclude_java=exclude_java)
+    df = load_frame(location=location, exclude_java=exclude_java, days=days)
     out_dir = SETTINGS.output_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     if out_path:

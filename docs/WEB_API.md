@@ -147,11 +147,22 @@ browser scrape as fallback. Both `POST /api/collect` and
 `POST /api/exports {format: excel}` take `exclude_java` (default `true`):
 pure-Java postings (Java/Spring/Selenium/… signal, no `c#/.NET` anchor —
 see `should_exclude_java_job` in `src/naukri_scraper.py`) are skipped at
-collect time and gated again at export time. Then `POST /api/exports {format: excel}` writes
+collect time and gated again at export time.
+
+`POST /api/exports` also takes an optional `days` (integer, `>0`, omit for
+the whole DB): only rows whose `first_seen` falls inside the last N days are
+written, so `days: 1` is exactly the "posted in the last 24h" slice. The
+cutoff is computed in **UTC** (`fresh_cutoff()` in `src/export.py`) because
+`first_seen` comes from SQLite's `CURRENT_TIMESTAMP` — a local-time cutoff
+would shrink the window by the machine's UTC offset. CLI mirrors it:
+`python3 -m src.main export --format excel --days 1`.
+
+Then `POST /api/exports {format: excel}` writes
 a snapshot whose title cells are true clickable hyperlinks (openpyxl
 `Hyperlink` → apply URL); CSV keeps plain URL text (Excel auto-linkifies).
 Flow for apply-links day: collect lane 1 + lane 2 → one excel export →
-open, click titles, apply.
+open, click titles, apply. For a last-24h-only file, send `days: 1` to
+**both** the collect and the export.
 
 ## MCP tools (curated) + harness wiring
 
