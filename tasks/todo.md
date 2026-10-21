@@ -1,0 +1,32 @@
+# Todo — Lane Job-Quality Gates (from tasks/plan.md, spec docs/SPEC-lane-job-quality-gates.md)
+
+- [x] Task 1: Gate functions + regexes in `src/naukri_scraper.py`
+  - Acceptance: `should_exclude_irrelevant_job` / `should_exclude_frontend_job` match the spec truth tables; truth-table tests in place.
+  - Verify: `python3 -m pytest tests/test_scraper.py` green.
+  - Files: `src/naukri_scraper.py`, `tests/test_scraper.py`
+- [x] Task 2: Export gates + dedupe + `exclude_unwanted` in `src/export.py`
+  - Acceptance: `load_frame` drops irrelevant / pure-frontend / non-naukri `apply_url` rows, collapses duplicate `(title, company, location, experience)` keeping freshest; `exclude_unwanted=False` bypasses the three gates (dedupe stays on).
+  - Verify: `python3 -m pytest tests/test_export.py` → 17 passed.
+  - Files: `src/export.py`, `tests/test_export.py`
+- [x] Task 3: API-collect gates in `src/web/nkapi.py`
+  - Acceptance: `is_external_apply(raw)` true for `companyApplyJob` / `clientCareersUrl` / `applyRedirectUrl`; `api_collect_jobs` skips those + irrelevant/frontend rows when `exclude_unwanted` (default True), counts them in progress (`external` / `excluded`); `api_scan_skills` pins `False`.
+  - Verify: `python3 -m pytest tests/test_web.py -k api_` → green.
+  - Files: `src/web/nkapi.py`, `tests/test_web.py`
+- [x] Task 4: Contract plumbing (`schemas`, orchestrator, CLI)
+  - Acceptance: `exclude_unwanted: bool = True` on `CollectRequest` + `ExportRequest`, forwarded by both runners and by `src.main export --exclude-unwanted/--include-unwanted`.
+  - Verify: `python3 -m pytest tests/test_web.py tests/test_main.py` → 73 passed.
+  - Files: `src/web/schemas.py`, `src/web/orchestrator.py`, `src/main.py`, `tests/test_web.py`, `tests/test_main.py`
+- [x] Task 5: Browser path G1+G2 — `is_relevant` removed, `job_should_exclude_unwanted` applied
+  - Acceptance: `run_scrape` keeps Lane 1 AI cards (old gate dropped them) and skips irrelevant/pure-frontend cards; no `is_relevant` reference anywhere.
+  - Verify: `python3 -m pytest tests/test_scraper.py` → 63 passed.
+  - Files: `src/naukri_scraper.py`, `tests/test_scraper.py`
+- [x] Checkpoint: gates — full `python3 -m pytest` green at `--cov-fail-under=100`
+  - Result: **202 passed, total coverage 100.00 %** (2026-10-21).
+- [x] Task 6: Docs (`LANES_RUNBOOK.md` §1c + params, `WEB_API.md` contract)
+  - Acceptance: both docs describe the four gates, the flag, and drop counters.
+  - Verify: read-through vs code; `graphify update .` → 1788 nodes rebuilt.
+  - Files: `docs/LANES_RUNBOOK.md`, `docs/WEB_API.md`
+- [x] Task 7: Run it — collect Lane 1 + Lane 2, export Excel, deliver
+  - Acceptance: both collects `succeeded` (`source: api`), export `days:1` downloaded to `output/`, all rows `naukri.com`, no duplicate identity rows.
+  - Verify: 96 rows; 0 non-naukri apply_urls; 0 duplicate identity rows; 0 java; lane-1 AI 33 + lane-2 .NET 23 titles, rest snippet-qualified (spot-checked: GenAI/LLM/agentic AI-LLM-security JDs).
+  - Files: `output/naukri_export_20261021_201239.xlsx`
