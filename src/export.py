@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pandas as pd
 from sqlalchemy import select
@@ -25,6 +26,38 @@ COLUMNS = ["job_id", "title", "company", "location", "search_location",
            "experience", "salary", "posted", "url", "apply_url",
            "skills", "first_seen", "last_seen"]
 
+#: Job-identity columns for the export-time repost collapse: a posting
+#: re-listed under a fresh job id keeps the same identity, so it collapses.
+#: ``search_location`` is deliberately NOT here — it describes the *search*,
+#: not the posting (and both lanes use the same combined-city string).
+DEDUPE_KEYS = ["title", "company", "location", "experience"]
+
+
+def _external_apply_url(apply_url: str) -> bool:
+    """True when ``apply_url`` leaves Naukri for a company careers/ATS portal.
+
+    The lane recipe applies **on Naukri**, so postings whose apply flow
+    redirects to the employer's own portal (``companyApplyJob`` rows at
+    collect time, browser-enriched external links at export time) stay out.
+    An empty value/host means "falls back to the Naukri job URL" → kept.
+    """
+    host = urlparse(apply_url or "").netloc.casefold()
+    return bool(host) and not host.removeprefix("www.").endswith("naukri.com")
+
+
+def _dedupe(df: pd.DataFrame) -> pd.DataFrame:
+    """Collapse near-identical reposts (``job_id`` differs, identity doesn't).
+
+    Rows arrive freshest-first (``last_seen DESC``), so the first occurrence
+    of an identity is kept. Always on — a duplicate is never useful in an
+    apply sheet.
+    """
+    if df.empty:
+        return df
+    key = df[DEDUPE_KEYS].astype(str).apply(
+        lambda col: col.str.strip().str.casefold())
+    return df[~key.duplicated()]
+
 
 def fresh_cutoff(days: int) -> datetime:
     """Naive UTC cutoff for "first seen within the last ``days`` days".
@@ -40,7 +73,8 @@ def fresh_cutoff(days: int) -> datetime:
 def load_frame(location: str = "", limit: int = 5000,
               exclude_java: bool = True,
               days: int | None = None,
-              location_match: str = "contains") -> pd.DataFrame:
+              location_match: str = "contains",
+              exclude_unwanted: bool = True) -> pd.DataFrame:
     """Load jobs from SQLite into a :class:`~pandas.DataFrame`.
 
     Args:
@@ -58,6 +92,12 @@ def load_frame(location: str = "", limit: int = 5000,
             substring, so ``"pune"`` also matches the combined
             ``"pune,hyderabad,bengaluru"`` search string; ``"exact"`` keeps
             only rows whose city equals the needle (the "Pune-only" sheet).
+        exclude_unwanted: Drop the lane-quality gates' casualties — postings
+            matching neither lane (:func:`src.naukri_scraper.should_exclude_irrelevant_job`),
+            pure-frontend roles (:func:`src.naukri_scraper.should_exclude_frontend_job`),
+            and postings whose ``apply_url`` leaves Naukri for the company's
+            own portal (:func:`_external_apply_url`). ``False`` keeps them.
+            The repost collapse (:func:`_dedupe`) is always on.
     """
     engine = get_engine()
     stmt = select(JobRow).order_by(JobRow.last_seen.desc())
@@ -92,6 +132,24 @@ def load_frame(location: str = "", limit: int = 5000,
                 str(row.get("description") or ""))
 
         df = df[df.apply(_keep, axis=1)]
+    if exclude_unwanted and not df.empty:
+        from .naukri_scraper import (should_exclude_frontend_job,
+                                     should_exclude_irrelevant_job)
+
+        def _keep_wanted(row) -> bool:  # type: ignore[no-untyped-def]
+            skills = [s.strip() for s in
+                      str(row.get("skills") or "").split(",")]
+            title = str(row.get("title") or "")
+            snippet = str(row.get("snippet") or "")
+            return (not should_exclude_irrelevant_job(title, skills, snippet)
+                    and not should_exclude_frontend_job(title, skills, snippet)
+                    and not _external_apply_url(str(row.get("apply_url") or "")))
+
+        before = len(df)
+        df = df[df.apply(_keep_wanted, axis=1)]
+        if len(df) != before:
+            log.info("Export gates dropped %d unwanted rows", before - len(df))
+    df = _dedupe(df)
     return df[COLUMNS]
 
 
@@ -99,7 +157,8 @@ def export_jobs(fmt: str = "csv", location: str = "",
                 out_path: str | None = None,
                 exclude_java: bool = True,
                 days: int | None = None,
-                location_match: str = "contains") -> Path:
+                location_match: str = "contains",
+                exclude_unwanted: bool = True) -> Path:
     """Export the current DB snapshot to CSV or Excel.
 
     Args:
@@ -112,12 +171,15 @@ def export_jobs(fmt: str = "csv", location: str = "",
             the last N days (``None`` exports everything).
         location_match: Forwarded to :func:`load_frame` — ``"contains"``
             (default) or ``"exact"`` city equality.
+        exclude_unwanted: Forwarded to :func:`load_frame` — the lane-quality
+            gates (irrelevant / pure-frontend / external-apply postings).
 
     Returns:
         Path of the written file.
     """
     df = load_frame(location=location, exclude_java=exclude_java, days=days,
-                    location_match=location_match)
+                    location_match=location_match,
+                    exclude_unwanted=exclude_unwanted)
     out_dir = SETTINGS.output_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     if out_path:

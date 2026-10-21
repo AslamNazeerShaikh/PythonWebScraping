@@ -193,6 +193,36 @@ def test_default_export_runner_writes_files(fresh_db, tmp_path, monkeypatch):
     assert out["file"].endswith(".csv")
 
 
+def test_export_runner_forwards_exclude_unwanted(fresh_db, tmp_path, monkeypatch):
+    """POST /api/exports {exclude_unwanted:false} must reach the file rows."""
+    import pandas as pd
+
+    from src.config import SETTINGS
+    from src.db import upsert_jobs
+
+    monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
+    upsert_jobs([make_job("81000001"),
+                 make_job("81000002", title="Product Owner",
+                          skills=["Agile", "Jira"], snippet="roadmap")])
+    gated = default_export_runner(RunRecord(run_id="e", kind="export", seq=1,
+                                            params={"format": "csv"}))
+    assert set(pd.read_csv(tmp_path / gated["file"])["title"]) == \
+        {"Senior .NET Developer"}
+    raw = default_export_runner(RunRecord(run_id="e", kind="export", seq=2,
+                                          params={"format": "csv",
+                                                  "exclude_unwanted": False}))
+    assert len(pd.read_csv(tmp_path / raw["file"])) == 2
+
+
+def test_collect_and_export_requests_gate_defaults():
+    from src.web.schemas import CollectRequest, ExportRequest
+
+    assert CollectRequest(keywords="ai").exclude_unwanted is True
+    assert ExportRequest().exclude_unwanted is True
+    assert CollectRequest(keywords="ai",
+                          exclude_unwanted=False).exclude_unwanted is False
+
+
 def test_export_days_filter_reaches_the_file(fresh_db, tmp_path, monkeypatch):
     """POST /api/exports {days:1} must export only the last-24h rows."""
     import io
@@ -588,11 +618,14 @@ def test_web_command_serves(monkeypatch, fresh_db):
 # ---------------------------------------------------------------------------
 # runlog — per-run files, both loggers, timestamped lines
 # ---------------------------------------------------------------------------
-def test_run_log_captures_python_and_playwright_with_timestamps():
+def test_run_log_captures_python_and_playwright_with_timestamps(caplog):
     import logging
 
     from src.web.runlog import attached_run_log, list_log_files, read_log_file
 
+    # Pin the level: without it the INFO records are dropped whenever no
+    # earlier test has called setup_logging() (order-dependent flake).
+    caplog.set_level(logging.INFO, logger="src.web.test")
     logging.getLogger("src.web.test").info("python hello")
     with attached_run_log("scrape", "scrape-0001") as name:
         assert name.startswith("scrape_scrape-0001_") and name.endswith(".log")
@@ -821,11 +854,13 @@ def test_dashboard_has_skills_section(web_env):
 # nkapi — direct search API fast path (mocked HTTP, no network)
 # ---------------------------------------------------------------------------
 def _api_job(job_id, skills="C#, SQL", title="Senior .NET Developer",
-             company="Acme", desc="asp.net core c# fullstack"):
-    return {"jobId": job_id, "title": title, "companyName": company,
-            "experienceText": "6-8 Yrs", "tagsAndSkills": skills,
-            "jdURL": f"/job-listings-dev-{job_id}",
-            "jobDescription": desc}
+             company="Acme", desc="asp.net core c# fullstack", **extra):
+    row = {"jobId": job_id, "title": title, "companyName": company,
+           "experienceText": "6-8 Yrs", "tagsAndSkills": skills,
+           "jdURL": f"/job-listings-dev-{job_id}",
+           "jobDescription": desc}
+    row.update(extra)
+    return row
 
 
 class _Resp:
@@ -1058,6 +1093,83 @@ def test_api_collect_jobs_excludes_pure_java(monkeypatch):
                                    "exclude_java": False},
                                   lambda: False, lambda p: None)
     assert sorted(j.job_id for j in jobs) == ["300001", "300002", "300003"]
+
+
+# -- lane job-quality gates on the API fast path (spec §G3 + §G1/§G2) -----------
+def test_is_external_apply_signals():
+    from src.web.nkapi import is_external_apply
+
+    assert is_external_apply({"companyApplyJob": True}) is True
+    assert is_external_apply({"clientCareersUrl": "acme-jobs-careers-1"}) is True
+    assert is_external_apply({"applyRedirectUrl": "https://ats.acme.example/1"}) \
+        is True
+    assert is_external_apply({"companyApplyJob": False}) is False
+    assert is_external_apply({"companyApplyJob": None}) is False
+    assert is_external_apply({}) is False
+    assert is_external_apply(_api_job("11111111")) is False  # plain Naukri row
+
+
+def test_api_collect_jobs_drops_external_apply_rows(monkeypatch):
+    import src.web.nkapi as nk
+
+    monkeypatch.setattr(nk, "api_pause", lambda: None)
+    rows = [_api_job("300001"),                                # on-Naukri -> kept
+            _api_job("300002", companyApplyJob=True),          # portal apply
+            _api_job("300003", clientCareersUrl="acme-careers-1"),
+            _api_job("300004",
+                     applyRedirectUrl="https://ats.acme.example/1")]
+    monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(
+        200, {"jobDetails": rows, "noOfJobs": 4}))
+    seen = []
+    jobs, _ = nk.api_collect_jobs(_api_params(max_jobs=10),
+                                  lambda: False, seen.append)
+    assert [j.job_id for j in jobs] == ["300001"]
+    assert seen[-1]["external"] == 3
+    # flag off: the raw pool keeps the portal-redirect rows (java gate stays)
+    jobs, _ = nk.api_collect_jobs({**_api_params(max_jobs=10),
+                                   "exclude_unwanted": False},
+                                  lambda: False, lambda p: None)
+    assert [j.job_id for j in jobs] == ["300001", "300002", "300003", "300004"]
+
+
+def test_api_collect_jobs_drops_unwanted_rows(monkeypatch):
+    import src.web.nkapi as nk
+
+    monkeypatch.setattr(nk, "api_pause", lambda: None)
+    rows = [_api_job("300001"),                                # lane 2 -> kept
+            _api_job("300002", title="Product Owner",
+                     skills="Agile, Jira", desc="roadmap prioritisation"),
+            _api_job("300003", title="React Developer",
+                     skills="React, JavaScript, HTML, CSS",
+                     desc="responsive UIs"),
+            _api_job("300004", title="AI Engineer",
+                     skills="Python, LLM", desc="rag with langchain")]
+    monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(
+        200, {"jobDetails": rows, "noOfJobs": 4}))
+    seen = []
+    jobs, _ = nk.api_collect_jobs(_api_params(max_jobs=10),
+                                  lambda: False, seen.append)
+    assert sorted(j.job_id for j in jobs) == ["300001", "300004"]
+    assert seen[-1]["excluded"] == 2
+    jobs, _ = nk.api_collect_jobs({**_api_params(max_jobs=10),
+                                   "exclude_unwanted": False},
+                                  lambda: False, lambda p: None)
+    assert sorted(j.job_id for j in jobs) == \
+        ["300001", "300002", "300003", "300004"]
+
+
+def test_api_scan_skills_pins_unwanted_gates_off(monkeypatch):
+    import src.web.nkapi as nk
+
+    monkeypatch.setattr(nk, "api_pause", lambda: None)
+    rows = [_api_job("400001", title="Product Owner", skills="Agile, Jira",
+                     desc="roadmap prioritisation")]
+    monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(
+        200, {"jobDetails": rows, "noOfJobs": 1}))
+    rec = RunRecord(run_id="k", kind="skills", seq=1,
+                    params=_api_params(max_jobs=10))
+    rep = nk.api_scan_skills(rec.params, rec.should_stop, lambda p: None)
+    assert rep["jobs_scanned"] == 1  # exploratory scans keep the raw pool
 
 
 def test_default_collect_runner_api_and_fallback(fresh_db, tmp_path, monkeypatch):

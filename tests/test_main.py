@@ -100,6 +100,9 @@ def test_export_command_ok(monkeypatch, fresh_db, tmp_path):
     assert strict.exit_code == 0 and seen["location_match"] == "exact"
     bad = runner.invoke(main.app, ["export", "--location-match", "fuzzy"])
     assert bad.exit_code == 2  # rejected before export_jobs runs
+    assert seen["exclude_unwanted"] is True  # lane gates default on
+    opt_out = runner.invoke(main.app, ["export", "--include-unwanted"])
+    assert opt_out.exit_code == 0 and seen["exclude_unwanted"] is False
 
 
 def test_stats_command(fresh_db):

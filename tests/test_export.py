@@ -32,13 +32,14 @@ def _seed_search_locations(fresh_db):
     """Realistic API-collected mix: a Pune-only search hit vs a 3-city hit.
 
     ``location`` is blank on both — the search fast path never captures the
-    job's own city, so ``search_location`` is the only city signal.
+    job's own city, so ``search_location`` is the only city signal. Titles
+    differ so the (title, company, location, experience) dedupe leaves both.
     """
     from src.db import upsert_jobs
-    upsert_jobs([make_job("55555555", location="",
-                          search_location="pune"),
-                 make_job("66666666", location="",
-                          search_location="pune,hyderabad,bengaluru")])
+    upsert_jobs([make_job("55555555", title="Pune Only .NET Developer",
+                          location="", search_location="pune"),
+                 make_job("66666666", title="Three City .NET Developer",
+                          location="", search_location="pune,hyderabad,bengaluru")])
 
 
 def test_load_frame_location_match_exact(fresh_db):
@@ -163,3 +164,65 @@ def test_export_jobs_respects_include_java(fresh_db, tmp_path, monkeypatch):
     assert len(pd.read_csv(export.export_jobs(fmt="csv"))) == 3
     assert len(pd.read_csv(export.export_jobs(fmt="csv",
                                               exclude_java=False))) == 4
+
+
+# -- lane job-quality gates (spec: docs/SPEC-lane-job-quality-gates.md) ---------
+def _seed_quality_gates(fresh_db):
+    """One row per gate outcome, all under the combined-lane search string."""
+    from src.db import upsert_jobs
+
+    common = dict(search_location="pune,hyderabad,bengaluru")
+    upsert_jobs([
+        make_job("71000001", title="AI Engineer", skills=["Python", "LLM"],
+                 snippet="rag pipelines built with langchain", **common),
+        make_job("71000002", title="Product Owner", skills=["Agile", "Jira"],
+                 snippet="roadmap prioritisation", **common),
+        make_job("71000003", title="React Developer",
+                 skills=["React", "JavaScript", "HTML", "CSS"],
+                 snippet="responsive UIs", **common),
+        make_job("71000004", title="Gen AI Engineer", skills=["LangChain"],
+                 snippet="llm integrations",
+                 apply_url="https://careers.acme.example/jobs/123", **common),
+    ])
+
+
+def test_load_frame_drops_unwanted_rows_by_default(fresh_db):
+    _seed_quality_gates(fresh_db)
+    titles = set(export.load_frame()["title"])
+    assert titles == {"AI Engineer"}  # unrelated + frontend + external-apply gone
+
+
+def test_load_frame_exclude_unwanted_false_keeps_raw_pool(fresh_db):
+    _seed_quality_gates(fresh_db)
+    titles = set(export.load_frame(exclude_unwanted=False)["title"])
+    assert titles == {"AI Engineer", "Product Owner", "React Developer",
+                      "Gen AI Engineer"}  # java gate stays on, only new gates opt out
+
+
+def test_load_frame_external_apply_dropped_only_under_gates(fresh_db):
+    _seed_quality_gates(fresh_db)
+    kept = set(export.load_frame(exclude_unwanted=False)["title"])
+    assert "Gen AI Engineer" not in set(export.load_frame()["title"])
+    assert "Gen AI Engineer" in kept
+
+
+def test_load_frame_dedupes_same_title_company_reposts(fresh_db):
+    from src.db import upsert_jobs
+
+    upsert_jobs([make_job("72000001", title="Sr. SW Engineer", company="Visa",
+                          skills=["Python"], snippet="agentic automation"),
+                 make_job("72000002", title="  sr. sw   engineer ",
+                          company="VISA", skills=["Python"],
+                          snippet="agentic automation")])
+    df = export.load_frame()
+    assert len(df) == 1  # near-identical repost collapses (freshest kept)
+
+
+def test_load_frame_dedupe_keeps_distinct_openings(fresh_db):
+    from src.db import upsert_jobs
+
+    upsert_jobs([make_job("73000001", title="Sr. SW Engineer", company="Visa",
+                          experience="1-3 Yrs"),
+                 make_job("73000002", title="Sr. SW Engineer", company="Visa",
+                          experience="5-8 Yrs")])
+    assert len(export.load_frame()) == 2  # same title, different band = 2 jobs

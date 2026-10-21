@@ -173,7 +173,9 @@ def default_export_runner(record: RunRecord) -> dict:
                        exclude_java=record.params.get("exclude_java", True),
                        days=record.params.get("days"),
                        location_match=record.params.get("location_match")
-                       or "contains")
+                       or "contains",
+                       exclude_unwanted=record.params.get(
+                           "exclude_unwanted", True))
     return {"file": dest.name, "path": str(dest)}
 
 

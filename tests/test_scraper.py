@@ -28,13 +28,6 @@ def test_build_search_url_encodes_params():
     assert "l=pune" in url and "c%23" in url  # '#' encoded, location present
 
 
-def test_is_relevant():
-    assert ns.is_relevant("Senior .NET Developer") is True
-    assert ns.is_relevant("Java Developer", "asp.net core experience") is True
-    assert ns.is_relevant("Java Developer", "spring boot only") is False
-    assert ns.is_relevant("Fullstack Engineer (Angular, .NET)") is True
-
-
 # -- java-stack exclusion (pure-java jobs stay out of the Excel) -----------------
 # Ports the title keyword/blocklist idea from ankitbaghel01's auto-apply
 # runner (Node): filter by keywords before persisting/exporting. Rule here:
@@ -96,6 +89,65 @@ def test_should_exclude_checks_snippet_and_description():
     assert ns.should_exclude_java_job("Data Engineer", ["Pyspark", "SQL"],
                                       "night shift", "") is False
     assert ns.should_exclude_java_job("", [], "", "") is False
+
+
+# -- relevance gate (Naukri fuzzy-search noise stays out of the Excel) -----------
+# Lane 1 (AI) ∪ Lane 2 (.NET/full-stack): a posting must match an anchor in
+# TITLE/SKILLS, or a *strong* term in the snippet — a bare "ai" in prose is
+# the main noise path and must NOT qualify (spec §G1 truth table).
+def test_should_exclude_irrelevant_job_drops_mixed_results():
+    assert ns.should_exclude_irrelevant_job("Product Owner", ["Agile", "Jira"]) is True
+    assert ns.should_exclude_irrelevant_job("Hardware Design Engineer", ["PCB"]) is True
+    assert ns.should_exclude_irrelevant_job("Senior Identity Specialist",
+                                            ["IAM", "OKTA"]) is True
+    assert ns.should_exclude_irrelevant_job("Devops Engineer", ["AWS", "Terraform"]) is True
+    # bare "ai" in prose ("training", "aided") must not qualify the job
+    assert ns.should_exclude_irrelevant_job("Data Engineer", ["PySpark", "SQL"],
+                                            "aided by technology and training") is True
+    assert ns.should_exclude_irrelevant_job("", [], "") is True
+
+
+def test_should_exclude_irrelevant_job_keeps_both_lanes():
+    # Lane 1 — AI
+    assert ns.should_exclude_irrelevant_job("AI Engineer", ["LLM", "RAG"]) is False
+    assert ns.should_exclude_irrelevant_job("Gen AI Engineer",
+                                            ["LangChain", "Pinecone"]) is False
+    assert ns.should_exclude_irrelevant_job("MCP Integration Engineer") is False
+    assert ns.should_exclude_irrelevant_job("Machine Learning Engineer") is False
+    # strong term in the snippet rescues a generic title
+    assert ns.should_exclude_irrelevant_job("Sr. SW Engineer", ["Python"],
+                                            "python, ai & agentic automation") is False
+    # Lane 2 — .NET / full stack
+    assert ns.should_exclude_irrelevant_job("Senior .NET Developer", ["C#"]) is False
+    assert ns.should_exclude_irrelevant_job("Full Stack Developer",
+                                            ["React", "Microservices"]) is False
+    assert ns.should_exclude_irrelevant_job("Software Engineer",
+                                            [], "asp.net core web api") is False
+    assert ns.should_exclude_irrelevant_job("Software Engineer",
+                                            [], "must know microservices") is False
+
+
+# -- pure-frontend gate (React/Angular-only postings stay out) -------------------
+def test_should_exclude_frontend_job_pure_frontend():
+    assert ns.should_exclude_frontend_job("React Developer", ["React", "Redux"]) is True
+    assert ns.should_exclude_frontend_job("Frontend Engineer",
+                                          ["JavaScript", "HTML", "CSS"]) is True
+    assert ns.should_exclude_frontend_job("UI UX Designer", ["Figma"]) is True
+    assert ns.should_exclude_frontend_job("Angular Developer",
+                                          ["Angular", "TypeScript"],
+                                          "build responsive UIs") is True
+
+
+def test_should_exclude_frontend_job_keeps_hybrids():
+    assert ns.should_exclude_frontend_job("Full Stack Developer",
+                                          ["React", "C#", ".NET"]) is False
+    assert ns.should_exclude_frontend_job("Fullstack JavaScript Engineer",
+                                          ["Node", "Express", "MongoDB"]) is False
+    assert ns.should_exclude_frontend_job("AI Engineer",
+                                          ["Python", "React"]) is False
+    assert ns.should_exclude_frontend_job("Senior .NET Developer", ["C#"]) is False
+    assert ns.should_exclude_frontend_job("Python Backend Developer",
+                                          ["Python", "Django", "SQL"]) is False
 
 
 def test_job_should_exclude_wraps_job():
@@ -338,6 +390,21 @@ def test_run_scrape_skips_pure_java_listing_card(monkeypatch):
     page.listing_queue = [[raw_card("11111111"), java_card, mixed_card]]
     jobs = ns.run_scrape(FakeContext(page))
     assert sorted(j.job_id for j in jobs) == ["11111111", "99999992"]
+
+
+def test_run_scrape_skips_unwanted_listing_cards(monkeypatch):
+    _tune(monkeypatch, enrich_details=False, max_pages_per_search=1)
+    page = FakePage()
+    owner = raw_card("99999993", "Product Owner")
+    owner["snippet"] = "roadmap prioritisation, stakeholders"  # no lane anchor
+    frontend = raw_card("99999994", "React Developer")
+    frontend["snippet"] = "javascript, html, css, responsive UIs"  # pure FE
+    ai = raw_card("99999995", "AI Engineer")
+    ai["snippet"] = "langchain, rag, mcp"  # Lane 1 — the old .NET-only gate
+    # relevance check would have dropped it (spec: browser path fix)
+    page.listing_queue = [[raw_card("11111111"), owner, frontend, ai]]
+    jobs = ns.run_scrape(FakeContext(page))
+    assert sorted(j.job_id for j in jobs) == ["11111111", "99999995"]
 
 
 def test_run_scrape_excludes_java_revealed_by_enrichment(monkeypatch):

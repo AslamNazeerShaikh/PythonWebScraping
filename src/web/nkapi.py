@@ -35,6 +35,7 @@ from ..naukri_scraper import (
     build_skills_report,
     coerce_job,
     job_should_exclude,
+    job_should_exclude_unwanted,
 )
 
 log = logging.getLogger(__name__)
@@ -167,6 +168,22 @@ def api_job_to_raw(api_job: dict) -> dict:
             "url": url, "skills": tags}
 
 
+def is_external_apply(api_job: dict) -> bool:
+    """True when a search-API row applies on the **company's own portal**.
+
+    Naukri marks such postings so the Apply flow hands the candidate off to
+    the employer's careers/ATS site instead of applying on Naukri — exactly
+    the postings the lane recipe wants to stay away from. JobSpy uses the
+    same ``companyApplyJob`` flag for its ``easy_apply`` filter
+    (``jobspy/naukri/__init__.py``); ``clientCareersUrl`` /
+    ``applyRedirectUrl`` are the concrete external URLs. All three come
+    free on the search row — no detail request needed.
+    """
+    return bool(api_job.get("companyApplyJob")
+                or api_job.get("clientCareersUrl")
+                or api_job.get("applyRedirectUrl"))
+
+
 def api_collect_jobs(params: dict, should_stop: StopHook,
                      on_progress: ProgressHook) -> tuple[list[Job], int]:
     """Collect postings over the API (no browser): page until cap/empty.
@@ -177,6 +194,12 @@ def api_collect_jobs(params: dict, should_stop: StopHook,
     Pure-Java postings (Java stack, no .NET anchor — see
     :func:`src.naukri_scraper.should_exclude_java_job`) are skipped unless
     ``params["exclude_java"]`` is explicitly ``False``.
+
+    Unless ``params["exclude_unwanted"]`` is explicitly ``False`` (skills
+    scans pin it off — they are exploratory), the lane-quality gates also
+    run: company-portal postings (:func:`is_external_apply`) and postings
+    matching neither lane or pure-frontend
+    (:func:`src.naukri_scraper.job_should_exclude_unwanted`) are skipped.
     Returns ``(jobs, pages_fetched)``.
     """
     keywords = str(params.get("keywords") or "").strip()
@@ -185,8 +208,10 @@ def api_collect_jobs(params: dict, should_stop: StopHook,
     days = params.get("days") or 7
     max_jobs = params.get("max_jobs") or 100
     exclude_java = params.get("exclude_java", True)
+    exclude_unwanted = params.get("exclude_unwanted", True)
     found: dict[str, Job] = {}
     excluded = 0
+    external = 0
     # Bounded page range: caps API requests even when every page is fresh.
     max_pages = max_jobs // JOBS_PER_API_PAGE + 2
     total = None
@@ -201,6 +226,11 @@ def api_collect_jobs(params: dict, should_stop: StopHook,
         if not rows:
             break
         for raw in rows:
+            if exclude_unwanted and is_external_apply(raw):
+                external += 1
+                log.info("Skipping company-portal posting: %s",
+                         str(raw.get("title"))[:70])
+                continue
             job: Job | None = coerce_job(api_job_to_raw(raw),
                                          search_location=location)
             if job is None or job.job_id in found:
@@ -209,11 +239,16 @@ def api_collect_jobs(params: dict, should_stop: StopHook,
                 excluded += 1
                 log.info("Skipping pure-Java posting: %s", job.title[:70])
                 continue
+            if exclude_unwanted and job_should_exclude_unwanted(job):
+                excluded += 1
+                log.info("Skipping unwanted posting: %s", job.title[:70])
+                continue
             found[job.job_id] = job
             if len(found) >= max_jobs:
                 break
         on_progress({"stage": "search", "location": location, "page": page_no,
-                     "found": len(found), "excluded": excluded, "source": "api"})
+                     "found": len(found), "excluded": excluded,
+                     "external": external, "source": "api"})
         if len(found) >= max_jobs:
             break
         if total is not None and page_no * JOBS_PER_API_PAGE >= total:
@@ -225,7 +260,13 @@ def api_collect_jobs(params: dict, should_stop: StopHook,
 
 def api_scan_skills(params: dict, should_stop: StopHook,
                     on_progress: ProgressHook) -> dict:
-    """Full skills report over the API (no browser): collect then aggregate."""
+    """Full skills report over the API (no browser): collect then aggregate.
+
+    Exploratory by design: keyword scans answer "what skills does <query>
+    want?", so the lane-quality gates stay off here (``exclude_unwanted``
+    pinned ``False``) — the raw pool is the point of a skills scan.
+    """
     by_company = company_mode(params)
-    jobs, _ = api_collect_jobs(params, should_stop, on_progress)
+    jobs, _ = api_collect_jobs({**params, "exclude_unwanted": False},
+                               should_stop, on_progress)
     return build_skills_report(jobs, by_company=by_company)

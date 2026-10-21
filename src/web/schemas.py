@@ -33,6 +33,10 @@ class ExportRequest(BaseModel):
     #: exact city equality (a "Pune-only" sheet).
     location_match: str = Field(default="contains", pattern="^(contains|exact)$")
     exclude_java: bool = True
+    #: Lane-quality gates (default on): drop postings matching neither lane,
+    #: pure-frontend roles, and postings whose apply leaves Naukri for the
+    #: company's own portal. The repost collapse is always on.
+    exclude_unwanted: bool = True
     #: Freshness window: only rows first seen in the last N days (whole DB
     #: when omitted) — ``1`` is the "posted in the last 24h" slice.
     days: int | None = Field(default=None, gt=0)
@@ -67,6 +71,9 @@ class CollectRequest(BaseModel):
     days: int | None = Field(default=3, gt=0)
     max_jobs: int | None = Field(default=100, gt=0, le=200)
     exclude_java: bool = True
+    #: Lane-quality gates (default on): company-portal postings plus rows
+    #: matching neither lane or pure-frontend are skipped at collect time.
+    exclude_unwanted: bool = True
 
 
 class RunOut(BaseModel):

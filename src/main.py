@@ -133,6 +133,10 @@ def export(
     out: Optional[str] = typer.Option(None, help="Output path"),
     exclude_java: bool = typer.Option(True, "--exclude-java/--include-java",
                                       help="Drop pure-Java postings (default on)"),
+    exclude_unwanted: bool = typer.Option(
+        True, "--exclude-unwanted/--include-unwanted",
+        help="Drop irrelevant / pure-frontend / company-portal postings "
+             "(default on)"),
     days: Optional[int] = typer.Option(
         None, "--days",
         help="Only rows first seen in the last N days (default: whole DB)"),
@@ -150,7 +154,8 @@ def export(
         raise typer.Exit(code=2)
     dest = export_jobs(fmt=fmt, location=location, out_path=out,
                        exclude_java=exclude_java, days=days,
-                       location_match=location_match)
+                       location_match=location_match,
+                       exclude_unwanted=exclude_unwanted)
     console.print(f"[green]Exported ->[/green] {dest}")
 
 

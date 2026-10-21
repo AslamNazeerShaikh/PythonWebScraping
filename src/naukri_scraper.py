@@ -266,14 +266,6 @@ def human_scroll(page: Page, rounds: int = 3) -> None:
     except Exception:
         pass
 
-def is_relevant(title: str, desc: str = "") -> bool:
-    """Light relevance filter for .NET fullstack roles; keeps recall high."""
-    t = f"{title} {desc}".lower()
-    must = ("net", ".net", "dotnet", "asp.net", "c#", "c #", "fullstack", "full stack")
-    if not any(k in t for k in must):
-        return False
-    return True
-
 #: Java-stack signal for the pure-Java exclusion gate (see
 #: :func:`should_exclude_java_job`). Word-boundary guarded so ``JavaScript``
 #: (and the spaced variant ``Java Script``) never counts as Java — port of
@@ -331,6 +323,126 @@ def job_should_exclude(job: Job) -> bool:
     """Thin :class:`Job` wrapper over :func:`should_exclude_java_job`."""
     return should_exclude_java_job(job.title, job.skills, job.snippet,
                                    job.description)
+
+# ---------------------------------------------------------------------------
+# Lane job-quality gates (spec: docs/SPEC-lane-job-quality-gates.md)
+# Naukri's fuzzy search returns mixed postings for both lanes, pure-frontend
+# roles, and postings whose Apply leaves Naukri — these gates keep them out.
+# Text basis is title + key skills + snippet, the same fields the API collect
+# and a DB row both carry, so collect-time and export-time always agree.
+# ---------------------------------------------------------------------------
+#: Lane 1 (AI) anchors — word-boundary guarded so prose ("training", "retail",
+#: "html") can never qualify a posting.
+AI_ANCHOR_RE = re.compile(
+    r"\bai\b|gen ?ai|\bllm\b|large language model|\brag\b|retrieval[- ]augmented"
+    r"|langchain|langgraph|agentic|multi[- ]agent|\bmcp\b|machine learning"
+    r"|\bml\b|\bnlp\b|natural language|generative|deep learning|computer vision"
+    r"|pytorch|tensorflow|hugging ?face|openai|chatgpt|copilot|claude"
+    r"|prompt engineering|vector (?:db|store|database)|embedding",
+    re.I,
+)
+
+#: Lane 2 (.NET full-stack) anchors: the existing .NET anchor plus the
+#: full-stack vocabulary from the lane keywords. ``react``/``angular`` are
+#: deliberately NOT anchors (approved spec §Open Questions) — pure-React
+#: results die in the frontend gate instead.
+DOTNET_LANE_RE = re.compile(
+    f"(?:{DOTNET_ANCHOR_RE.pattern})|full ?stack|microservice|web api"
+    r"|rest ?api|restful|\bmvc\b",
+    re.I,
+)
+
+#: Either lane, checked against title + skills.
+LANE_ANCHOR_RE = re.compile(
+    f"(?:{AI_ANCHOR_RE.pattern})|(?:{DOTNET_LANE_RE.pattern})", re.I)
+
+#: Terms strong enough to qualify a generic title from the snippet alone.
+#: A bare ``ai`` in prose is NOT here — that is the main fuzzy-search noise
+#: path (Data Engineer JDs mentioning "aided by AI").
+STRONG_SNIPPET_RE = re.compile(
+    r"\bllm\b|\brag\b|langchain|langgraph|agentic|gen ?ai|\bmcp\b|\.net|c#"
+    r"|asp\.?net|dotnet|microservice|full ?stack",
+    re.I,
+)
+
+#: Frontend vocabulary — a match here needs a server-side anchor to survive.
+FRONTEND_RE = re.compile(
+    r"frontend|front[- ]end|react|angular|vue|next\.?js|nuxt|svelte|html5?"
+    r"|css3?|javascript|typescript|jquery|bootstrap|tailwind|ui[- /]?ux"
+    r"|ux designer|web design|ui developer|storybook|webpack|\bvite\b",
+    re.I,
+)
+
+#: Server-side rescue for the frontend gate (mirrors the Java gate's anchor
+#: idea): .NET anchors + backend stacks + backend vocabulary.
+SERVER_ANCHOR_RE = re.compile(
+    f"(?:{DOTNET_ANCHOR_RE.pattern})|python|(?<![a-zA-Z])node|\bexpress\b"
+    r"|django|flask|fastapi|\bsql\b|backend|full ?stack|microservice"
+    r"|rest ?api|web api|restful|ruby|\bphp\b|rails|golang",
+    re.I,
+)
+
+
+def _gate_blob(title: str, skills: list[str] | tuple[str, ...],
+               snippet: str) -> str:
+    """Title + key skills + snippet as one lowercase-searchable text block."""
+    return "\n".join([title or "", *(s for s in (skills or []) if s),
+                      snippet or ""])
+
+
+def should_exclude_irrelevant_job(title: str = "",
+                                  skills: list[str] | tuple[str, ...] = (),
+                                  snippet: str = "") -> bool:
+    """True when a posting matches neither lane and must stay out of the Excel.
+
+    Rule: keep iff a lane anchor (``LANE_ANCHOR_RE`` — Lane 1 AI ∪ Lane 2
+    .NET/full-stack) appears in the TITLE or SKILLS, **or** a strong term
+    (``STRONG_SNIPPET_RE``) appears in the snippet. Truth table:
+
+    * AI Engineer / Gen AI Engineer / MCP Engineer / Senior .NET Developer /
+      Full Stack Developer (React, Microservices) / "Sr. SW Engineer … ai &
+      agentic automation" → keep
+    * Product Owner / Hardware Design Engineer / Identity Specialist /
+      DevOps / Data Engineer ("aided by training" prose) → exclude
+
+    Pure function — unit-tested against every row of that table.
+    """
+    head = "\n".join([title or "", *(s for s in (skills or []) if s)])
+    if LANE_ANCHOR_RE.search(head):
+        return False
+    return STRONG_SNIPPET_RE.search(snippet or "") is None
+
+
+def should_exclude_frontend_job(title: str = "",
+                                skills: list[str] | tuple[str, ...] = (),
+                                snippet: str = "") -> bool:
+    """True when a posting is *pure* frontend and must stay out of the Excel.
+
+    Rule: exclude iff ``FRONTEND_RE`` matches anywhere in the text AND no
+    server-side anchor (``SERVER_ANCHOR_RE``) rescues it. Truth table:
+
+    * React Developer / Frontend Engineer (JS, HTML, CSS) / UI UX Designer →
+      exclude
+    * Full Stack Developer (React, C#) / Fullstack JavaScript Engineer
+      (Node) / AI Engineer (Python, React) → keep
+
+    Pure function — unit-tested against every row of that table.
+    """
+    blob = _gate_blob(title, skills, snippet)
+    return (FRONTEND_RE.search(blob) is not None
+            and SERVER_ANCHOR_RE.search(blob) is None)
+
+
+def job_should_exclude_unwanted(job: Job) -> bool:
+    """True when a posting fails the lane-quality gates (irrelevant or pure frontend).
+
+    Thin :class:`Job` wrapper over :func:`should_exclude_irrelevant_job` and
+    :func:`should_exclude_frontend_job` — the "unwanted" half of the
+    ``exclude_unwanted`` flag (external-apply is gated separately from the
+    search-row flags in :mod:`src.web.nkapi`).
+    """
+    return (should_exclude_irrelevant_job(job.title, job.skills, job.snippet)
+            or should_exclude_frontend_job(job.title, job.skills, job.snippet))
 
 def normalize_raw(raw: dict, search_location: str = "") -> dict:
     """Map extractor output (in-page JS camelCase) to Job snake_case fields.
@@ -554,10 +666,12 @@ def run_scrape(context: BrowserContext,
                on_progress: Callable[[dict], None] | None = None) -> list[Job]:
     """Run the full collection pass: all locations × pages → enriched Jobs.
 
-    Stages: (1) per search+page: goto, extract, coerce to Job, relevance
-    filter, dedupe by job_id (stops early at MAX_JOBS_TOTAL); (2) optional
-    per-job detail enrichment with polite pauses. Pure collection — the
-    caller (CLI/scheduler) handles persistence. Returns validated Jobs.
+    Stages: (1) per search+page: goto, extract, coerce to Job, lane-quality
+    gates (irrelevant / pure-frontend / Java — see
+    :func:`job_should_exclude_unwanted`), dedupe by job_id (stops early at
+    MAX_JOBS_TOTAL); (2) optional per-job detail enrichment with polite
+    pauses. Pure collection — the caller (CLI/scheduler) handles
+    persistence. Returns validated Jobs.
 
     Args:
         context: Playwright browser context (the hands).
@@ -603,7 +717,13 @@ def run_scrape(context: BrowserContext,
                 job = coerce_job(raw, search_location=location)
                 if job is None or job.job_id in all_jobs:
                     continue
-                if not is_relevant(job.title, job.snippet):
+                # Lane-quality gates (spec: docs/SPEC-lane-job-quality-gates.md):
+                # postings matching neither lane, and pure-frontend roles, stay
+                # out — this replaces the old .NET-only is_relevant, which
+                # silently dropped Lane 1 (AI) postings on the fallback path.
+                if job_should_exclude_unwanted(job):
+                    log.info("Skipping irrelevant/pure-frontend posting: %s",
+                             job.title[:70])
                     continue
                 if job_should_exclude(job):
                     log.info("Skipping pure-Java posting: %s", job.title[:70])
