@@ -22,7 +22,7 @@ python3 -m src.main web --port 8000
 | `location` | `pune,hyderabad,bengaluru` | `pune,hyderabad,bengaluru` |
 | `experience` | `6` | `6` |
 | `days` | `3` (jobAge freshness filter) | `3` |
-| `max_jobs` | `100` | `100` |
+| `max_jobs` | `150` (post-gate cap counts *kept* rows — §1c) | `150` |
 
 Why these strings: Lane 1 mirrors the current Senior Software Engineer
 (AI/CCaaS, LangGraph/MCP) role; Lane 2 mirrors the 6-yr .NET full-stack
@@ -57,6 +57,46 @@ gate at export time (so older DB rows are filtered from the Excel too).
 the Excel carried 325 of 371 DB rows with **0** pure-Java leaks.
 Opt out per-run with `"exclude_java": false` if you ever want the raw pool.
 
+## 1c. Lane-quality gates (always on — irrelevant / frontend / portal / dupes)
+
+Naukri's fuzzy search also returns mixed postings unrelated to either lane
+(Product Owners, Data Engineers, SREs…), pure-frontend roles, near-identical
+reposts, and postings whose **Apply hands you off to the company's own
+portal** instead of applying on Naukri. Four gates keep them out (spec:
+`docs/SPEC-lane-job-quality-gates.md`; text basis = title + key skills +
+snippet, so collect-time and export-time always agree):
+
+1. **Relevance** — `should_exclude_irrelevant_job()`: keep only if a lane
+   anchor (Lane 1 `ai/genai/llm/rag/langchain/langgraph/agentic/mcp/ml/nlp/
+   pytorch/openai/…` ∪ Lane 2 `c#/.net/asp.net/full stack/microservices/
+   web api/mvc`) matches in title/skills, **or** a strong term (`llm`, `rag`,
+   `langchain`, `.net`, `c#`, `microservices`, …) appears in the snippet — a
+   bare "ai" in prose does NOT count (that is the main noise path).
+2. **Pure frontend** — `should_exclude_frontend_job()`: drop when a frontend
+   signal (react/angular/vue/html/css/javascript/typescript/ui-ux/…) appears
+   with **no** server-side anchor (.NET/python/node/api/full stack/…).
+   React/Angular stay Lane-2 *search keywords* but are not relevance
+   anchors, so React-only postings die here.
+3. **Company-portal redirects** — `is_external_apply()` in `src/web/nkapi.py`:
+   drop search rows carrying `companyApplyJob` / `clientCareersUrl` /
+   `applyRedirectUrl` (JobSpy uses the same flag for `easy_apply`; verified
+   live — such a row's `applyRedirectUrl` points at e.g.
+   `careers.<company>.com`). Export re-checks that `apply_url` stays on
+   `naukri.com`, so browser-enriched external links cannot leak either.
+4. **Duplicates** — always on at export: rows sharing
+   `(title, company, location, experience)` collapse (freshest wins);
+   `job_id` dedupe already covers upserts.
+
+Gates are governed by **`exclude_unwanted`** (default `true`) on
+`POST /api/collect` and `POST /api/exports` (`--exclude-unwanted` /
+`--include-unwanted` on the CLI) — opt out per-run with
+`"exclude_unwanted": false`; the Java gate stays on regardless. Collect
+progress reports drops as `excluded` (irrelevant/frontend/Java) and
+`external` (company-portal). Skills scans pin the gates **off** (the raw
+pool is the point). Because gates keep fewer rows per raw page, the daily
+apply-links run collects with `max_jobs: 150` per lane (the cap counts
+*kept* rows). 2026-10-21: full suite green at 100 % coverage (202 tests).
+
 ## 2. Collect (API path, ~25s per lane, no browser)
 
 Run **sequentially** (one browser/API lock; the second `POST` while busy
@@ -65,10 +105,10 @@ if a run reports `source: "browser"`, the API rate-limited (406) and the
 run still completed via fallback — file is still valid.
 
 ```bash
-# Lane 1
+# Lane 1 (add "exclude_unwanted":false only if you ever want the raw pool)
 curl -s -X POST http://127.0.0.1:8000/api/collect \
   -H 'content-type: application/json' \
-  -d '{"keywords":"AI Engineer, AI Agent Developer, LangChain, LangGraph, GenAI Engineer, LLM, RAG, Agentic AI, Python AI Engineer, MCP","location":"pune,hyderabad,bengaluru","experience":6,"days":3,"max_jobs":100}'
+  -d '{"keywords":"AI Engineer, AI Agent Developer, LangChain, LangGraph, GenAI Engineer, LLM, RAG, Agentic AI, Python AI Engineer, MCP","location":"pune,hyderabad,bengaluru","experience":6,"days":3,"max_jobs":150}'
 # → {"run_id":"collect-NNNN", ...} — poll until succeeded:
 curl -s http://127.0.0.1:8000/api/runs/collect-NNNN
 # Lane 2 (same shape, .NET keywords above)
@@ -97,6 +137,10 @@ curl -s -X POST http://127.0.0.1:8000/api/exports \
 curl -s -OJ http://127.0.0.1:8000/api/runs/export-NNNN/download
 # file lands in output/naukri_export_<ts>.xlsx
 ```
+
+The §1b/§1c gates (`exclude_java`, `exclude_unwanted` — both default `true`)
+plus the repost collapse run inside every export, so the sheet carries only
+applicable-on-Naukri lane jobs.
 
 Dashboard equivalent: **export** card → format `excel` → start → download
 link when done. Open in Excel/LibreOffice: the **title column cells are

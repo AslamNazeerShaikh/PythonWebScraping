@@ -149,6 +149,21 @@ pure-Java postings (Java/Spring/Selenium/… signal, no `c#/.NET` anchor —
 see `should_exclude_java_job` in `src/naukri_scraper.py`) are skipped at
 collect time and gated again at export time.
 
+Both endpoints also take **`exclude_unwanted`** (default `true`) — the lane
+quality gates (spec: `docs/SPEC-lane-job-quality-gates.md`, runbook §1c):
+irrelevant postings (no Lane-1 AI / Lane-2 `.NET` anchor —
+`should_exclude_irrelevant_job`), pure-frontend roles
+(`should_exclude_frontend_job`), and postings that apply on the **company's
+own portal** (`is_external_apply` in `src/web/nkapi.py`: `companyApplyJob` /
+`clientCareersUrl` / `applyRedirectUrl` on the search row; export re-checks
+that `apply_url` stays on `naukri.com`). Collect progress reports the drop
+counts as `excluded` (irrelevant/frontend/Java) and `external`
+(company-portal). Exports additionally always collapse near-identical
+reposts sharing `(title, company, location, experience)` — freshest wins.
+`{"exclude_unwanted": false}` restores the raw pool (the Java gate stays on);
+CLI mirrors it as `export --exclude-unwanted/--include-unwanted`. Skills
+scans pin the gates **off** — exploratory keyword scans keep the raw pool.
+
 `POST /api/exports` also takes an optional `days` (integer, `>0`, omit for
 the whole DB): only rows whose `first_seen` falls inside the last N days are
 written, so `days: 1` is exactly the "posted in the last 24h" slice. The
