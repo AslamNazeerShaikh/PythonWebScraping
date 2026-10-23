@@ -1,6 +1,8 @@
 """Tests for src.export — Pandas frames, filters, CSV/Excel snapshots."""
 from __future__ import annotations
 
+import pandas as pd
+
 from src import export
 from src.config import SETTINGS
 from tests.conftest import make_job
@@ -226,3 +228,54 @@ def test_load_frame_dedupe_keeps_distinct_openings(fresh_db):
                  make_job("73000002", title="Sr. SW Engineer", company="Visa",
                           experience="5-8 Yrs")])
     assert len(export.load_frame()) == 2  # same title, different band = 2 jobs
+
+
+# ---------------------------------------------------------------------------
+# Email collector export (Task 5)
+# ---------------------------------------------------------------------------
+def _seed_emails():
+    from src.db import upsert_emails
+    from src.models import EmailContact
+
+    upsert_emails([
+        EmailContact(email="b@tcs.com", domain="tcs.com", keyword="@tcs.com",
+                     author="B", snippet="mail b@tcs.com"),
+        EmailContact(email="a@tcs.com", domain="tcs.com", keyword="@tcs.com"),
+        EmailContact(email="c@wipro.com", domain="wipro.com",
+                     keyword="@wipro.com", post_url="https://lnkd.in/x"),
+    ])
+
+
+def test_load_email_frame_columns_and_sort(fresh_db):
+    _seed_emails()
+    df = export.load_email_frame()
+    assert list(df.columns) == export.EMAIL_COLUMNS
+    # sorted domain -> email
+    assert list(df["email"]) == ["a@tcs.com", "b@tcs.com", "c@wipro.com"]
+
+
+def test_load_email_frame_empty_db(fresh_db):
+    df = export.load_email_frame()
+    assert df.empty
+    assert list(df.columns) == export.EMAIL_COLUMNS
+
+
+def test_export_emails_explicit_paths_both_formats(fresh_db, tmp_path):
+    _seed_emails()
+    xlsx = export.export_emails(fmt="excel", out_path=tmp_path / "e.xlsx")
+    csvf = export.export_emails(fmt="csv", out_path=tmp_path / "e.csv")
+    assert xlsx.exists() and xlsx.suffix == ".xlsx"
+    assert csvf.exists() and csvf.suffix == ".csv"
+    assert len(pd.read_excel(xlsx)) == 3
+
+
+def test_export_emails_default_path_is_timestamped(fresh_db, tmp_path,
+                                                   monkeypatch):
+    from src.config import SETTINGS as S
+    monkeypatch.setattr(S, "output_dir", tmp_path)
+    _seed_emails()
+    p = export.export_emails(fmt="excel")
+    assert p.name.startswith("linkedin_emails_") and p.suffix == ".xlsx"
+    assert p.parent == tmp_path
+    pc = export.export_emails(fmt="csv")
+    assert pc.suffix == ".csv"

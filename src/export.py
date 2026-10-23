@@ -16,7 +16,7 @@ from sqlalchemy import select
 
 from .config import SETTINGS
 from .db import get_engine
-from .models import JobRow
+from .models import EmailRow, JobRow
 
 #: Module logger — configured once by :func:`src.log.setup_logging`.
 log = logging.getLogger(__name__)
@@ -217,3 +217,65 @@ def _hyperlink_titles(path: Path) -> None:
             row[title_idx - 1].hyperlink = target
             row[title_idx - 1].style = "Hyperlink"
     workbook.save(path)
+
+
+# ---------------------------------------------------------------------------
+# LinkedIn email collector snapshots (docs/SPEC-linkedin-email-collector.md)
+# ---------------------------------------------------------------------------
+#: Column order for ``contact_emails`` exports (stable, spec-mandated).
+EMAIL_COLUMNS = ["email", "domain", "author", "posted", "post_url",
+                 "snippet", "keyword", "first_seen", "last_seen"]
+
+
+def load_email_frame(limit: int = 5000) -> pd.DataFrame:
+    """Load harvested emails from SQLite into a :class:`~pandas.DataFrame`.
+
+    Sorted ``domain → email`` so one company's contacts sit together in
+    the sheet. Empty DB still yields the documented columns (a sheet with
+    headers, not a crash).
+
+    Args:
+        limit: Max rows after sorting (default 5000 — far past a 11-domain
+            run's realistic volume).
+    """
+    engine = get_engine()
+    stmt = (select(EmailRow)
+            .order_by(EmailRow.domain, EmailRow.email)
+            .limit(limit))
+    with engine.connect() as conn:
+        df = pd.read_sql(stmt, conn)
+    if df.empty:
+        return pd.DataFrame(columns=EMAIL_COLUMNS)
+    return df[EMAIL_COLUMNS]
+
+
+def export_emails(fmt: str = "excel", out_path: str | None = None,
+                  limit: int = 5000) -> Path:
+    """Export the harvested-email snapshot to Excel or CSV.
+
+    SQLite stays the source of truth; the file is a disposable snapshot.
+
+    Args:
+        fmt: ``"excel"`` (default, ``.xlsx``) or ``"csv"``.
+        out_path: Explicit destination; otherwise a timestamped
+            ``linkedin_emails_<ts>.xlsx|.csv`` under ``SETTINGS.output_dir``.
+        limit: Forwarded to :func:`load_email_frame`.
+
+    Returns:
+        Path of the written file.
+    """
+    df = load_email_frame(limit=limit)
+    out_dir = SETTINGS.output_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if out_path:
+        dest = Path(out_path)
+    else:
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        suffix = "xlsx" if fmt == "excel" else "csv"
+        dest = out_dir / f"linkedin_emails_{ts}.{suffix}"
+    if fmt == "excel":
+        df.to_excel(dest, index=False)
+    else:
+        df.to_csv(dest, index=False)
+    log.info("Exported %d emails -> %s", len(df), dest)
+    return dest
