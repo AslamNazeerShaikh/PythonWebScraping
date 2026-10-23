@@ -150,6 +150,8 @@ class FakePage:
         self.option_texts: list[str] = []
         #: Every evaluate() call (proves indexed option clicks ran).
         self.evals: list[str] = []
+        #: Card batches served per LinkedIn content-extract evaluate call.
+        self.cards_queue: list[list[dict]] = []
         #: Current URL (search-bar submit returns this as the landed URL).
         self.url = "https://www.naukri.com/"
 
@@ -184,6 +186,8 @@ class FakePage:
         self.evals.append(js)
         if 'innerText.slice(0,4000)' in js:
             return self.body_text
+        if '/*content-email-cards*/' in js:
+            return self.cards_queue.pop(0) if self.cards_queue else []
         if '/*OPTION_TEXTS*/' in js:
             return list(self.option_texts)  # dropdown texts for _pick_option
         if '.click()' in js:
