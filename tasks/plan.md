@@ -1,85 +1,95 @@
-# Implementation Plan: Lane Job-Quality Gates (irrelevant · pure-frontend · external-apply · dedupe)
+# Implementation Plan: LinkedIn Recruiter Email Collector
 
-Implements `docs/SPEC-lane-job-quality-gates.md` (approved 2026-10-21).
-User-confirmed decisions: dedupe key `(title, company)`; `react`/`angular` are
-search keywords but not relevance anchors; lane scans use `max_jobs: 150`.
-Scope of this run: Pune + Hyderabad + Bengaluru, experience 6, days 3.
+Implements `docs/SPEC-linkedin-email-collector.md` (approved 2026-10-23).
+User-confirmed decisions: `capgemini.com` (typo fix), **post-body only**
+extraction, keep **all** emails tagged by target domain, `past-month` facet
+for the ~30-day window. Scroll default `--max-scrolls 6`; keyword is the
+literal `"@<domain>"`; company-page sweep deferred (spec open Q2/Q3 resolved
+as: single `@domain` pass, no second pass).
 
 ## Overview
 
-Four durable, API-only gates (no Playwright) so lane collects + exports stop
-carrying Naukri's fuzzy-search junk: unrelated postings, pure-frontend roles,
-duplicate reposts, and postings whose Apply leaves Naukri for the company's
-own portal. One opt-out flag (`exclude_unwanted`, default `true`) on collect
-and export; runbook + WEB_API updated; pytest stays at 100 % coverage.
+New CLI path `python -m src.main collect-emails` that loops 11 target
+domains, opens LinkedIn **content search** (`/search/results/content/?…`
+with `datePosted=["past-month"]`, `sortBy="date_posted"`) in the existing
+persistent stealth profile, scrolls the infinite feed, extracts post cards
+in-page, regexes every email out of the post body, and upserts into a new
+`contact_emails` SQLite table; `export-emails --fmt excel` renders the
+working Excel (`output/linkedin_emails_<ts>.xlsx`). No new dependencies; the
+job pipeline is untouched.
 
 ## Architecture Decisions
 
-- **Gates live beside the existing Java gate** (`src/naukri_scraper.py`): pure
-  regex functions over `title + skills + snippet`, so collect time and export
-  time judge the same text and stay deterministic.
-- **External-apply is detected from the search row** (`companyApplyJob` /
-  `clientCareersUrl` / `applyRedirectUrl` — JobSpy semantics, live-verified):
-  zero extra requests. A non-`naukri.com` `apply_url` host at export time is
-  the safety net for browser-enriched rows.
-- **Skills scans stay raw**: `api_scan_skills` pins `exclude_unwanted: False`
-  so exploratory keyword scans keep today's behaviour.
-- **Browser fallback path gets the same G1+G2 unconditionally** (like the Java
-  gate already is) and drops the stale `.NET`-only `is_relevant`, which would
-  have silently discarded Lane 1 AI jobs.
-- **No schema change** — no migration; SQLite stays source of truth.
+- **URL grammar borrowed (as patterns) from linkedin-mcp-server**
+  (Apache-2.0): validate the date facet *before* navigating — LinkedIn
+  silently ignores unknown facets. Sort newest-first.
+- **Extraction split into two testable halves**: in-page JS
+  (`CONTENT_EXTRACT_JS`, mirrors joeyism's `feed-shared-update-v2`
+  selectors) returns plain card dicts; pure Python
+  `_contacts_from_cards()` applies JobSpy's email regex → `EmailContact`.
+  Tests drive the Python half with fake card dicts (repo's FakePage
+  convention) — no live LinkedIn in pytest.
+- **Post URL is best-effort** (`a[href*="/feed/update/"]` / `/posts/`),
+  empty string acceptable — per the MCP server's finding that content
+  search renders no per-post permalink anchors.
+- **email = primary key** — one row per address; re-sighting bumps
+  `last_seen` and backfills empty evidence fields (author/post_url/snippet).
+  Cross-domain evidence overwrites the tag (newest search wins) per spec
+  "keep all, tagged".
+- **Same safety rails as Naukri**: tenacity retries transient-only
+  (never 403/429/security walls), `BOT_WALL_PATTERNS`-style guard stops the
+  run with guidance, `human_pause()` between domains and scroll batches,
+  never solve CAPTCHAs.
+- **No web/MCP surface** — CLI + Excel only for this phase (scheduler/API
+  out of scope; keeps blast radius small).
 
 ## Task List
 
-### Phase 1 — Foundation (gate functions)
+### Phase 1: Foundation (data contract)
+- [ ] Task 1: `EmailContact` (Pydantic) + `EmailRow` (SQLAlchemy, table
+  `contact_emails`) + converters in `src/models.py`
+- [ ] Task 2: Settings (`EMAIL_DOMAINS`, `EMAIL_MAX_SCROLLS`,
+  `EMAIL_DATE_FACET`) in `src/config.py` + `.env.example`; DB helpers
+  `upsert_emails()` / `count_emails()` in `src/db.py`
 
-- [ ] Task 1: Gate functions + regexes in `src/naukri_scraper.py`
-  (`should_exclude_irrelevant_job`, `should_exclude_frontend_job`, remove
-  `is_relevant` + its test) — tests first.
-  Files: `src/naukri_scraper.py`, `tests/test_scraper.py`. Size: S.
+### Checkpoint: Foundation
+- [ ] `python3 -m pytest` green at 100 % (new model/db tests included)
 
-### Phase 2 — Wiring (consumers)
+### Phase 2: Core collector
+- [ ] Task 3: `src/linkedin_email_scraper.py` — `build_content_search_url`,
+  `EMAIL_RE` + `extract_emails()`, `CONTENT_EXTRACT_JS`,
+  `_contacts_from_cards()`, bot-wall guard, `_safe_goto`
+- [ ] Task 4: `run_collect(context, domains, …)` loop — scrolls, pauses,
+  per-domain dedupe, progress logging; wires `launch_context` from CLI
+- [ ] Task 5: Export — `load_email_frame()` + `export_emails()` in
+  `src/export.py` (columns/order per spec)
 
-- [ ] Task 2: Export gates + dedupe + `exclude_unwanted` in `src/export.py`.
-  Files: `src/export.py`, `tests/test_export.py`. Size: S. Depends: 1.
-- [ ] Task 3: API-collect gates (`is_external_apply`, `exclude_unwanted`) in
-  `src/web/nkapi.py`; skills scan pins `False`.
-  Files: `src/web/nkapi.py`, `tests/test_web.py`. Size: S. Depends: 1.
-- [ ] Task 4: Contract plumbing — `exclude_unwanted` on `CollectRequest` /
-  `ExportRequest`, orchestrator runners, CLI `--exclude-unwanted`.
-  Files: `src/web/schemas.py`, `src/web/orchestrator.py`, `src/main.py`,
-  `tests/test_web.py`, `tests/test_main.py`. Size: M. Depends: 2, 3.
-- [ ] Task 5: Browser path — apply G1+G2 (pre- and post-enrichment).
-  Files: `src/naukri_scraper.py`, `tests/test_scraper.py`. Size: S. Depends: 1.
+### Checkpoint: Core
+- [ ] `python3 -m pytest` green; fake end-to-end (FakeContext → DB → Excel)
 
-### Checkpoint: Gates
-- [x] `python3 -m pytest` green at `--cov-fail-under=100`; spot-check a live
-  search page against the gates (junk drops, lanes survive).
-
-### Phase 3 — Docs + delivery
-
-- [x] Task 6: Docs — `docs/LANES_RUNBOOK.md` §1c + params, `docs/WEB_API.md`
-  contract lines.
-  Files: `docs/LANES_RUNBOOK.md`, `docs/WEB_API.md`. Size: S.
-- [x] Task 7: Run it — start server, collect Lane 1 then Lane 2
-  (`pune,hyderabad,bengaluru`, exp 6, `days: 3`, `max_jobs: 150`,
-  `exclude_unwanted: true`), export `{"format":"excel","days":1}` → download,
-  sanity-check, hand over the Excel. Size: M (ops).
+### Phase 3: CLI + polish
+- [ ] Task 6: `collect-emails` + `export-emails` Typer commands in
+  `src/main.py` (+ tests via typer runner)
+- [ ] Task 7: Docs — spec status → APPROVED/IMPLEMENTED, `LINKEDIN_RESEARCH.md`
+  §11 decision record, README mention, `.env.example`, `docs/TESTING.md`
+  practice-run note
+- [ ] Task 8: Full gate — `python3 -m pytest` 100 %, `graphify update .`,
+  live practice run of `collect-emails` on the logged-in profile
 
 ### Checkpoint: Complete
-- [x] All spec success criteria met; Excel delivered; graph updated.
+- [ ] All spec success criteria met; commit + push
 
 ## Risks and Mitigations
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| 406 rate-limit on back-to-back pages | Med | keep 3–7 s pacing; sequential lanes; retry after a pause |
-| Gates keep fewer rows than `max_jobs` | Med | `max_jobs: 150` + `max_pages = max_jobs//20+2` pages per lane |
-| False drops (relevant job killed by a gate) | High | truth-table tests; title+skills anchors; snippet needs a *strong* term |
-| Coverage gate trips on a new branch | Med | tests written with (before) each function; full pytest after every task |
+| LinkedIn card markup differs in search vs feed | Med | Candidate selector list (joeyism's proven set) + empty-result guidance; fixture test keeps parser honest |
+| Bot-wall on automated scroll | Med | Headful first run, politeness delays, stop-with-guidance (never CAPTCHA-solve) — existing policy |
+| No permalinks in content search | Low | Best-effort URL; email+snippet+author is the evidence (spec) |
+| Coverage gate (100 % branch) | Med | Fake card dicts + FakeContext follow repo conventions; JS string kept dumb |
+| 11 domains → long runtime | Low | 6-scroll cap/domain, random delays, resumable (DB dedupe) |
 
-## Verification
+## Open Questions
 
-`python3 -m pytest` (coverage gate baked into `pyproject.toml`), then live:
-collect summaries report `source: "api"` + drop counters, export downloads,
-every `apply_url` in the sheet is `naukri.com`, no `(title, company)` repeats.
+- None blocking (spec Q1–Q3 resolved at approval: 6 scrolls, single
+  `@domain` pass, company sweep deferred).

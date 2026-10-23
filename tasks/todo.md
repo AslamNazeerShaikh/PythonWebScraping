@@ -1,32 +1,37 @@
-# Todo — Lane Job-Quality Gates (from tasks/plan.md, spec docs/SPEC-lane-job-quality-gates.md)
+# Todo — LinkedIn Recruiter Email Collector (from tasks/plan.md, spec docs/SPEC-linkedin-email-collector.md)
 
-- [x] Task 1: Gate functions + regexes in `src/naukri_scraper.py`
-  - Acceptance: `should_exclude_irrelevant_job` / `should_exclude_frontend_job` match the spec truth tables; truth-table tests in place.
-  - Verify: `python3 -m pytest tests/test_scraper.py` green.
-  - Files: `src/naukri_scraper.py`, `tests/test_scraper.py`
-- [x] Task 2: Export gates + dedupe + `exclude_unwanted` in `src/export.py`
-  - Acceptance: `load_frame` drops irrelevant / pure-frontend / non-naukri `apply_url` rows, collapses duplicate `(title, company, location, experience)` keeping freshest; `exclude_unwanted=False` bypasses the three gates (dedupe stays on).
-  - Verify: `python3 -m pytest tests/test_export.py` → 17 passed.
+- [ ] Task 1: `EmailContact` + `EmailRow` + converters in `src/models.py`
+  - Acceptance: `EmailContact` validates/normalises email (lowercase, format+domain check), fields per spec; `EmailRow` maps table `contact_emails` (PK `email`) with `from_contact()` / `to_contact()` bridges.
+  - Verify: `python3 -m pytest tests/test_models.py` green (new tests).
+  - Files: `src/models.py`, `tests/test_models.py`
+- [ ] Task 2: Settings + DB helpers
+  - Acceptance: `SETTINGS.email_domains` (11 defaults), `email_max_scrolls=6`, `email_date_facet="past-month"`; `.env.example` entries; `upsert_emails()` returns `(new, total)`, re-sighting bumps `last_seen` + backfills empty evidence; `count_emails()`.
+  - Verify: `python3 -m pytest tests/test_config.py tests/test_db.py` green.
+  - Files: `src/config.py`, `.env.example`, `src/db.py`, `tests/test_db.py`, `tests/test_config.py`
+- [ ] Checkpoint: Foundation — `python3 -m pytest` green at 100 %
+- [ ] Task 3: Scraper core (URL builder, regex, JS extractor, card→contacts)
+  - Acceptance: `build_content_search_url` validates facet + encodes keyword; `extract_emails` finds/normalises/dedupes (JobSpy regex, rejects image/`example` junk per spec); `_contacts_from_cards` maps card dicts → `EmailContact` incl. no-email/missing-field branches; bot-wall guard + transient-only `_safe_goto`.
+  - Verify: `python3 -m pytest tests/test_email_collector.py` green.
+  - Files: `src/linkedin_email_scraper.py`, `tests/test_email_collector.py`, `tests/fixtures/…`
+- [ ] Task 4: `run_collect` loop
+  - Acceptance: loops domains → goto → waits main → N scrolls extracting cards → contacts; politeness pauses between domains/scrolls; skips already-seen emails only at DB layer; returns contacts list; stops cleanly on bot-wall.
+  - Verify: `python3 -m pytest tests/test_email_collector.py` green (FakeContext path).
+  - Files: `src/linkedin_email_scraper.py`, `tests/test_email_collector.py`
+- [ ] Task 5: Export
+  - Acceptance: `load_email_frame()` → columns `email, domain, author, posted, post_url, snippet, keyword, first_seen, last_seen`, sorted domain→email, empty-DB-safe; `export_emails(fmt)` writes `output/linkedin_emails_<ts>.xlsx|.csv`.
+  - Verify: `python3 -m pytest tests/test_export.py` green.
   - Files: `src/export.py`, `tests/test_export.py`
-- [x] Task 3: API-collect gates in `src/web/nkapi.py`
-  - Acceptance: `is_external_apply(raw)` true for `companyApplyJob` / `clientCareersUrl` / `applyRedirectUrl`; `api_collect_jobs` skips those + irrelevant/frontend rows when `exclude_unwanted` (default True), counts them in progress (`external` / `excluded`); `api_scan_skills` pins `False`.
-  - Verify: `python3 -m pytest tests/test_web.py -k api_` → green.
-  - Files: `src/web/nkapi.py`, `tests/test_web.py`
-- [x] Task 4: Contract plumbing (`schemas`, orchestrator, CLI)
-  - Acceptance: `exclude_unwanted: bool = True` on `CollectRequest` + `ExportRequest`, forwarded by both runners and by `src.main export --exclude-unwanted/--include-unwanted`.
-  - Verify: `python3 -m pytest tests/test_web.py tests/test_main.py` → 73 passed.
-  - Files: `src/web/schemas.py`, `src/web/orchestrator.py`, `src/main.py`, `tests/test_web.py`, `tests/test_main.py`
-- [x] Task 5: Browser path G1+G2 — `is_relevant` removed, `job_should_exclude_unwanted` applied
-  - Acceptance: `run_scrape` keeps Lane 1 AI cards (old gate dropped them) and skips irrelevant/pure-frontend cards; no `is_relevant` reference anywhere.
-  - Verify: `python3 -m pytest tests/test_scraper.py` → 63 passed.
-  - Files: `src/naukri_scraper.py`, `tests/test_scraper.py`
-- [x] Checkpoint: gates — full `python3 -m pytest` green at `--cov-fail-under=100`
-  - Result: **202 passed, total coverage 100.00 %** (2026-10-21).
-- [x] Task 6: Docs (`LANES_RUNBOOK.md` §1c + params, `WEB_API.md` contract)
-  - Acceptance: both docs describe the four gates, the flag, and drop counters.
-  - Verify: read-through vs code; `graphify update .` → 1788 nodes rebuilt.
-  - Files: `docs/LANES_RUNBOOK.md`, `docs/WEB_API.md`
-- [x] Task 7: Run it — collect Lane 1 + Lane 2, export Excel, deliver
-  - Acceptance: both collects `succeeded` (`source: api`), export `days:1` downloaded to `output/`, all rows `naukri.com`, no duplicate identity rows.
-  - Verify: 96 rows; 0 non-naukri apply_urls; 0 duplicate identity rows; 0 java; lane-1 AI 33 + lane-2 .NET 23 titles, rest snippet-qualified (spot-checked: GenAI/LLM/agentic AI-LLM-security JDs).
-  - Files: `output/naukri_export_20261021_201239.xlsx`
+- [ ] Checkpoint: Core — full `python3 -m pytest` green; fake end-to-end OK
+- [ ] Task 6: CLI commands
+  - Acceptance: `collect-emails --domains/--max-scrolls/--headless` runs pipeline via `launch_context` + `run_collect` + `upsert_emails`, prints summary; `export-emails --fmt/--out`; typer-runner tests cover both incl. empty result.
+  - Verify: `python3 -m pytest tests/test_main.py` green.
+  - Files: `src/main.py`, `tests/test_main.py`
+- [ ] Task 7: Docs
+  - Acceptance: spec status → IMPLEMENTED; `LINKEDIN_RESEARCH.md` §11 (decision record + citations); README command list; `.env.example`; TESTING practice note.
+  - Verify: read-through vs code.
+  - Files: `docs/SPEC-linkedin-email-collector.md`, `docs/LINKEDIN_RESEARCH.md`, `README.md`, `.env.example`, `docs/TESTING.md`
+- [ ] Task 8: Gates + live run
+  - Acceptance: `python3 -m pytest` 100 % branch coverage; `graphify update .`; live `collect-emails` on logged-in profile produces `output/linkedin_emails_*.xlsx`.
+  - Verify: pytest summary line; Excel spot-check (≥ known `neha.pandey@ltm.com` if in window).
+  - Files: `graphify-out/`, `output/`
+- [ ] Checkpoint: Complete — spec success criteria met; commit + push

@@ -117,4 +117,5 @@ screenshotted and recorded, never retried.
 | Bot-wall pause | `handle_possible_block` ×3 paths | Bot-detection suite |
 | Engine guard | non-chromium BROWSER rejected | `test_stealth.py` |
 | Export | csv/xlsx + location filter | `stats`/`export` cmds |
+| LinkedIn email collector | `test_email_collector.py` (FakePage cards, bot-wall, URL facet) | `collect-emails` live run |
 | E-commerce | Amazon.in + Flipkart 5+5 products | `practice_ecommerce.py` |

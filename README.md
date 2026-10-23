@@ -58,6 +58,11 @@ source .venv/bin/activate
 python -m src.main scrape --keywords "python backend api" --locations "remote" --days 7 --pages 3
 python -m src.main scrape --no-enrich --pages 2   # fast link sweep without detail visits
 
+# LinkedIn email collector: recruiter emails from posts, last ~30 days
+python -m src.main collect-emails                                  # all 11 target domains
+python -m src.main collect-emails --domains cognizant.com,ltm.com  # subset, --max-scrolls N
+python -m src.main export-emails --format excel                    # re-export contact snapshot
+
 # Inspect and export
 python -m src.main stats
 python -m src.main export --format excel
@@ -84,6 +89,8 @@ Everything is `.env`-driven (see `.env.example`); CLI flags and API fields overr
 | `EXPERIENCE` / `DATE_FILTER` | `6` / `7` | Years of experience · posted within last N days |
 | `MAX_PAGES_PER_SEARCH` / `MAX_JOBS_TOTAL` | `3` / `60` | Politeness caps |
 | `ENRICH_DETAILS` | `true` | Visit each posting page for full text/skills |
+| `EMAIL_DOMAINS` | 11 targets (cognizant, capgemini, ltm, …) | LinkedIn post-search domains for `collect-emails` |
+| `EMAIL_MAX_SCROLLS` / `EMAIL_DATE_FACET` | `6` / `past-month` | Feed scrolls per domain · LinkedIn date window |
 | `DATABASE_URL` | `sqlite:///jobs.db` | SQLite file (or any SQLAlchemy URL) |
 | `WEB_HOST` / `WEB_PORT` | `127.0.0.1` / `8000` | Control-plane bind |
 | `HEADLESS` | `false` | Background runs (do the first run headful) |

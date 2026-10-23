@@ -228,3 +228,33 @@ skill indexes). No hurry items — accuracy over speed.
 Public postings only, personal search, rate-limited; respect LinkedIn ToS
 + `robots.txt`; never share/sell data; LinkedIn login-walls aggressively —
 first run headful, reuse the profile, back off on 429/verification pages.
+
+## 11. Email collector — decision record (2026-10-23)
+
+Built `collect-emails` (spec `docs/SPEC-linkedin-email-collector.md`):
+harvest recruiter emails from LinkedIn **post bodies** for 11 target
+domains within the native `past-month` facet → `contact_emails` table →
+`output/linkedin_emails_<ts>.xlsx`.
+
+Reference-repo verdicts for THIS problem (deep dive by subagent, URLs
+fetched 2026-10-23):
+
+| Repo | Post search? | Email extraction? | What we took |
+|---|---|---|---|
+| R1 speedyapply/JobSpy | No (jobs only) | Yes — job descriptions | `extract_emails_from_text` regex: `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}` |
+| R2 joeyism/linkedin_scraper | Company pages only (`CompanyPostsScraper`) | No | Card selectors: `div.feed-shared-update-v2` → `.feed-shared-update-v2__description` / `.update-components-text` / `.feed-shared-text`; author/timestamp `[class*="actor__name" / "actor__sub-description"]`; activity-urn dedupe |
+| R3 stickerdaniel/linkedin-mcp-server | **Yes — `search_posts` tool** | No | URL grammar `…/search/results/content/?keywords=…&origin=FACETED_SEARCH&datePosted=["past-month"]&sortBy="date_posted"` + "unknown facets are silently ignored → validate first" + **content search renders no per-post permalink anchors** (their network-interception finding ⇒ our `post_url` is best-effort) |
+| R4 m8sec/CrossLinked | No (Google/Bing people enum) | No — pattern-*generates* emails | Nothing (GPL-3.0, out of scope) |
+| Linked-API/linkedin-skills | Yes (paid hosted CLI) | No | Nothing |
+
+Not used: comment-section scrapers (gurbaaz27/linkedin-comments-scraper et
+al.) — post-body-only was an explicit scope decision; company-page sweep
+deferred.
+
+Implementation: `src/linkedin_email_scraper.py` (URL builder + facet
+validation, `extract_emails` w/ filename false-positive filter, in-page
+`CONTENT_EXTRACT_JS`, `run_collect` loop with transient-only retries,
+bot-wall stop, politeness pauses), `EmailContact`/`EmailRow` in
+`src/models.py`, `upsert_emails` in `src/db.py`, `load_email_frame`/
+`export_emails` in `src/export.py`, CLI `collect-emails`/`export-emails`
+in `src/main.py`.
