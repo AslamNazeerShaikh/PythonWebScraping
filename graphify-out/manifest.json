@@ -156,9 +156,9 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1792071671.558283,
-    "seen": 1792074777.391405,
-    "ast_hash": "cb48550c643ed05d903ebc807ce9bf46",
+    "mtime": 1792738500.3353777,
+    "seen": 1792738957.887989,
+    "ast_hash": "e8e9f140032b84d46d53ea951b299dfb",
     "semantic_hash": ""
   },
   "README.md": {
@@ -210,9 +210,9 @@
     "semantic_hash": ""
   },
   "docs/OPENCODE_SETUP.md": {
-    "mtime": 1791486843.1371665,
-    "seen": 1791486857.46863,
-    "ast_hash": "db8b33f88214e3b60b8b6a310e9a32f9",
+    "mtime": 1792738936.2638574,
+    "seen": 1792738957.8880482,
+    "ast_hash": "5c6f2bd698c6b3f52ff16fdcbf6cce99",
     "semantic_hash": ""
   },
   "src/web/__init__.py": {
@@ -579,6 +579,126 @@
     "mtime": 1792593827.690662,
     "seen": 1792597050.2281642,
     "ast_hash": "dae1e1dd93d88ab6509bfd3f6eea680e",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/report-schema.json": {
+    "mtime": 1792738451.254413,
+    "seen": 1792738957.8870778,
+    "ast_hash": "45df82d396f66aa5166e8ed7959520b2",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/validate-coverage-ledger.cjs": {
+    "mtime": 1792738451.253287,
+    "seen": 1792738957.887079,
+    "ast_hash": "548e89e63c473f7050a4d2c1270cb777",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/validate-coverage-ledger.test.cjs": {
+    "mtime": 1792738451.2530658,
+    "seen": 1792738957.887079,
+    "ast_hash": "d04d688b55dec323f44620548b14fe54",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/validate-findings.cjs": {
+    "mtime": 1792738451.2537649,
+    "seen": 1792738957.88708,
+    "ast_hash": "7f7ae93a0d6db41f8faff3d55ea15c0a",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/validate-findings.test.cjs": {
+    "mtime": 1792738451.256451,
+    "seen": 1792738957.88708,
+    "ast_hash": "ed905c8ad1373cb5a3c090c23e6eddbe",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/AI-AND-LLM.md": {
+    "mtime": 1792738451.2525733,
+    "seen": 1792738957.887912,
+    "ast_hash": "2007e7eac4e362d436a30679a5569291",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/ATTACK-CLASSES.md": {
+    "mtime": 1792738451.2548645,
+    "seen": 1792738957.887913,
+    "ast_hash": "d2fde6de50e5a56b42b0f9bd7b819e45",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/CLIENT-SIDE.md": {
+    "mtime": 1792738451.2553298,
+    "seen": 1792738957.887913,
+    "ast_hash": "8aaa95c9b10a85581de68d6ee71d1a75",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/CLOUD-AND-DEPLOYMENT.md": {
+    "mtime": 1792738451.253993,
+    "seen": 1792738957.887914,
+    "ast_hash": "b6113499d8e31ecf35486cc9be3cc8cd",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/DATA-ISOLATION-AND-LIFECYCLE.md": {
+    "mtime": 1792738451.2521367,
+    "seen": 1792738957.887914,
+    "ast_hash": "fdd89ac7baab1c5f2f6a8fccf1105dec",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/DESKTOP-MOBILE-AND-LOCAL-IPC.md": {
+    "mtime": 1792738451.2556782,
+    "seen": 1792738957.887915,
+    "ast_hash": "6fd7b6739f2757c0acb261114dbc0c57",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/HUNTING.md": {
+    "mtime": 1792738451.2562444,
+    "seen": 1792738957.887915,
+    "ast_hash": "95ddce3b9ae662810a4bcfb544cb3be6",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/MEMORY-SAFETY-AND-BINARY.md": {
+    "mtime": 1792738451.253512,
+    "seen": 1792738957.887915,
+    "ast_hash": "e34f776918ae8c3e9e8dee772d62ecd7",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/PROTOCOLS-RPC-AND-MESSAGING.md": {
+    "mtime": 1792738451.2550938,
+    "seen": 1792738957.887916,
+    "ast_hash": "c2d8be65810e31b3012701a8f594c1e6",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/RECONNAISSANCE.md": {
+    "mtime": 1792738451.2528346,
+    "seen": 1792738957.887916,
+    "ast_hash": "54896c52546adad7d6714e2fa7463468",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/RESOURCE-EXHAUSTION-AND-AVAILABILITY.md": {
+    "mtime": 1792738451.2519002,
+    "seen": 1792738957.887917,
+    "ast_hash": "cd602b30cc2d4619f81d5f06aa6f4cdb",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/SKILL.md": {
+    "mtime": 1792738451.2541916,
+    "seen": 1792738957.887917,
+    "ast_hash": "0b5b0d1007f2095360ce811bf02c5d77",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/SUPPLY-CHAIN-AND-RELEASE.md": {
+    "mtime": 1792738451.2523365,
+    "seen": 1792738957.887917,
+    "ast_hash": "52fe332b608df9ea8182e8881ef6cc5d",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/VALIDATION-AND-REPORTING.md": {
+    "mtime": 1792738451.2560067,
+    "seen": 1792738957.887918,
+    "ast_hash": "ee86d6a351d98dc0d8e833ddb1011f8c",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/WEB-PROTOCOL-AND-AUTH.md": {
+    "mtime": 1792738451.254622,
+    "seen": 1792738957.887918,
+    "ast_hash": "2b7484c839443219cffcd2d84b0d486d",
     "semantic_hash": ""
   }
 }

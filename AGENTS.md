@@ -45,6 +45,13 @@ https://github.com/addyosmani/agent-skills/blob/main/docs/opencode-setup.md.
 - API docs / decisions → `documentation-and-adrs` (update `docs/WEB_API.md`)
 - High-stakes or unfamiliar change → `doubt-driven-development`
 - New dependency or framework pattern → `source-driven-development`
+- Security question / focused review → `security-audit` (guidance mode only)
+- Explicit codebase audit / pen test / full security review, or requested
+  report artifacts → `security-audit` (full six-phase audit mode). Run the
+  Node validators in `.opencode/skills/security-audit/` against
+  `coverage-ledger.json` and `findings.json` as the skill directs. Default
+  output directory is outside the repo unless the user picks an
+  ignored path.
 
 ### Execution Model
 

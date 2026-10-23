@@ -62,7 +62,28 @@ https://github.com/AslamNazeerShaikh/QuarkZip/blob/main/.opencode/plugins/graphi
 ## 4. Skills — `.opencode/skills/`
 
 Auto-discovered by OpenCode (directory with `SKILL.md`, or flat `*.md`).
-Current: `graphify/` (knowledge-graph workflow — see `docs/GRAPHIFY.md`).
+The dir name is the skill ID; frontmatter `name`/`description` control
+display and model discoverability (v2 skills reference:
+https://opencode.ai/v2/docs/skills). The full set lives under
+`.opencode/skills/` (27 skills); the intent→skill routing table is in
+`AGENTS.md`. Notable ones:
+
+- `graphify/` — knowledge-graph workflow (see `docs/GRAPHIFY.md`).
+- `security-audit/` — Cloudflare's multi-phase security-audit skill,
+  vendored verbatim from
+  https://github.com/cloudflare/security-audit-skill (MIT). Installed
+  2026-10-23 from upstream `main` into
+  `.opencode/skills/security-audit/`: `SKILL.md`, 14 phase/methodology
+  docs (recon, hunting, attack classes, validation/reporting, plus
+  target-class guides for AI/LLM, client-side, cloud, supply-chain,
+  etc.), `report-schema.json`, and zero-dependency Node validators
+  `validate-findings.cjs` / `validate-coverage-ledger.cjs` with test
+  suites (65/65 tests pass on the local Node). Guidance mode by
+  default; full six-phase audit only on explicit audit/pen-test
+  requests. Audit output defaults outside the repo
+  (`~/security-audit-skill/<repo>/run-<N>`) unless a gitignored path is
+  chosen. Vendored copy is unmodified — refresh by re-copying from
+  upstream rather than editing in place.
 
 ## 5. Verify (run after any change here)
 
