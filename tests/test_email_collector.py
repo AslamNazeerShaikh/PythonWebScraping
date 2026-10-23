@@ -163,3 +163,70 @@ def test_run_collect_uses_settings_defaults(monkeypatch):
     out = run_collect(ctx)                       # all defaults resolved here
     assert out == []
     assert "datePosted=%5B%22past-week%22%5D" in page.goto_urls[0]
+
+
+# -- login wall (root cause of the 0-email live run: authwall redirect) --------
+def test_on_login_wall_detects_auth_redirect():
+    from src.linkedin_email_scraper import _on_login_wall
+
+    page = FakePage()
+    page.url = ("https://www.linkedin.com/uas/login?session_redirect=%2Fsearch"
+                "&skipRedirect=true")
+    assert _on_login_wall(page) is True
+    page.url = "https://www.linkedin.com/search/results/content/?keywords=x"
+    assert _on_login_wall(page) is False
+
+
+def test_run_collect_stops_when_signed_out_and_noninteractive(
+        monkeypatch, fresh_db):
+    """No TTY (background runs): EOF at the prompt → stop with guidance."""
+    from src.linkedin_email_scraper import run_collect
+
+    page = FakePage()
+    page.url = ("https://www.linkedin.com/uas/login?session_redirect=%2Fsearch"
+                "&skipRedirect=true")
+    ctx = FakeContext(page)
+    prompted: list[bool] = []
+
+    def _eof(*a, **k):
+        prompted.append(True)
+        raise EOFError
+
+    monkeypatch.setattr("builtins.input", _eof)
+    out = run_collect(ctx, domains=["ltm.com"], max_scrolls=1)
+    assert out == []
+    assert prompted == [True]              # manual-login prompt WAS attempted
+    assert len(page.goto_urls) == 1        # never searched while signed out
+
+
+def test_run_collect_logs_in_manually_then_proceeds(monkeypatch, fresh_db):
+    """User logs in at the prompt → re-goto lands on search → collects."""
+    from src.linkedin_email_scraper import run_collect
+    from src.models import EmailContact  # noqa: F401
+
+    page = FakePage()
+    page.url = "https://www.linkedin.com/uas/login?session_redirect=%2Fsearch"
+    ctx = FakeContext(page)
+    page.cards_queue = [[CARD]]
+
+    def _logged_in(*a, **k):               # ENTER pressed after real login
+        page.url = "https://www.linkedin.com/feed/"
+        return ""
+
+    monkeypatch.setattr("builtins.input", _logged_in)
+    out = run_collect(ctx, domains=["ltm.com"], max_scrolls=1)
+    assert [c.email for c in out] == ["neha.pandey@ltm.com"]
+    assert len(page.goto_urls) == 2        # initial + post-login re-goto
+
+
+def test_run_collect_still_signed_out_after_prompt_stops(monkeypatch, fresh_db):
+    from src.linkedin_email_scraper import run_collect
+
+    page = FakePage()
+    page.url = "https://www.linkedin.com/authwall"
+    ctx = FakeContext(page)
+
+    monkeypatch.setattr("builtins.input", lambda *a, **k: "")  # lied: no login
+    out = run_collect(ctx, domains=["tcs.com"], max_scrolls=1)
+    assert out == []
+    assert len(page.goto_urls) == 2        # one retry, then give up

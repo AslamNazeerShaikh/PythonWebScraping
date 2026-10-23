@@ -21,6 +21,7 @@ server's live finding) — ``post_url`` is best-effort, empty is acceptable.
 from __future__ import annotations
 
 import logging
+import re
 import urllib.parse
 
 from playwright.sync_api import BrowserContext, Page
@@ -187,6 +188,38 @@ def _check_bot_wall(page: Page) -> bool:
     return bool(BOT_WALL_PATTERNS.search(visible))
 
 
+#: LinkedIn auth-wall redirect targets (probe-verified 2026-10-23: an
+#: unauthenticated search lands on ``/uas/login?session_redirect=…``).
+LOGIN_WALL_RE = re.compile(r"/uas/login|authwall|checkpoint", re.I)
+
+
+def _on_login_wall(page: Page) -> bool:
+    """True when the page landed on LinkedIn's sign-in redirect.
+
+    Content search is auth-walled; without a session the extractor would
+    silently find zero cards — exactly the first live run's failure mode.
+    """
+    return bool(LOGIN_WALL_RE.search(page.url or ""))
+
+
+def _prompt_manual_login() -> bool:
+    """Ask the human to sign in once (session persists in the profile).
+
+    Returns:
+        False when non-interactive (no TTY / background run) — caller stops.
+
+    Never solves any challenge — signing in is the human's action only.
+    """
+    log.warning("LinkedIn session is signed out — log in MANUALLY in the "
+                "opened window, then press ENTER (session persists).")
+    try:
+        input("  Press ENTER after logging in (or Ctrl+C to abort)... ")
+    except EOFError:
+        return False
+    human_pause(2, 4)
+    return True
+
+
 def run_collect(context: BrowserContext,
                 domains: list[str] | None = None,
                 max_scrolls: int | None = None,
@@ -223,6 +256,18 @@ def run_collect(context: BrowserContext,
         log.info("Searching LinkedIn posts for %r", keyword)
         _safe_goto(page, url)
         page.wait_for_timeout(SETTLE_MS)      # SDUI hydration settle
+        if _on_login_wall(page):
+            # Signed out: one manual-login attempt, then re-goto once.
+            if not _prompt_manual_login():
+                log.warning("Signed out and no TTY — stopping. Run headful "
+                            "once, log in, and rerun (session persists).")
+                break
+            _safe_goto(page, url)
+            page.wait_for_timeout(SETTLE_MS)
+            if _on_login_wall(page):
+                log.warning("Still on the sign-in wall after the manual "
+                            "attempt — stopping the run.")
+                break
         if _check_bot_wall(page):
             log.warning("Bot-wall on %r — stopping the run. Solve any check "
                         "MANUALLY in the opened window, then rerun.", domain)
