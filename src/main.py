@@ -2,11 +2,13 @@
 
 Commands (``python -m src.main <cmd> --help`` for details)::
 
-    scrape    Full pipeline: browser → Pydantic → SQLite + JSON/CSV files.
-    export    SQLite → CSV/Excel snapshots (Pandas).
-    stats     DB overview table.
-    parse     Offline re-parse of saved HTML (BS4+lxml, no browser needed).
-    schedule  Daily runs at given hours (APScheduler, blocking).
+    scrape          Full pipeline: browser → Pydantic → SQLite + JSON/CSV files.
+    export          SQLite → CSV/Excel snapshots (Pandas).
+    stats           DB overview table.
+    parse           Offline re-parse of saved HTML (BS4+lxml, no browser needed).
+    schedule        Daily runs at given hours (APScheduler, blocking).
+    collect-emails  Harvest recruiter emails from LinkedIn posts → SQLite + Excel.
+    export-emails   contact_emails → Excel/CSV snapshot.
 
 :func:`do_scrape` holds the shared pipeline so both the ``scrape`` command
 and the scheduler execute identical logic.
@@ -23,8 +25,9 @@ from rich.console import Console
 from rich.table import Table
 
 from .config import BASE_DIR, SETTINGS
-from .db import count_jobs, fetch_all_jobs, init_db, record_run, upsert_jobs
-from .export import export_jobs
+from .db import count_jobs, fetch_all_jobs, init_db, record_run, upsert_emails, upsert_jobs
+from .export import export_emails, export_jobs
+from .linkedin_email_scraper import run_collect
 from .log import setup_logging
 from .models import Job
 from .naukri_scraper import run_scrape, save_results
@@ -78,6 +81,34 @@ def do_scrape() -> int:
     save_results(jobs)
     _print_jobs(jobs[:20])
     console.print(f"[green]Done:[/green] {total} jobs ({new} new) -> SQLite + output/")
+    return 0
+
+
+def do_collect_emails(domains: list[str] | None,
+                      max_scrolls: int | None = None) -> int:
+    """Run the LinkedIn email collector; return process exit code.
+
+    Opens the browser, searches posts per domain (``"@<domain>"`` keyword,
+    ``past-month`` facet), upserts unique addresses into ``contact_emails``,
+    and writes the Excel snapshot. Empty result is exit ``0`` with guidance.
+    """
+    setup_logging(SETTINGS.log_level)
+    init_db()
+    with sync_playwright() as p:
+        context = launch_context(p)
+        try:
+            contacts = run_collect(context, domains=domains,
+                                   max_scrolls=max_scrolls)
+        finally:
+            context.close()
+    if not contacts:
+        console.print("[yellow]No emails found — check login state "
+                      "(first run headful) or widen the date facet.[/yellow]")
+        return 0
+    new, total = upsert_emails(contacts)
+    dest = export_emails(fmt="excel")
+    console.print(f"[green]Done:[/green] {total} emails ({new} new) "
+                  f"-> SQLite + {dest}")
     return 0
 
 
@@ -156,6 +187,45 @@ def export(
                        exclude_java=exclude_java, days=days,
                        location_match=location_match,
                        exclude_unwanted=exclude_unwanted)
+    console.print(f"[green]Exported ->[/green] {dest}")
+
+
+@app.command("collect-emails")
+def collect_emails(
+    domains: str = typer.Option(
+        "", help="Comma-separated domains (default: EMAIL_DOMAINS, 11 targets)"),
+    max_scrolls: Optional[int] = typer.Option(
+        None, help="Feed scrolls per domain (default: EMAIL_MAX_SCROLLS=6)"),
+    headless: bool = typer.Option(False, "--headless", help="Background run"),
+) -> None:
+    """Harvest recruiter emails from LinkedIn posts (last ~30 days) -> Excel.
+
+    Searches LinkedIn content/posts for ``"@<domain>"`` with the native
+    ``past-month`` facet, newest first, then extracts every email from the
+    post bodies. Personal use only — polite delays are built in.
+    """
+    _ensure_env()
+    doms = [d.strip().lower() for d in domains.split(",") if d.strip()] or None
+    SETTINGS.headless = headless or SETTINGS.headless
+    console.print(f"[bold]Collecting emails[/bold] for "
+                  f"{doms or SETTINGS.email_domains} "
+                  f"| facet={SETTINGS.email_date_facet} "
+                  f"| scrolls={max_scrolls or SETTINGS.email_max_scrolls}")
+    console.print("[dim]Personal use only — never auto-solves CAPTCHAs.[/dim]")
+    raise typer.Exit(code=do_collect_emails(doms, max_scrolls))
+
+
+@app.command("export-emails")
+def export_emails_cmd(
+    fmt: str = typer.Option("excel", "--format", help="excel or csv"),
+    out: Optional[str] = typer.Option(None, help="Output path"),
+) -> None:
+    """Export harvested emails (contact_emails) -> Excel/CSV snapshot."""
+    _ensure_env()
+    if fmt not in ("csv", "excel"):
+        console.print("[red]--format must be csv or excel[/red]")
+        raise typer.Exit(code=2)
+    dest = export_emails(fmt=fmt, out_path=out)
     console.print(f"[green]Exported ->[/green] {dest}")
 
 

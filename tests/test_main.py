@@ -147,3 +147,70 @@ def test_schedule_command_ok(monkeypatch, fresh_db):
                         lambda hours: seen.setdefault("h", hours))
     result = runner.invoke(main.app, ["schedule", "--hours", "8,20"])
     assert result.exit_code == 0 and seen["h"] == [8, 20]
+
+
+# -- collect-emails / export-emails (LinkedIn email collector, Task 6) --------
+def _wire_email_pipeline(monkeypatch, contacts, captured: dict | None = None):
+    monkeypatch.setattr(main, "sync_playwright", lambda: _FakePW(object()))
+    monkeypatch.setattr(main, "launch_context", lambda p: FakeContext())
+    captured = captured if captured is not None else {}
+
+    def _run(ctx, **kw):
+        captured.update(kw)
+        return contacts
+
+    monkeypatch.setattr(main, "run_collect", _run)
+    return captured
+
+
+def test_collect_emails_empty_result_returns_zero(monkeypatch, fresh_db):
+    _wire_email_pipeline(monkeypatch, [])
+    res = runner.invoke(main.app,
+                        ["collect-emails", "--domains", "ltm.com"])
+    assert res.exit_code == 0
+    assert "No emails" in res.output
+
+
+def test_collect_emails_upserts_exports_and_reports(monkeypatch, fresh_db,
+                                                    tmp_path):
+    from src.models import EmailContact
+    captured = _wire_email_pipeline(monkeypatch, [
+        EmailContact(email="neha.pandey@ltm.com", domain="ltm.com",
+                     keyword="@ltm.com", author="Neha Pandey")
+    ])
+    monkeypatch.setattr(main.SETTINGS, "output_dir", tmp_path)
+    res = runner.invoke(main.app, [
+        "collect-emails", "--domains", "ltm.com", "--max-scrolls", "2",
+        "--headless"])
+    assert res.exit_code == 0
+    assert captured == {"domains": ["ltm.com"], "max_scrolls": 2}
+    assert fresh_db.count_emails() == 1
+    assert "(1 new)" in res.output
+    written = list(tmp_path.glob("linkedin_emails_*.xlsx"))
+    assert len(written) == 1                      # Excel produced per run
+
+
+def test_collect_emails_defaults_to_settings_domains(monkeypatch, fresh_db):
+    captured = _wire_email_pipeline(monkeypatch, [])
+    res = runner.invoke(main.app, ["collect-emails"])
+    assert res.exit_code == 0
+    assert captured["domains"] is None            # SETTINGS.email_domains
+    assert captured["max_scrolls"] is None        # SETTINGS.email_max_scrolls
+
+
+def test_export_emails_command_excel(monkeypatch, fresh_db, tmp_path):
+    from src.db import upsert_emails
+    from src.models import EmailContact
+
+    upsert_emails([EmailContact(email="hr@tcs.com", domain="tcs.com")])
+    res = runner.invoke(main.app, [
+        "export-emails", "--format", "excel", "--out", str(tmp_path / "e.xlsx")])
+    assert res.exit_code == 0
+    assert (tmp_path / "e.xlsx").exists()
+    assert "Exported" in res.output
+
+
+def test_export_emails_command_rejects_bad_fmt(fresh_db):
+    res = runner.invoke(main.app, ["export-emails", "--format", "pdf"])
+    assert res.exit_code == 2
+    assert "--format must be csv or excel" in res.output
