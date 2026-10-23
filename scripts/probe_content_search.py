@@ -7,6 +7,7 @@ candidate card-selector counts. Used to fix CONTENT_EXTRACT_JS selectors
 when the collector returns 0 emails. Usage:
 
     .venv/bin/python scripts/probe_content_search.py "@ltm.com"
+    .venv/bin/python scripts/probe_content_search.py --login  # one-time sign-in
 """
 from __future__ import annotations
 
@@ -61,7 +62,42 @@ PROBE_JS = """
 """ % (CONTENT_EXTRACT_JS, CONTENT_EXTRACT_JS)
 
 
+def _login_wait(timeout_s: int = 600) -> int:
+    """Open LinkedIn headful; wait for the human to sign in (max 10 min).
+
+    One-time step — the persistent profile (``.pw-profile``) keeps the
+    session for every later ``collect-emails`` run. Never automates the
+    credentials: the human types them, this only polls for success.
+    """
+    import time
+
+    from src.linkedin_email_scraper import _on_login_wall
+
+    with sync_playwright() as p:
+        ctx = launch_context(p)
+        try:
+            page = ctx.new_page()
+            page.goto("https://www.linkedin.com/feed/",
+                      wait_until="domcontentloaded")
+            print(f"LOG IN IN THE OPENED WINDOW (waiting up to {timeout_s}s)…",
+                  flush=True)
+            deadline = time.time() + timeout_s
+            while time.time() < deadline:
+                page.wait_for_timeout(2000)
+                if not _on_login_wall(page) and page.evaluate(
+                        "!!document.querySelector('header.global-nav, .global-nav')"):
+                    print("LOGGED_IN_OK — session persisted; closing.",
+                          flush=True)
+                    return 0
+            print("LOGIN_TIMEOUT — try again.", flush=True)
+            return 1
+        finally:
+            ctx.close()
+
+
 def main() -> int:
+    if "--login" in sys.argv:
+        return _login_wait()
     keyword = sys.argv[1] if len(sys.argv) > 1 else "@ltm.com"
     url = build_content_search_url(keyword, SETTINGS.email_date_facet)
     with sync_playwright() as p:

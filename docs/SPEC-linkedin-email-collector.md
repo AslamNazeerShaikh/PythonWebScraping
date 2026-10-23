@@ -224,6 +224,18 @@ gitignored `output/`. No bulk messaging automation — sending stays manual.
 6. Existing commands (`scrape`, `export`, `stats`, `parse`, `schedule`) and
    their tests are untouched/unchanged in behaviour.
 
+## Implementation note (2026-10-23)
+
+Shipped and gated (pytest 242 passed, 100 % branch coverage) except
+Success Criterion #1's live Excel: the first live run surfaced the
+authwall (profile had no LinkedIn session) → 0 emails. Fixed at the root
+(`_on_login_wall` + one manual-ENTER login prompt, never automated) with
+regression tests; live verification is deferred until the user performs
+the one-time sign-in (`scripts/probe_content_search.py --login`, then
+`collect-emails`). Card selectors (joeyism-derived) are offline-tested but
+not yet live-confirmed — the probe reports a selector census if the first
+signed-in run still finds nothing.
+
 ## Open Questions
 
 1. **Scroll depth default** — proposal: `--max-scrolls 6` per domain

@@ -24,21 +24,21 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "src/config.py": {
-    "mtime": 1792070505.1525445,
-    "seen": 1792070993.7574599,
-    "ast_hash": "38d9e7abeb95276663b3316063048d26",
+    "mtime": 1792744685.7421627,
+    "seen": 1792745314.716576,
+    "ast_hash": "813279d391d9eaeb3e3787882ad528d1",
     "semantic_hash": ""
   },
   "src/db.py": {
-    "mtime": 1789758386.599648,
-    "seen": 1789764660.6451662,
-    "ast_hash": "39e10e04d79ab8e50b7882f2d50b91d6",
-    "semantic_hash": "39e10e04d79ab8e50b7882f2d50b91d6"
+    "mtime": 1792744698.265381,
+    "seen": 1792745314.716577,
+    "ast_hash": "91159ded281762c65395c11c2b0e1446",
+    "semantic_hash": ""
   },
   "src/export.py": {
-    "mtime": 1792592404.8207653,
-    "seen": 1792593529.055167,
-    "ast_hash": "43321ecfd829321967fe8b7f2da4f8cc",
+    "mtime": 1792745089.9110684,
+    "seen": 1792745314.716578,
+    "ast_hash": "e339918079c5607d6408d1edb56b2638",
     "semantic_hash": ""
   },
   "src/log.py": {
@@ -48,16 +48,16 @@
     "semantic_hash": ""
   },
   "src/main.py": {
-    "mtime": 1792593110.1064768,
-    "seen": 1792593529.055178,
-    "ast_hash": "dfe008b3b2881b33e730620721a0f77e",
+    "mtime": 1792745241.7441425,
+    "seen": 1792745314.7165902,
+    "ast_hash": "64bb9a9ee6009d8b8b6836984a8b33d0",
     "semantic_hash": ""
   },
   "src/models.py": {
-    "mtime": 1789758376.0770528,
-    "seen": 1789764660.645167,
-    "ast_hash": "98566c1b72691dbe575755be03c641b1",
-    "semantic_hash": "98566c1b72691dbe575755be03c641b1"
+    "mtime": 1792744633.4866414,
+    "seen": 1792745314.7165911,
+    "ast_hash": "7470306eafcf754870c75cf2c761abdf",
+    "semantic_hash": ""
   },
   "src/naukri_scraper.py": {
     "mtime": 1792593343.325519,
@@ -90,27 +90,27 @@
     "semantic_hash": "d41d8cd98f00b204e9800998ecf8427e"
   },
   "tests/conftest.py": {
-    "mtime": 1792077833.2859616,
-    "seen": 1792078001.805495,
-    "ast_hash": "9aebc13f8796f85b709789e91f5a30fb",
+    "mtime": 1792744897.3311625,
+    "seen": 1792745314.716827,
+    "ast_hash": "b755c7b227b6ffed89ffb5a89e7c0fa6",
     "semantic_hash": ""
   },
   "tests/test_config.py": {
-    "mtime": 1789758519.2116308,
-    "seen": 1789764660.64517,
-    "ast_hash": "8dcbcba89a82f0e4a88e7497dd7f8976",
-    "semantic_hash": "8dcbcba89a82f0e4a88e7497dd7f8976"
+    "mtime": 1792744677.582975,
+    "seen": 1792745314.716827,
+    "ast_hash": "2ebc837800d8a16b6baa82251c0a0cd3",
+    "semantic_hash": ""
   },
   "tests/test_db.py": {
-    "mtime": 1789758531.3676796,
-    "seen": 1789764660.64517,
-    "ast_hash": "c6151da0be5ebf81bb066f2babc60ed7",
-    "semantic_hash": "c6151da0be5ebf81bb066f2babc60ed7"
+    "mtime": 1792744769.1324353,
+    "seen": 1792745314.7168279,
+    "ast_hash": "eeb1f6db8c7c7c41771dcd1263412d48",
+    "semantic_hash": ""
   },
   "tests/test_export.py": {
-    "mtime": 1792592226.059737,
-    "seen": 1792593529.0554,
-    "ast_hash": "ec61ab7ad4682d8fb4c7c95693e4b6d1",
+    "mtime": 1792745089.9057832,
+    "seen": 1792745314.7168288,
+    "ast_hash": "2946e0ae1941a220d0b6bb95ac4e3373",
     "semantic_hash": ""
   },
   "tests/test_log_scheduler.py": {
@@ -120,16 +120,16 @@
     "semantic_hash": ""
   },
   "tests/test_main.py": {
-    "mtime": 1792592925.6659098,
-    "seen": 1792593529.0554109,
-    "ast_hash": "485c3e264eb140224252e5e8d8def9aa",
+    "mtime": 1792745221.4543285,
+    "seen": 1792745314.716841,
+    "ast_hash": "bb5430cde2af85d68b7f5e7356960a12",
     "semantic_hash": ""
   },
   "tests/test_models.py": {
-    "mtime": 1789758625.0053327,
-    "seen": 1789764660.645171,
-    "ast_hash": "795eb988fdd280d7c81b0649d57145f0",
-    "semantic_hash": "795eb988fdd280d7c81b0649d57145f0"
+    "mtime": 1792744601.9135637,
+    "seen": 1792745314.716841,
+    "ast_hash": "856c4f6682005514ff3f9d8a95e44c4a",
+    "semantic_hash": ""
   },
   "tests/test_parser.py": {
     "mtime": 1789758531.37243,
@@ -156,15 +156,15 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1792071671.558283,
-    "seen": 1792074777.391405,
-    "ast_hash": "cb48550c643ed05d903ebc807ce9bf46",
+    "mtime": 1792738500.3353777,
+    "seen": 1792738957.887989,
+    "ast_hash": "e8e9f140032b84d46d53ea951b299dfb",
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1792151385.7264626,
-    "seen": 1792151416.877913,
-    "ast_hash": "c34fdb2ed0f7d23218a853019f73dd19",
+    "mtime": 1792745287.6231933,
+    "seen": 1792745314.71756,
+    "ast_hash": "70ce62afec9e2a79f637ea974d07653f",
     "semantic_hash": ""
   },
   "docs/BOT_DETECTION.md": {
@@ -192,9 +192,9 @@
     "semantic_hash": ""
   },
   "docs/TESTING.md": {
-    "mtime": 1789761863.395417,
-    "seen": 1789811993.082048,
-    "ast_hash": "f756a3e17d3c14beda57649b9620726d",
+    "mtime": 1792745287.619772,
+    "seen": 1792745314.717637,
+    "ast_hash": "49cba352e799d776646553564f097fde",
     "semantic_hash": ""
   },
   "requirements.txt": {
@@ -204,15 +204,15 @@
     "semantic_hash": ""
   },
   "docs/LINKEDIN_RESEARCH.md": {
-    "mtime": 1791486586.0405667,
-    "seen": 1791486602.5369768,
-    "ast_hash": "6f8b17cae0b37087c1564ee77491fc91",
+    "mtime": 1792745298.7440767,
+    "seen": 1792745314.717605,
+    "ast_hash": "951b06581deb71111a0da0b991924901",
     "semantic_hash": ""
   },
   "docs/OPENCODE_SETUP.md": {
-    "mtime": 1791486843.1371665,
-    "seen": 1791486857.46863,
-    "ast_hash": "db8b33f88214e3b60b8b6a310e9a32f9",
+    "mtime": 1792738936.2638574,
+    "seen": 1792738957.8880482,
+    "ast_hash": "5c6f2bd698c6b3f52ff16fdcbf6cce99",
     "semantic_hash": ""
   },
   "src/web/__init__.py": {
@@ -246,9 +246,9 @@
     "semantic_hash": ""
   },
   "tests/test_web.py": {
-    "mtime": 1792597019.5659137,
-    "seen": 1792597050.227586,
-    "ast_hash": "793ba4be71940ba3877a25b13487c8da",
+    "mtime": 1792744724.334538,
+    "seen": 1792745314.716873,
+    "ast_hash": "9c5b05520a9ecd1500bc99ca2f92586d",
     "semantic_hash": ""
   },
   "docs/WEB_API.md": {
@@ -570,15 +570,153 @@
     "semantic_hash": ""
   },
   "tasks/plan.md": {
-    "mtime": 1792593892.4711149,
-    "seen": 1792597050.228163,
-    "ast_hash": "30ae9f58bcca0b9459ab8568991dbf18",
+    "mtime": 1792744570.4687452,
+    "seen": 1792745314.717671,
+    "ast_hash": "c7ed31c58dfa7aa26cc838934230c640",
     "semantic_hash": ""
   },
   "tasks/todo.md": {
-    "mtime": 1792593827.690662,
-    "seen": 1792597050.2281642,
-    "ast_hash": "dae1e1dd93d88ab6509bfd3f6eea680e",
+    "mtime": 1792744570.4687445,
+    "seen": 1792745314.717671,
+    "ast_hash": "34fb824ce78e7331c38050d310fec4af",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/report-schema.json": {
+    "mtime": 1792738451.254413,
+    "seen": 1792738957.8870778,
+    "ast_hash": "45df82d396f66aa5166e8ed7959520b2",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/validate-coverage-ledger.cjs": {
+    "mtime": 1792738451.253287,
+    "seen": 1792738957.887079,
+    "ast_hash": "548e89e63c473f7050a4d2c1270cb777",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/validate-coverage-ledger.test.cjs": {
+    "mtime": 1792738451.2530658,
+    "seen": 1792738957.887079,
+    "ast_hash": "d04d688b55dec323f44620548b14fe54",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/validate-findings.cjs": {
+    "mtime": 1792738451.2537649,
+    "seen": 1792738957.88708,
+    "ast_hash": "7f7ae93a0d6db41f8faff3d55ea15c0a",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/validate-findings.test.cjs": {
+    "mtime": 1792738451.256451,
+    "seen": 1792738957.88708,
+    "ast_hash": "ed905c8ad1373cb5a3c090c23e6eddbe",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/AI-AND-LLM.md": {
+    "mtime": 1792738451.2525733,
+    "seen": 1792738957.887912,
+    "ast_hash": "2007e7eac4e362d436a30679a5569291",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/ATTACK-CLASSES.md": {
+    "mtime": 1792738451.2548645,
+    "seen": 1792738957.887913,
+    "ast_hash": "d2fde6de50e5a56b42b0f9bd7b819e45",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/CLIENT-SIDE.md": {
+    "mtime": 1792738451.2553298,
+    "seen": 1792738957.887913,
+    "ast_hash": "8aaa95c9b10a85581de68d6ee71d1a75",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/CLOUD-AND-DEPLOYMENT.md": {
+    "mtime": 1792738451.253993,
+    "seen": 1792738957.887914,
+    "ast_hash": "b6113499d8e31ecf35486cc9be3cc8cd",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/DATA-ISOLATION-AND-LIFECYCLE.md": {
+    "mtime": 1792738451.2521367,
+    "seen": 1792738957.887914,
+    "ast_hash": "fdd89ac7baab1c5f2f6a8fccf1105dec",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/DESKTOP-MOBILE-AND-LOCAL-IPC.md": {
+    "mtime": 1792738451.2556782,
+    "seen": 1792738957.887915,
+    "ast_hash": "6fd7b6739f2757c0acb261114dbc0c57",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/HUNTING.md": {
+    "mtime": 1792738451.2562444,
+    "seen": 1792738957.887915,
+    "ast_hash": "95ddce3b9ae662810a4bcfb544cb3be6",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/MEMORY-SAFETY-AND-BINARY.md": {
+    "mtime": 1792738451.253512,
+    "seen": 1792738957.887915,
+    "ast_hash": "e34f776918ae8c3e9e8dee772d62ecd7",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/PROTOCOLS-RPC-AND-MESSAGING.md": {
+    "mtime": 1792738451.2550938,
+    "seen": 1792738957.887916,
+    "ast_hash": "c2d8be65810e31b3012701a8f594c1e6",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/RECONNAISSANCE.md": {
+    "mtime": 1792738451.2528346,
+    "seen": 1792738957.887916,
+    "ast_hash": "54896c52546adad7d6714e2fa7463468",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/RESOURCE-EXHAUSTION-AND-AVAILABILITY.md": {
+    "mtime": 1792738451.2519002,
+    "seen": 1792738957.887917,
+    "ast_hash": "cd602b30cc2d4619f81d5f06aa6f4cdb",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/SKILL.md": {
+    "mtime": 1792738451.2541916,
+    "seen": 1792738957.887917,
+    "ast_hash": "0b5b0d1007f2095360ce811bf02c5d77",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/SUPPLY-CHAIN-AND-RELEASE.md": {
+    "mtime": 1792738451.2523365,
+    "seen": 1792738957.887917,
+    "ast_hash": "52fe332b608df9ea8182e8881ef6cc5d",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/VALIDATION-AND-REPORTING.md": {
+    "mtime": 1792738451.2560067,
+    "seen": 1792738957.887918,
+    "ast_hash": "ee86d6a351d98dc0d8e833ddb1011f8c",
+    "semantic_hash": ""
+  },
+  ".opencode/skills/security-audit/WEB-PROTOCOL-AND-AUTH.md": {
+    "mtime": 1792738451.254622,
+    "seen": 1792738957.887918,
+    "ast_hash": "2b7484c839443219cffcd2d84b0d486d",
+    "semantic_hash": ""
+  },
+  "src/linkedin_email_scraper.py": {
+    "mtime": 1792744986.978744,
+    "seen": 1792745314.716578,
+    "ast_hash": "d0b530ee6e21630c045596eba4a1308b",
+    "semantic_hash": ""
+  },
+  "tests/test_email_collector.py": {
+    "mtime": 1792745025.6692226,
+    "seen": 1792745314.7168288,
+    "ast_hash": "2c1810525e40ad728cf23a2f95b8bc53",
+    "semantic_hash": ""
+  },
+  "docs/SPEC-linkedin-email-collector.md": {
+    "mtime": 1792745298.7814171,
+    "seen": 1792745314.717637,
+    "ast_hash": "86c92c5edce586aed4a566fa5226e8ca",
     "semantic_hash": ""
   }
 }

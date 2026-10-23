@@ -1,37 +1,37 @@
 # Todo — LinkedIn Recruiter Email Collector (from tasks/plan.md, spec docs/SPEC-linkedin-email-collector.md)
 
-- [ ] Task 1: `EmailContact` + `EmailRow` + converters in `src/models.py`
+- [x] Task 1: `EmailContact` + `EmailRow` + converters in `src/models.py`
   - Acceptance: `EmailContact` validates/normalises email (lowercase, format+domain check), fields per spec; `EmailRow` maps table `contact_emails` (PK `email`) with `from_contact()` / `to_contact()` bridges.
   - Verify: `python3 -m pytest tests/test_models.py` green (new tests).
   - Files: `src/models.py`, `tests/test_models.py`
-- [ ] Task 2: Settings + DB helpers
+- [x] Task 2: Settings + DB helpers
   - Acceptance: `SETTINGS.email_domains` (11 defaults), `email_max_scrolls=6`, `email_date_facet="past-month"`; `.env.example` entries; `upsert_emails()` returns `(new, total)`, re-sighting bumps `last_seen` + backfills empty evidence; `count_emails()`.
   - Verify: `python3 -m pytest tests/test_config.py tests/test_db.py` green.
   - Files: `src/config.py`, `.env.example`, `src/db.py`, `tests/test_db.py`, `tests/test_config.py`
-- [ ] Checkpoint: Foundation — `python3 -m pytest` green at 100 %
-- [ ] Task 3: Scraper core (URL builder, regex, JS extractor, card→contacts)
+- [x] Checkpoint: Foundation — `python3 -m pytest` green at 100 %
+- [x] Task 3: Scraper core (URL builder, regex, JS extractor, card→contacts)
   - Acceptance: `build_content_search_url` validates facet + encodes keyword; `extract_emails` finds/normalises/dedupes (JobSpy regex, rejects image/`example` junk per spec); `_contacts_from_cards` maps card dicts → `EmailContact` incl. no-email/missing-field branches; bot-wall guard + transient-only `_safe_goto`.
   - Verify: `python3 -m pytest tests/test_email_collector.py` green.
   - Files: `src/linkedin_email_scraper.py`, `tests/test_email_collector.py`, `tests/fixtures/…`
-- [ ] Task 4: `run_collect` loop
+- [x] Task 4: `run_collect` loop
   - Acceptance: loops domains → goto → waits main → N scrolls extracting cards → contacts; politeness pauses between domains/scrolls; skips already-seen emails only at DB layer; returns contacts list; stops cleanly on bot-wall.
   - Verify: `python3 -m pytest tests/test_email_collector.py` green (FakeContext path).
   - Files: `src/linkedin_email_scraper.py`, `tests/test_email_collector.py`
-- [ ] Task 5: Export
+- [x] Task 5: Export
   - Acceptance: `load_email_frame()` → columns `email, domain, author, posted, post_url, snippet, keyword, first_seen, last_seen`, sorted domain→email, empty-DB-safe; `export_emails(fmt)` writes `output/linkedin_emails_<ts>.xlsx|.csv`.
   - Verify: `python3 -m pytest tests/test_export.py` green.
   - Files: `src/export.py`, `tests/test_export.py`
-- [ ] Checkpoint: Core — full `python3 -m pytest` green; fake end-to-end OK
-- [ ] Task 6: CLI commands
+- [x] Checkpoint: Core — full `python3 -m pytest` green; fake end-to-end OK
+- [x] Task 6: CLI commands
   - Acceptance: `collect-emails --domains/--max-scrolls/--headless` runs pipeline via `launch_context` + `run_collect` + `upsert_emails`, prints summary; `export-emails --fmt/--out`; typer-runner tests cover both incl. empty result.
   - Verify: `python3 -m pytest tests/test_main.py` green.
   - Files: `src/main.py`, `tests/test_main.py`
-- [ ] Task 7: Docs
+- [x] Task 7: Docs
   - Acceptance: spec status → IMPLEMENTED; `LINKEDIN_RESEARCH.md` §11 (decision record + citations); README command list; `.env.example`; TESTING practice note.
   - Verify: read-through vs code.
   - Files: `docs/SPEC-linkedin-email-collector.md`, `docs/LINKEDIN_RESEARCH.md`, `README.md`, `.env.example`, `docs/TESTING.md`
-- [ ] Task 8: Gates + live run
+- [ ] Task 8: Gates + live run (gates done; live run pending one-time login)
   - Acceptance: `python3 -m pytest` 100 % branch coverage; `graphify update .`; live `collect-emails` on logged-in profile produces `output/linkedin_emails_*.xlsx`.
-  - Verify: pytest summary line; Excel spot-check (≥ known `neha.pandey@ltm.com` if in window).
+  - Verify: pytest 242 passed, 100% branch coverage; graphify updated. LIVE RUN DEFERRED (user decision 2026-10-23): the persistent profile has no LinkedIn session; authwall detected + manual-login prompt shipped (`277be18`). First live run: `python -m src.main collect-emails` (headed) → log in at the ENTER prompt once → reruns reuse the session. If 0 emails while signed in, run `scripts/probe_content_search.py "@ltm.com"` to re-census selectors.
   - Files: `graphify-out/`, `output/`
 - [ ] Checkpoint: Complete — spec success criteria met; commit + push
