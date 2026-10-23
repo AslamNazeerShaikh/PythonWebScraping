@@ -1,17 +1,17 @@
-# Graph Report - PythonWebScraping  (2026-10-23)
+# Graph Report - PythonWebScraping  (2026-10-24)
 
 ## Corpus Check
-- 120 files · ~165,535 words
+- 120 files · ~165,563 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 4 file(s) not represented in the graph (top: (none) 3, .example 1)
 
 ## Summary
-- 2211 nodes · 4053 edges · 118 communities (110 shown, 8 thin omitted)
+- 2208 nodes · 4050 edges · 111 communities (104 shown, 7 thin omitted)
 - Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 470 edges (avg confidence: 0.93)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `277be180`
+- Built from commit: `467aa249`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -19,7 +19,7 @@
 - validate-coverage-ledger.cjs
 - Job
 - validate-findings.cjs
-- run_skills_scan
+- FakePage
 - src/main.py
 - test_parser.py
 - test_main.py
@@ -30,14 +30,14 @@
 - build_mcp
 - orchestrator.py
 - confirmed
-- Project Document — Secure Naukri.com Jobs Collector
+- Full Code Explanation — Secure Naukri.com Jobs Collector
 - Jobs Collector
-- validate-findings.test.cjs
+- Spec: Lane Job-Quality Gates (irrelevant · pure-frontend · external-apply · dedupe)
 - Bot-Detection Test Guide — measure exposure, don't chase “Human”
-- runs.py
-- Hardening Controls
 - ops.py
-- _Resp
+- Hardening Controls
+- db.py
+- api_collect_jobs
 - create_app
 - agent-skills
 - schemas.py
@@ -67,15 +67,15 @@
 - Security Audit
 - Code Simplification
 - Debugging and Error Recovery
-- FakePage
+- RunRecord
 - FakeContext
 - Interview Me
 - Planning and Task Breakdown
-- fresh_db
+- should_exclude_irrelevant_job
 - Security Checklist
 - ReOrder: Keep Your Regulars Ordering Direct
 - Idea Refine
-- stealth_browser.py
+- export.py
 - Accessibility Checklist
 - Doubt-Driven Development
 - Process
@@ -89,22 +89,22 @@
 - The Standing Checklist
 - Observability Checklist
 - Ideation Frameworks Reference
-- validate-coverage-ledger.test.cjs
+- Gate definitions (the contract)
 - Cloud and Deployment Hunting
-- test_scraper.py
-- test_run_events_timeline_capped
+- should_exclude_java_job
+- _check_bot_wall
 - test_web.py
-- handle_possible_block
-- main
+- 4. Code style (the conventions used everywhere)
+- practice_tests.py
 - Data Isolation and Lifecycle Hunting
 - idea-refine.sh
 - test_email_collector.py
 - Desktop, Mobile, and Local IPC Hunting
-- Task List
-- export_jobs
+- build_slug_search_url
+- upsert_jobs
 - Memory Safety, Binary, and Kernel Hunting
 - Protocols, RPC, and Messaging Hunting
-- naukri_scraper.py
+- human_scroll
 - Resource Exhaustion and Availability Hunting
 - HTTP-Protocol and Authentication Hunting
 - Vulnerability Hunting
@@ -115,21 +115,14 @@
 - Phase 6: Produce target-neutral reports from final records
 - Spec: LinkedIn Recruiter Email Collector
 - setup_logging
-- collectUnitErrors
-- upsert_jobs
-- preflightJsonText
-- scrape_site
-- linkedin_email_scraper.py
-- _on_login_wall
-- Full Code Explanation — Secure Naukri.com Jobs Collector
+- count_jobs
+- naukri_scraper.py
+- launch_context
+- 7. Module-by-module explanation
 - Module responsibility matrix
-- no_pauses
-- jobs.py
-- ApiError
-- fetch_search_page
-- health
-- api_collect_jobs
-- 9. Mermaid diagrams (detail)
+- crud.py
+- RunOut
+- stats
 - _FakePW
 
 ## God Nodes (most connected - your core abstractions)
@@ -145,142 +138,137 @@
 10. `launch_context()` - 34 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `G4 — duplicates` --references--> `load_frame()`  [INFERRED]
+  docs/SPEC-lane-job-quality-gates.md → src/export.py
+- `Implementation note (2026-10-23)` --references--> `_on_login_wall()`  [INFERRED]
+  docs/SPEC-linkedin-email-collector.md → src/linkedin_email_scraper.py
 - `5.3 Modular monolith, CLI-first (no server, no microservices)` --references--> `do_scrape()`  [INFERRED]
+  docs/CODE_EXPLANATION.md → src/main.py
+- ``config.py` — Layer 0, env-driven settings` --references--> `scrape()`  [INFERRED]
   docs/CODE_EXPLANATION.md → src/main.py
 - `6. R2 joeyism/linkedin_scraper — deep dive (stack twin)` --references--> `Job`  [INFERRED]
   docs/LINKEDIN_RESEARCH.md → src/models.py
-- `3c. Job-domain (career) skills — pipeline-adjacent, not scraping` --references--> `ScrapeRun`  [INFERRED]
-  docs/LINKEDIN_RESEARCH.md → src/models.py
-- `Testing Strategy` --references--> `EmailContact`  [INFERRED]
-  docs/SPEC-linkedin-email-collector.md → src/models.py
-- ``stealth_browser.py` — Layer 1, Chromium launcher` --references--> `launch_context()`  [INFERRED]
-  docs/CODE_EXPLANATION.md → src/stealth_browser.py
 
 ## Import Cycles
 - None detected.
 
-## Communities (118 total, 8 thin omitted)
+## Communities (111 total, 7 thin omitted)
 
 ### Community 0 - "validate-coverage-ledger.cjs"
-Cohesion: 0.12
-Nodes (23): ATTEMPT_FIELDS, ATTEMPT_STATUSES, createErrorList(), escapeUnsafeDiagnosticCharacters(), fs, hasOwn(), hasValidSemanticFields(), hasValidUnicodeScalarValues() (+15 more)
+Cohesion: 0.06
+Nodes (66): ATTEMPT_FIELDS, ATTEMPT_STATUSES, canonicalCoverageId(), collectUnitErrors(), createErrorList(), encodeCanonicalRef(), escapeUnsafeDiagnosticCharacters(), fs (+58 more)
 
 ### Community 1 - "Job"
 Cohesion: 0.14
-Nodes (16): 6. Design patterns — GoF catalog (with file:line evidence), `models.py` — Layers 3+4, the data contract, Non-GoF / idiomatic patterns used, Job, JobRow, test_email_contact_defaults_are_empty(), test_email_contact_normalises_email_and_snippet(), test_email_contact_rejects_malformed_email() (+8 more)
+Nodes (15): `models.py` — Layers 3+4, the data contract, 2. Module reference, Job, JobRow, test_email_contact_defaults_are_empty(), test_email_contact_normalises_email_and_snippet(), test_email_contact_rejects_malformed_email(), test_email_contact_snippet_capped() (+7 more)
 
 ### Community 2 - "validate-findings.cjs"
-Cohesion: 0.11
-Nodes (37): canonicalKey(), append(), encode(), codePointLength(), collect(), collectDataLimitErrors(), collectFindingSemanticErrors(), collectSchemaErrors() (+29 more)
+Cohesion: 0.06
+Nodes (50): canonicalKey(), append(), encode(), codePointLength(), collect(), collectDataLimitErrors(), collectFindingSemanticErrors(), collectSchemaErrors() (+42 more)
 
-### Community 3 - "run_skills_scan"
-Cohesion: 0.15
-Nodes (14): run_skills_scan(), submit_searchbar(), _detail_skills(), test_run_skills_scan_cap_breaks_page_loop(), test_run_skills_scan_close_failure_swallowed(), test_run_skills_scan_full_flow(), test_run_skills_scan_search_error_continues(), test_skills_scan_bar_failure_uses_url_fallback() (+6 more)
+### Community 3 - "FakePage"
+Cohesion: 0.09
+Nodes (30): build_skills_report(), enrich_job(), run_skills_scan(), submit_searchbar(), FakePage, _detail_skills(), test_build_skills_report_counts_postings_once(), test_build_skills_report_empty() (+22 more)
 
 ### Community 4 - "src/main.py"
-Cohesion: 0.11
-Nodes (15): `config.py` — Layer 0, env-driven settings, Success Criteria, command, export_emails(), collect_emails(), do_collect_emails(), _ensure_env(), export() (+7 more)
+Cohesion: 0.13
+Nodes (13): 2. Start point (how the app boots), 3. Endpoints (CLI commands — this app has no HTTP server), Success Criteria, command, collect_emails(), do_collect_emails(), _ensure_env(), export() (+5 more)
 
 ### Community 5 - "test_parser.py"
-Cohesion: 0.13
+Cohesion: 0.14
 Nodes (16): `parser.py` — Layer 2-offline, BS4 twin, _card_text(), _is_trap(), parse_detail_html(), parse_search_html(), _anchor(), test_card_text_none_card(), test_parse_detail_external_apply_wins_over_traps() (+8 more)
 
 ### Community 6 - "test_main.py"
 Cohesion: 0.08
-Nodes (13): _FakePW, test_collect_emails_defaults_to_settings_domains(), test_collect_emails_empty_result_returns_zero(), test_collect_emails_upserts_exports_and_reports(), test_do_scrape_empty_returns_zero(), test_do_scrape_found_persists_and_snapshots(), test_ensure_env_default_base_no_copy(), test_ensure_env_first_run_copies_example() (+5 more)
+Nodes (12): _FakePW, test_collect_emails_defaults_to_settings_domains(), test_collect_emails_empty_result_returns_zero(), test_collect_emails_upserts_exports_and_reports(), test_do_scrape_empty_returns_zero(), test_do_scrape_found_persists_and_snapshots(), test_ensure_env_default_base_no_copy(), test_ensure_env_first_run_copies_example() (+4 more)
 
 ### Community 7 - "config.py"
 Cohesion: 0.12
 Nodes (9): _get(), _get_bool(), _get_float(), _get_int(), test_get_bool_variants(), test_get_float_valid_and_invalid(), test_get_int_valid_and_invalid(), test_get_returns_default_when_unset() (+1 more)
 
 ### Community 8 - "EmailContact"
-Cohesion: 0.12
-Nodes (21): 11. Email collector — decision record (2026-10-23), count_emails(), get_session(), upsert_emails(), load_email_frame(), EmailContact, EmailRow, Phase 1: Foundation (data contract) (+13 more)
+Cohesion: 0.15
+Nodes (18): 11. Email collector — decision record (2026-10-23), count_emails(), get_session(), upsert_emails(), EmailContact, EmailRow, Phase 1: Foundation (data contract), Todo — LinkedIn Recruiter Email Collector (from tasks/plan.md, spec docs/SPEC-linkedin-email-collector.md) (+10 more)
 
 ### Community 9 - "LinkedIn Jobs Expansion — Deep Research"
-Cohesion: 0.12
-Nodes (16): 10. Fair-use note (extends README §5 to LinkedIn), 1. Link index (everything in one place), 2. awesome-agent-skills (S1) — how the catalog is organized, 3. Skills relevant to THIS project (checked hyperlink by hyperlink), 3a. Directly usable — browser automation / scraping, 3b. Usable as services (API, not browser) — discovery / enrichment, 3c. Job-domain (career) skills — pipeline-adjacent, not scraping, 4. awesome-agent-skills-mcp (S2/S3) — evaluation for this repo (+8 more)
+Cohesion: 0.11
+Nodes (17): 10. Fair-use note (extends README §5 to LinkedIn), 1. Link index (everything in one place), 2. awesome-agent-skills (S1) — how the catalog is organized, 3. Skills relevant to THIS project (checked hyperlink by hyperlink), 3a. Directly usable — browser automation / scraping, 3b. Usable as services (API, not browser) — discovery / enrichment, 3c. Job-domain (career) skills — pipeline-adjacent, not scraping, 4. awesome-agent-skills-mcp (S2/S3) — evaluation for this repo (+9 more)
 
 ### Community 10 - "AI, LLM, and Agent Hunting"
 Cohesion: 0.20
 Nodes (9): AI, LLM, and Agent Hunting, Context, retrieval, and memory attack classes (subagent_type: `general`), Core discipline (include in every agent prompt for this domain), MCP and sub-agent trust classes (subagent_type: `general`), Output and disclosure attack classes (subagent_type: `general`), Tool and action attack classes (subagent_type: `general`), Universal moves (apply across the above), Validation rules (apply before reporting ANY finding here) (+1 more)
 
 ### Community 12 - "build_mcp"
-Cohesion: 0.15
-Nodes (6): get_stats(), stats(), build_mcp(), collector_stats(), RunNotCancellable, test_get_stats_empty_and_seeded()
+Cohesion: 0.13
+Nodes (9): MCP tools (curated) + optional harness wiring, get_stats(), list_jobs(), build_mcp(), collector_stats(), RunNotCancellable, RunNotFound, test_get_stats_empty_and_seeded() (+1 more)
 
 ### Community 13 - "orchestrator.py"
-Cohesion: 0.09
-Nodes (14): Architecture (FastAPI bigger-applications shape), company_mode(), browser_scan_skills(), default_skills_runner(), _target(), render_skills_text(), attached_run_log(), list_log_files() (+6 more)
+Cohesion: 0.12
+Nodes (9): _target(), attached_run_log(), list_log_files(), log_dir(), LogNotFound, read_log_file(), run_log_path(), test_read_log_file_rejects_bad_names() (+1 more)
 
 ### Community 14 - "confirmed"
 Cohesion: 0.24
 Nodes (16): Structured hunter result, Cost budget, Coverage and prior runs, Full audit planning, Run profiles and scope, confirmed(), evidence(), needsValidation() (+8 more)
 
-### Community 15 - "Project Document — Secure Naukri.com Jobs Collector"
-Cohesion: 0.09
-Nodes (19): Artifacts (`graphify-out/`, committed), Graphify — queryable knowledge graph of this repo, Repo wiring, Usage (no API key needed for code), 1. How it works (pipeline), 3. Configuration (`.env`, see `.env.example`), 4. Commands, 5. Data model (+11 more)
+### Community 15 - "Full Code Explanation — Secure Naukri.com Jobs Collector"
+Cohesion: 0.05
+Nodes (36): 11. Knowledge graph + living docs, 12. Fair use (binding), 1. Project structure (where everything lives), 5.1 Layered architecture (the backbone), 5.2 ETL / pipeline pattern, 5.3 Modular monolith, CLI-first (no server, no microservices), 5.5 Other architectural idioms, 5. Architecture patterns (+28 more)
 
 ### Community 16 - "Jobs Collector"
 Cohesion: 0.17
 Nodes (11): API & MCP sketch, Architecture, Configuration, Contributing, Docs, Fair use, Jobs Collector, Quickstart (+3 more)
 
-### Community 17 - "validate-findings.test.cjs"
-Cohesion: 0.09
-Nodes (13): LIMITS, assert, errorsFor(), fs, {
-  LIMITS,
-  collect,
-  collectSchemaErrors,
-  validateDocument,
-}, os, path, rejectMutation() (+5 more)
+### Community 17 - "Spec: Lane Job-Quality Gates (irrelevant · pure-frontend · external-apply · dedupe)"
+Cohesion: 0.18
+Nodes (10): Boundaries, Code style, Objective, Open Questions, Project Structure (files touched), Run plan (after implementation, same session), Spec: Lane Job-Quality Gates (irrelevant · pure-frontend · external-apply · dedupe), Success Criteria (+2 more)
 
 ### Community 18 - "Bot-Detection Test Guide — measure exposure, don't chase “Human”"
 Cohesion: 0.29
 Nodes (6): 1. Sites (comparison order), 2. Procedure — Test A/B/C matrix, 3. Signal table (fill from your runs), 4. Reading the results, 5. Fix applied from these measurements (2026-09-19), Bot-Detection Test Guide — measure exposure, don't chase “Human”
 
-### Community 19 - "runs.py"
-Cohesion: 0.08
-Nodes (11): get_orchestrator(), _mount_scalar(), cancel(), list_all(), start_collect(), start_export(), start_scrape(), start_skills() (+3 more)
+### Community 19 - "ops.py"
+Cohesion: 0.11
+Nodes (4): get_orchestrator(), _mount_scalar(), get_one(), list_all()
 
 ### Community 20 - "Hardening Controls"
 Cohesion: 0.05
 Nodes (42): Broken Access Control, Broken Authentication, Cross-Site Scripting (XSS), Data Classification, Dependency Audit Triage, Destructive Operations on Derived Paths, File Upload Safety, Hardening Patterns (+34 more)
 
-### Community 21 - "ops.py"
-Cohesion: 0.10
-Nodes (10): get_engine(), _resolve_url(), Base, ScrapeRun, list_tables(), table_rows(), TableNotFound, db_table() (+2 more)
+### Community 21 - "db.py"
+Cohesion: 0.14
+Nodes (11): 5.4 Repository / DAO (data-access encapsulation), `db.py` — Layer 4, repository, get_engine(), init_db(), record_run(), _resolve_url(), Base, ScrapeRun (+3 more)
 
-### Community 22 - "_Resp"
-Cohesion: 0.21
-Nodes (18): _api_job(), _api_params(), _Resp, test_api_collect_jobs_drops_external_apply_rows(), test_api_collect_jobs_drops_unwanted_rows(), test_api_collect_jobs_excludes_pure_java(), test_api_collect_jobs_returns_jobs_and_pages(), test_api_scan_skills_cap_and_exhaustion() (+10 more)
+### Community 22 - "api_collect_jobs"
+Cohesion: 0.15
+Nodes (21): api_collect_jobs(), api_scan_skills(), _api_job(), _api_params(), _down(), _Resp, test_api_collect_jobs_drops_external_apply_rows(), test_api_collect_jobs_drops_unwanted_rows() (+13 more)
 
 ### Community 23 - "create_app"
-Cohesion: 0.14
-Nodes (15): create_app(), _blocking(), _instant(), _run(), test_app_without_optional_deps(), test_cancel_running_scrape_via_api(), test_collect_api_busy_and_validation(), test_dependency_override_injects_orchestrator() (+7 more)
+Cohesion: 0.12
+Nodes (15): create_app(), _blocking(), _failing(), _instant(), _run(), test_app_without_optional_deps(), test_cancel_running_scrape_via_api(), test_collect_api_busy_and_validation() (+7 more)
 
 ### Community 24 - "agent-skills"
-Cohesion: 0.08
-Nodes (23): codemode, environment, timeout, type, LOG_LEVEL, SKILLS_CACHE_DIR, SKILLS_SYNC_INTERVAL, headers (+15 more)
+Cohesion: 0.10
+Nodes (20): codemode, environment, timeout, type, LOG_LEVEL, SKILLS_CACHE_DIR, SKILLS_SYNC_INTERVAL, headers (+12 more)
 
 ### Community 25 - "schemas.py"
-Cohesion: 0.15
-Nodes (7): DbTable, DbTablePage, HealthOut, LogFile, SkillTop, StatsOut, TopItem
+Cohesion: 0.10
+Nodes (13): CollectRequest, DbTable, DbTablePage, ExportRequest, HealthOut, JobsPage, LogFile, ScrapeRequest (+5 more)
 
 ### Community 26 - "Web Control Plane — Spec + Guide"
 Cohesion: 0.18
-Nodes (10): Boundaries, Contract (every action has a cancel twin), Evidence (verify-before-claim), Key-skills scan (API fast path + browser fallback), MCP tools (curated) + harness wiring, Objective, Run logs, Sources (source-driven-development) (+2 more)
+Nodes (10): Architecture (FastAPI bigger-applications shape), Boundaries, Contract (every action has a cancel twin), Evidence (verify-before-claim), Key-skills scan (API fast path + browser fallback), Objective, Run logs, Sources (source-driven-development) (+2 more)
 
 ### Community 27 - "Orchestrator"
-Cohesion: 0.14
-Nodes (8): BusyError, Orchestrator, RunRecord, test_failing_runner_marks_failed_and_frees_lock(), test_run_history_evicts_oldest(), test_scrape_lock_and_cancel_flow(), test_start_and_finish_success(), test_start_skills_shares_browser_lock()
+Cohesion: 0.12
+Nodes (9): health(), BusyError, Orchestrator, start_export(), test_mcp_start_and_cancel(), test_run_history_evicts_oldest(), test_scrape_lock_and_cancel_flow(), test_start_and_finish_success() (+1 more)
 
 ### Community 28 - "Agent Skills (OpenCode)"
 Cohesion: 0.33
 Nodes (5): Agent Skills (OpenCode), Core Rules, Execution Model, graphify, Intent → Skill Mapping
 
 ### Community 29 - "nkapi.py"
-Cohesion: 0.19
-Nodes (6): api_pause(), generate_nkparam(), _public_key(), _read_der(), test_api_pause_uses_jobspy_window(), test_generate_nkparam_shape()
+Cohesion: 0.10
+Nodes (11): job_should_exclude(), job_should_exclude_unwanted(), api_pause(), fetch_search_page(), generate_nkparam(), NkApiError, _public_key(), _read_der() (+3 more)
 
 ### Community 30 - "OpenCode Setup (v2) — plugins, skills, MCP servers"
 Cohesion: 0.29
@@ -332,7 +320,7 @@ Nodes (24): Accessibility (WCAG 2.1 AA), ARIA Labels, Avoid the AI Aesthetic, Co
 
 ### Community 43 - "test_export.py"
 Cohesion: 0.06
-Nodes (43): Boundaries, Code style, G1 — relevance (kills mixed / unrelated results), G2 — pure frontend, G3 — external apply (company-portal redirect), G4 — duplicates, Gate definitions (the contract), Objective (+35 more)
+Nodes (44): _dedupe(), export_emails(), export_jobs(), _hyperlink_titles(), load_email_frame(), load_frame(), Architecture Decisions, Checkpoint: Complete (+36 more)
 
 ### Community 44 - "CI/CD and Automation"
 Cohesion: 0.08
@@ -347,8 +335,8 @@ Cohesion: 0.08
 Nodes (23): Adapter Pattern, Code Is a Liability, Common Rationalizations, Compulsory vs Advisory Deprecation, Core Principles, Database Schema Migrations (Expand/Contract), Deprecation and Migration, Deprecation Planning Starts at Design Time (+15 more)
 
 ### Community 47 - "should_exclude_frontend_job"
-Cohesion: 0.11
-Nodes (16): 1c. Lane-quality gates (always on — irrelevant / frontend / portal / dupes), Testing Strategy, Lane collection → Excel with hyperlinks, _external_apply_url(), fresh_cutoff(), _keep_wanted(), _gate_blob(), job_should_exclude_unwanted() (+8 more)
+Cohesion: 0.18
+Nodes (8): 1c. Lane-quality gates (always on — irrelevant / frontend / portal / dupes), Lane collection → Excel with hyperlinks, fresh_cutoff(), _gate_blob(), should_exclude_frontend_job(), is_external_apply(), test_should_exclude_frontend_job_keeps_hybrids(), test_should_exclude_frontend_job_pure_frontend()
 
 ### Community 48 - "Documentation and ADRs"
 Cohesion: 0.09
@@ -370,13 +358,13 @@ Nodes (21): 1. Preserve Behavior Exactly, 2. Follow Project Conventions, 3. Pref
 Cohesion: 0.09
 Nodes (21): Build Failure Triage, Common Rationalizations, Debugging and Error Recovery, Error-Specific Patterns, Instrumentation Guidelines, Overview, Red Flags, Runtime Error Triage (+13 more)
 
-### Community 53 - "FakePage"
-Cohesion: 0.15
-Nodes (14): This repo's map (from `GRAPH_REPORT.md`), FakePage, test_safe_goto_retries_playwright_timeout_error(), test_safe_goto_retries_then_reraises(), test_safe_goto_success(), _force_browser_fallback(), test_default_scrape_runner_failure_restores_settings(), test_default_scrape_runner_full_params() (+6 more)
+### Community 53 - "RunRecord"
+Cohesion: 0.12
+Nodes (18): company_mode(), browser_scan_skills(), default_collect_runner(), default_scrape_runner(), default_skills_runner(), render_skills_text(), RunRecord, _force_browser_fallback() (+10 more)
 
 ### Community 54 - "FakeContext"
-Cohesion: 0.13
-Nodes (19): run_scrape(), FakeContext, raw_card(), test_run_scrape_cap_breaks_next_page_loop(), test_run_scrape_close_failure_swallowed(), test_run_scrape_excludes_java_revealed_by_enrichment(), test_run_scrape_full_flow(), test_run_scrape_no_enrich_and_cap() (+11 more)
+Cohesion: 0.14
+Nodes (17): This repo's map (from `GRAPH_REPORT.md`), run_scrape(), FakeContext, raw_card(), test_run_scrape_cap_breaks_next_page_loop(), test_run_scrape_close_failure_swallowed(), test_run_scrape_excludes_java_revealed_by_enrichment(), test_run_scrape_full_flow() (+9 more)
 
 ### Community 55 - "Interview Me"
 Cohesion: 0.11
@@ -386,9 +374,9 @@ Nodes (18): Common Rationalizations, Example, Interaction with Other Skills, Int
 Cohesion: 0.11
 Nodes (18): Common Rationalizations, Output Files, Overview, Parallelization Opportunities, Plan Document Template, Planning and Task Breakdown, Red Flags, See Also (+10 more)
 
-### Community 57 - "fresh_db"
-Cohesion: 0.17
-Nodes (8): 10. Testing architecture (why 100% is feasible), 1. Practice progression (manual, in order), 2. Automated suite (this repo), 3. Live practice runs (this repo, Chrome-only stack), 4. Live e-commerce test (Amazon.in + Flipkart), 5. Test matrix (automated ↔ manual), Testing Guide — practice progression + automated suite, fresh_db()
+### Community 57 - "should_exclude_irrelevant_job"
+Cohesion: 0.25
+Nodes (6): Testing Strategy, _external_apply_url(), _keep_wanted(), should_exclude_irrelevant_job(), test_should_exclude_irrelevant_job_drops_mixed_results(), test_should_exclude_irrelevant_job_keeps_both_lanes()
 
 ### Community 58 - "Security Checklist"
 Cohesion: 0.11
@@ -402,9 +390,9 @@ Nodes (17): Example 1: Vague Early-Stage Concept (Full 3-Phase Session), Example
 Cohesion: 0.11
 Nodes (17): Anti-patterns to Avoid, Common Rationalizations, Detailed Instructions, How It Works, Idea Refine, Output, Overview, Phase 1: Understand & Expand (Divergent) (+9 more)
 
-### Community 61 - "stealth_browser.py"
-Cohesion: 0.19
-Nodes (3): main(), probe(), main()
+### Community 61 - "export.py"
+Cohesion: 0.12
+Nodes (6): main(), probe(), _dismiss_flipkart_login(), main(), Product, scrape_site()
 
 ### Community 62 - "Accessibility Checklist"
 Cohesion: 0.12
@@ -458,36 +446,28 @@ Nodes (10): Alerting, Dashboards, Distributed Tracing, Metrics, Observability Ch
 Cohesion: 0.22
 Nodes (8): Analogous Inspiration, Constraint-Based Ideation, First Principles Thinking, How Might We (HMW), Ideation Frameworks Reference, Jobs to Be Done (JTBD), Pre-mortem, SCAMPER
 
-### Community 75 - "validate-coverage-ledger.test.cjs"
-Cohesion: 0.11
-Nodes (16): canonicalCoverageId(), encodeCanonicalRef(), LIMITS, archivedAttempt(), assert, fs, {
-  LIMITS,
-  canonicalCoverageId,
-  encodeCanonicalRef,
-  isSafeAgentId,
-  isSafeRelativePath,
-  preflightJsonText,
-  validateDocument,
-}, localCheck() (+8 more)
+### Community 75 - "Gate definitions (the contract)"
+Cohesion: 0.40
+Nodes (5): G1 — relevance (kills mixed / unrelated results), G2 — pure frontend, G3 — external apply (company-portal redirect), G4 — duplicates, Gate definitions (the contract)
 
 ### Community 76 - "Cloud and Deployment Hunting"
 Cohesion: 0.20
 Nodes (10): Cloud and Deployment Hunting, Configuration and secret lifecycle attack classes (subagent_type: `general`), Container and orchestration attack classes (subagent_type: `general`), Core discipline (include in every agent prompt for this domain), Ingress, network, and control-plane attack classes (subagent_type: `general`), Managed storage, events, and edge attack classes (subagent_type: `general`), Universal moves (apply across the above), Validation rules (apply before reporting ANY finding here) (+2 more)
 
-### Community 77 - "test_scraper.py"
-Cohesion: 0.11
-Nodes (24): _keep(), build_skills_report(), enrich_job(), job_should_exclude(), should_exclude_java_job(), make_job(), test_build_skills_report_counts_postings_once(), test_build_skills_report_empty() (+16 more)
+### Community 77 - "should_exclude_java_job"
+Cohesion: 0.22
+Nodes (8): _keep(), should_exclude_java_job(), test_should_exclude_ai_plus_java_without_dotnet(), test_should_exclude_ai_python_without_java(), test_should_exclude_checks_snippet_and_description(), test_should_exclude_javascript_is_not_java(), test_should_exclude_keeps_dotnet_anchored(), test_should_exclude_pure_java_stack()
 
 ### Community 79 - "test_web.py"
-Cohesion: 0.07
-Nodes (15): Flag, default_export_runner(), CollectRequest, ExportRequest, _failing(), _isolated_logs(), _payload(), test_collect_and_export_requests_gate_defaults() (+7 more)
+Cohesion: 0.11
+Nodes (7): api_job_to_raw(), _payload(), test_api_job_to_raw_mapping(), test_is_external_apply_signals(), test_mcp_read_tools(), _tool(), _tools()
 
-### Community 80 - "handle_possible_block"
-Cohesion: 0.13
-Nodes (9): 9.1b Live network trace — measured session on naukri.com (2026-09-19), 9. Recommended LinkedIn plan for this repo, check_bot_wall(), handle_possible_block(), test_check_bot_wall_clean_and_blocked(), test_check_bot_wall_evaluate_failure_is_safe(), test_handle_block_eoferror_in_noninteractive(), test_handle_block_noop_never_prompts() (+1 more)
+### Community 80 - "4. Code style (the conventions used everywhere)"
+Cohesion: 0.08
+Nodes (20): 10. Testing architecture (why 100% is feasible), 4. Code style (the conventions used everywhere), 6. Design patterns — GoF catalog (with file:line evidence), 9.1b Live network trace — measured session on naukri.com (2026-09-19), `naukri_scraper.py` — Layer 2-live, the pipeline core, Non-GoF / idiomatic patterns used, build_search_url(), check_bot_wall() (+12 more)
 
-### Community 81 - "main"
-Cohesion: 0.16
+### Community 81 - "practice_tests.py"
+Cohesion: 0.17
 Nodes (5): crawl_books(), _get_with_retry(), main(), Reporter, store_books()
 
 ### Community 82 - "Data Isolation and Lifecycle Hunting"
@@ -495,20 +475,16 @@ Cohesion: 0.20
 Nodes (9): Core discipline (include in every agent prompt for this domain), Data Isolation and Lifecycle Hunting, Deletion, revocation, and lifecycle attack classes (subagent_type: `general`), Derived-data and disclosure attack classes (subagent_type: `general`), Export, backup, restore, and migration attack classes (subagent_type: `general`), Tenant and object-isolation attack classes (subagent_type: `general`), Universal moves (apply across the above), Validation rules (apply before reporting ANY finding here) (+1 more)
 
 ### Community 84 - "test_email_collector.py"
-Cohesion: 0.10
-Nodes (20): build_content_search_url(), _contacts_from_cards(), extract_emails(), run_collect(), test_build_content_search_url_rejects_unknown_facet(), test_build_content_search_url_shape(), test_contacts_from_cards_maps_fields_and_snippet(), test_contacts_from_cards_skips_cards_without_email() (+12 more)
+Cohesion: 0.09
+Nodes (22): build_content_search_url(), _contacts_from_cards(), extract_emails(), run_collect(), no_pauses(), test_build_content_search_url_rejects_unknown_facet(), test_build_content_search_url_shape(), test_contacts_from_cards_maps_fields_and_snippet() (+14 more)
 
 ### Community 85 - "Desktop, Mobile, and Local IPC Hunting"
 Cohesion: 0.20
 Nodes (10): Application-state and device-lifecycle attack classes (subagent_type: `general`), Core discipline (include in every agent prompt for this domain), Deep-link, callback, and navigation attack classes (subagent_type: `general`), Desktop, Mobile, and Local IPC Hunting, Local IPC and exported-component attack classes (subagent_type: `general`), Privileged-helper and local-file attack classes (subagent_type: `general`), Universal moves (apply across the above), Validation rules (apply before reporting ANY finding here) (+2 more)
 
-### Community 86 - "Task List"
-Cohesion: 0.18
-Nodes (10): Architecture Decisions, Checkpoint: Complete, Checkpoint: Core, Checkpoint: Foundation, Implementation Plan: LinkedIn Recruiter Email Collector, Open Questions, Overview, Phase 3: CLI + polish (+2 more)
-
-### Community 87 - "export_jobs"
-Cohesion: 0.40
-Nodes (3): export_jobs(), _hyperlink_titles(), test_export_excel_hyperlinks()
+### Community 87 - "upsert_jobs"
+Cohesion: 0.15
+Nodes (12): Flag, upsert_jobs(), default_export_runner(), make_job(), test_stats_command(), _isolated_logs(), test_default_export_runner_writes_files(), test_export_days_filter_reaches_the_file() (+4 more)
 
 ### Community 88 - "Memory Safety, Binary, and Kernel Hunting"
 Cohesion: 0.20
@@ -518,9 +494,9 @@ Nodes (10): Binary loading and runtime attack classes (subagent_type: `general`)
 Cohesion: 0.20
 Nodes (9): Broker and queue isolation attack classes (subagent_type: `general`), Core discipline (include in every agent prompt for this domain), Framing, schema, and interpretation attack classes (subagent_type: `general`), Protocols, RPC, and Messaging Hunting, Replay, ordering, and transaction attack classes (subagent_type: `general`), RPC identity and authorization attack classes (subagent_type: `general`), Universal moves (apply across the above), Validation rules (apply before reporting ANY finding here) (+1 more)
 
-### Community 90 - "naukri_scraper.py"
-Cohesion: 0.07
-Nodes (24): 4. Code style (the conventions used everywhere), 5.5 Other architectural idioms, `naukri_scraper.py` — Layer 2-live, the pipeline core, build_search_url(), build_slug_search_url(), coerce_job(), extract_listing_cards(), _first_match() (+16 more)
+### Community 90 - "human_scroll"
+Cohesion: 0.09
+Nodes (16): 1. Practice progression (manual, in order), 2. Automated suite (this repo), 3. Live practice runs (this repo, Chrome-only stack), 4. Live e-commerce test (Amazon.in + Flipkart), 5. Test matrix (automated ↔ manual), Testing Guide — practice progression + automated suite, extract_listing_cards(), _first_match() (+8 more)
 
 ### Community 91 - "Resource Exhaustion and Availability Hunting"
 Cohesion: 0.20
@@ -539,8 +515,8 @@ Cohesion: 0.22
 Nodes (8): CI and automation attack classes (subagent_type: `general`), Core discipline (include in every agent prompt for this domain), Dependency and build-input attack classes (subagent_type: `general`), Release and update attack classes (subagent_type: `general`), Supply Chain and Release Hunting, Universal moves (apply across the above), Validation rules (apply before reporting ANY finding here), When to use this file
 
 ### Community 95 - "test_stealth.py"
-Cohesion: 0.10
-Nodes (20): _extension_args(), _launch_chromium(), launch_playwright(), _maybe_block_ads(), fake_playwright(), FakeRoute, _handler(), test_blocker_aborts_trackers_pixels_and_continues_rest() (+12 more)
+Cohesion: 0.12
+Nodes (20): _extension_args(), _launch_chromium(), fake_playwright(), FakeRoute, _handler(), test_blocker_aborts_trackers_pixels_and_continues_rest(), test_blocker_disabled_registers_nothing(), test_extension_args_headed_load() (+12 more)
 
 ### Community 96 - "Daily Lanes Runbook — fresh apply-links Excel, every morning"
 Cohesion: 0.20
@@ -556,81 +532,61 @@ Nodes (4): `FINDINGS-DETAIL.md`, `NEEDS-VALIDATION.md`, Phase 6: Produce target-
 
 ### Community 99 - "Spec: LinkedIn Recruiter Email Collector"
 Cohesion: 0.12
-Nodes (15): Boundaries, Code Style, Commands, Data contract, Decisions already made (clarification round, 2026-10-23), Design, Fair use (extends LINKEDIN_RESEARCH §10), Objective (+7 more)
+Nodes (16): Boundaries, Code Style, Commands, Data contract, Decisions already made (clarification round, 2026-10-23), Design, Fair use (extends LINKEDIN_RESEARCH §10), Implementation note (2026-10-23) (+8 more)
 
 ### Community 100 - "setup_logging"
 Cohesion: 0.15
 Nodes (8): setup_logging(), _FakeSched, test_run_scheduled_handles_interrupt(), _factory(), test_run_scheduled_handles_system_exit(), _factory(), test_setup_logging_levels(), test_setup_logging_preserves_file_handlers()
 
-### Community 101 - "collectUnitErrors"
-Cohesion: 0.34
-Nodes (16): collectUnitErrors(), isCanonicalRef(), isObject(), isOwnedArtifactPath(), isSafeAgentId(), isSafeRelativePath(), isVisibleText(), requireEmptyArray() (+8 more)
+### Community 102 - "count_jobs"
+Cohesion: 0.28
+Nodes (6): count_jobs(), fetch_all_jobs(), stats(), test_count_empty_db(), test_upsert_empty_apply_url_falls_back(), test_upsert_insert_then_dedupe_refresh()
 
-### Community 102 - "upsert_jobs"
+### Community 106 - "naukri_scraper.py"
 Cohesion: 0.16
-Nodes (17): 2. Start point (how the app boots), 3. Endpoints (CLI commands — this app has no HTTP server), 5.4 Repository / DAO (data-access encapsulation), `db.py` — Layer 4, repository, 2. Module reference, count_jobs(), fetch_all_jobs(), init_db() (+9 more)
+Nodes (5): _prompt_manual_login(), _snippet_around(), slugify_keywords(), human_pause(), test_slugify_matches_manual_search()
 
-### Community 103 - "preflightJsonText"
-Cohesion: 0.40
-Nodes (11): JsonStructureError, preflightJsonText(), beginContainer(), beginString(), beginValue(), closeContainer(), countValue(), currentContainer() (+3 more)
+### Community 107 - "launch_context"
+Cohesion: 0.18
+Nodes (6): _login_wait(), main(), _on_login_wall(), launch_context(), launch_playwright(), _maybe_block_ads()
 
-### Community 105 - "scrape_site"
-Cohesion: 0.22
-Nodes (3): _dismiss_flipkart_login(), Product, scrape_site()
-
-### Community 107 - "_on_login_wall"
-Cohesion: 0.17
-Nodes (7): Implementation note (2026-10-23), _login_wait(), main(), _check_bot_wall(), _on_login_wall(), test_check_bot_wall_swallows_evaluate_errors(), test_on_login_wall_detects_auth_redirect()
-
-### Community 108 - "Full Code Explanation — Secure Naukri.com Jobs Collector"
-Cohesion: 0.14
-Nodes (14): 11. Knowledge graph + living docs, 12. Fair use (binding), 1. Project structure (where everything lives), 5.1 Layered architecture (the backbone), 5.2 ETL / pipeline pattern, 5.3 Modular monolith, CLI-first (no server, no microservices), 5. Architecture patterns, 7. Module-by-module explanation (+6 more)
+### Community 108 - "7. Module-by-module explanation"
+Cohesion: 0.33
+Nodes (6): 7. Module-by-module explanation, `config.py` — Layer 0, env-driven settings, `export.py` — Layer 5, Pandas snapshots, `log.py` — one-call logging, `scheduler.py` — Layer 6, cron, `stealth_browser.py` — Layer 1, Chromium launcher
 
 ### Community 109 - "Module responsibility matrix"
+Cohesion: 0.13
+Nodes (9): `main.py` — shell, front door, Module responsibility matrix, Settings, do_scrape(), _print_jobs(), save_results(), run_scheduled(), test_save_results_writes_json_and_csv() (+1 more)
+
+### Community 111 - "crud.py"
+Cohesion: 0.16
+Nodes (8): get_job(), JobNotFound, list_tables(), table_rows(), ApiError, TableNotFound, test_db_explorer_tables_and_rows(), test_get_job_found_and_missing()
+
+### Community 112 - "RunOut"
 Cohesion: 0.15
-Nodes (8): `main.py` — shell, front door, Module responsibility matrix, Settings, do_scrape(), _print_jobs(), run_scheduled(), launch_context(), test_config_log_dir_default()
+Nodes (8): cancel(), download(), get_one(), list_all(), start_collect(), start_scrape(), start_skills(), RunOut
 
-### Community 111 - "jobs.py"
-Cohesion: 0.19
-Nodes (6): get_job(), JobNotFound, list_jobs(), get_one(), list_all(), JobsPage
-
-### Community 112 - "ApiError"
-Cohesion: 0.18
-Nodes (5): ApiError, RunNotFound, download(), get_one(), test_unknown_run_errors()
-
-### Community 113 - "fetch_search_page"
-Cohesion: 0.20
-Nodes (4): fetch_search_page(), NkApiError, _down(), test_fetch_search_page_outcomes()
-
-### Community 114 - "health"
-Cohesion: 0.20
-Nodes (4): db_tables(), health(), log_tail(), logs()
-
-### Community 115 - "api_collect_jobs"
-Cohesion: 0.28
-Nodes (4): api_collect_jobs(), api_job_to_raw(), api_scan_skills(), test_api_job_to_raw_mapping()
-
-### Community 116 - "9. Mermaid diagrams (detail)"
-Cohesion: 0.29
-Nodes (7): 9.1 Full data-flow (browser → DB → files), 9.2 Class / data-model diagram, 9.3 Database ER, 9.4 Module dependency graph, 9.5 Browser-launch decision flow, 9.6 Bot-wall / politeness state, 9. Mermaid diagrams (detail)
+### Community 114 - "stats"
+Cohesion: 0.17
+Nodes (5): db_table(), db_tables(), log_tail(), logs(), stats()
 
 ## Knowledge Gaps
-- **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `confirmed()` connect `confirmed` to `ATTACK-CLASSES.md`, `Client-Side and Browser Hunting`, `AI, LLM, and Agent Hunting`, `Cloud and Deployment Hunting`, `validate-findings.test.cjs`, `Data Isolation and Lifecycle Hunting`, `Security Audit`, `Desktop, Mobile, and Local IPC Hunting`, `Memory Safety, Binary, and Kernel Hunting`, `Protocols, RPC, and Messaging Hunting`, `Resource Exhaustion and Availability Hunting`, `HTTP-Protocol and Authentication Hunting`, `Vulnerability Hunting`, `Supply Chain and Release Hunting`?**
-  _High betweenness centrality (0.142) - this node is a cross-community bridge._
+- **Why does `confirmed()` connect `confirmed` to `ATTACK-CLASSES.md`, `validate-findings.cjs`, `Client-Side and Browser Hunting`, `AI, LLM, and Agent Hunting`, `Cloud and Deployment Hunting`, `Data Isolation and Lifecycle Hunting`, `Security Audit`, `Desktop, Mobile, and Local IPC Hunting`, `Memory Safety, Binary, and Kernel Hunting`, `Protocols, RPC, and Messaging Hunting`, `Resource Exhaustion and Availability Hunting`, `HTTP-Protocol and Authentication Hunting`, `Vulnerability Hunting`, `Supply Chain and Release Hunting`?**
+  _High betweenness centrality (0.143) - this node is a cross-community bridge._
 - **Are the 3 inferred relationships involving `FakePage` (e.g. with `10. Testing architecture (why 100% is feasible)` and `This repo's map (from `GRAPH_REPORT.md`)`) actually correct?**
   _`FakePage` has 3 INFERRED edges - model-reasoned connections that need verification._
 - **Should `validate-coverage-ledger.cjs` be split into smaller, more focused modules?**
-  _Cohesion score 0.11666666666666667 - nodes in this community are weakly interconnected._
-- **Why does `Attack classes — choose and split based on Phase 1` connect `ATTACK-CLASSES.md` to `handle_possible_block`, `confirmed`?**
-  _High betweenness centrality (0.136) - this node is a cross-community bridge._
+  _Cohesion score 0.06054054054054054 - nodes in this community are weakly interconnected._
+- **Why does `Attack classes — choose and split based on Phase 1` connect `ATTACK-CLASSES.md` to `4. Code style (the conventions used everywhere)`, `confirmed`?**
+  _High betweenness centrality (0.142) - this node is a cross-community bridge._
 - **Are the 13 inferred relationships involving `Orchestrator` (e.g. with `get_orchestrator()` and `health()`) actually correct?**
   _`Orchestrator` has 13 INFERRED edges - model-reasoned connections that need verification._
 - **Should `Job` be split into smaller, more focused modules?**
-  _Cohesion score 0.13793103448275862 - nodes in this community are weakly interconnected._
-- **Why does `FakePage` connect `FakePage` to `conftest.py`, `run_skills_scan`, `LinkedIn Jobs Expansion — Deep Research`, `_on_login_wall`, `test_scraper.py`, `test_web.py`, `handle_possible_block`, `test_email_collector.py`, `FakeContext`, `fresh_db`, `naukri_scraper.py`, `test_stealth.py`?**
-  _High betweenness centrality (0.090) - this node is a cross-community bridge._
+  _Cohesion score 0.13756613756613756 - nodes in this community are weakly interconnected._
+- **Why does `FakePage` connect `FakePage` to `conftest.py`, `LinkedIn Jobs Expansion — Deep Research`, `test_web.py`, `4. Code style (the conventions used everywhere)`, `test_email_collector.py`, `RunRecord`, `FakeContext`, `human_scroll`, `test_stealth.py`?**
+  _High betweenness centrality (0.091) - this node is a cross-community bridge._

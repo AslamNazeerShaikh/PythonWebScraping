@@ -189,20 +189,23 @@ Flow for apply-links day: collect lane 1 + lane 2 → one excel export →
 open, click titles, apply. For a last-24h-only file, send `days: 1` to
 **both** the collect and the export.
 
-## MCP tools (curated) + harness wiring
+## MCP tools (curated) + optional harness wiring
 
 `collector_stats`, `search_jobs(query, location, page_size)`,
 `start_scrape(keywords, locations)`, `start_skill_scan(keywords, location,
 max_jobs)`, `collect_lane(keywords, location, days)`, `run_status(run_id)`,
 `cancel_run(run_id)`. Errors return `{"error": ...}` dicts (never raise).
 
-The agent harness talks to the **running** server: `.opencode/opencode.json`
-declares `mcp.servers["naukri-collector"]` → `http://127.0.0.1:8000/mcp/`
-(Streamable HTTP; trailing slash is required — the mount answers the
-canonical path and plain `/mcp` only 307-redirects, which strict MCP
-clients do not follow). Start the server first (`python -m src.main web`),
-then restart the harness session so it reconnects; verify with
-`opencode mcp debug naukri-collector`.
+The server still serves MCP at `/mcp`, but the harness **no longer wires
+it**: `.opencode/opencode.json` previously declared
+`mcp.servers["naukri-collector"]` → `http://127.0.0.1:8000/mcp/`, and that
+entry was removed — day-to-day collection goes through the REST/CLI paths
+above. To re-wire any harness, start the server first
+(`python -m src.main web`), declare a remote MCP server pointing at
+`http://127.0.0.1:8000/mcp/` (Streamable HTTP; trailing slash is required —
+the mount answers the canonical path and plain `/mcp` only 307-redirects,
+which strict MCP clients do not follow), restart the harness session so it
+connects, and verify with `opencode mcp debug <server-name>`.
 
 ## Boundaries
 
@@ -233,4 +236,4 @@ then restart the harness session so it reconnects; verify with
   real TCS listing. Cancel-mid-run proven in tests with blocking runners.
 - Restructure verified: `uvicorn src.web.main:app` boots; routers resolve
   every route; `[tool.fastapi] entrypoint` declared per the guide; MCP tools
-  reachable over HTTP `/mcp` by the harness config.
+  reachable over HTTP `/mcp` via the FastMCP Streamable-HTTP mount.

@@ -150,9 +150,9 @@
     "semantic_hash": "9b074654045e0a9d8e72d9cf7c908ca4"
   },
   ".opencode/opencode.json": {
-    "mtime": 1792071236.7501957,
-    "seen": 1792074777.3910232,
-    "ast_hash": "10bd90b19ac6b57ecaafcaae70be46ab",
+    "mtime": 1792787112.3981476,
+    "seen": 1792787170.136601,
+    "ast_hash": "eb65d758324e14e344f5046d53daa7db",
     "semantic_hash": ""
   },
   "AGENTS.md": {
@@ -252,9 +252,9 @@
     "semantic_hash": ""
   },
   "docs/WEB_API.md": {
-    "mtime": 1792593417.2573555,
-    "seen": 1792593529.056042,
-    "ast_hash": "01de790495313534e38202eae70eef57",
+    "mtime": 1792787163.508082,
+    "seen": 1792787170.137909,
+    "ast_hash": "4ad36f1e6514b4c6e612f1fe53bda5e5",
     "semantic_hash": ""
   },
   "src/web/templates/dashboard.html": {
