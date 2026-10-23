@@ -16,7 +16,7 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from .config import BASE_DIR, SETTINGS
-from .models import Base, Job, JobRow, ScrapeRun
+from .models import Base, EmailContact, EmailRow, Job, JobRow, ScrapeRun
 
 #: Module logger — configured once by :func:`src.log.setup_logging`.
 log = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ def get_engine():  # type: ignore[no-untyped-def]
 
 
 def init_db() -> None:
-    """Create ``jobs`` / ``scrape_runs`` tables if they don't exist (idempotent)."""
+    """Create ``jobs`` / ``scrape_runs`` / ``contact_emails`` tables (idempotent)."""
     get_engine()
     Base.metadata.create_all(_engine)
     log.info("DB ready")
@@ -124,3 +124,49 @@ def count_jobs() -> int:
     """Return the total number of unique jobs stored."""
     with get_session() as s:
         return s.scalar(select(func.count()).select_from(JobRow)) or 0
+
+
+def upsert_emails(contacts: list[EmailContact]) -> tuple[int, int]:
+    """Insert new addresses; refresh evidence and bump ``last_seen``.
+
+    Re-sighting semantics (spec: one row per email, additive runs):
+
+    - new address → full insert (``first_seen`` defaults to now).
+    - known address → ``last_seen`` bumps; empty evidence fields
+      (``post_url``/``author``/``posted``/``snippet``) backfill from the
+      richer sighting but are never clobbered by empties; the
+      ``domain``/``keyword`` tag moves to the newest search that found it.
+
+    Args:
+        contacts: Validated contacts from :func:`src.linkedin_email_scraper.run_collect`.
+
+    Returns:
+        ``(new_count, total_count)``. Empty input short-circuits to ``(0, 0)``.
+    """
+    if not contacts:
+        return 0, 0
+    new = 0
+    with get_session() as s:
+        for contact in contacts:
+            row = s.get(EmailRow, contact.email)
+            if row is None:
+                s.add(EmailRow.from_contact(contact))
+                new += 1
+            else:
+                for attr in ("post_url", "author", "posted", "snippet"):
+                    if getattr(contact, attr) and not getattr(row, attr):
+                        setattr(row, attr, getattr(contact, attr))
+                if contact.domain:      # newest search's tag wins
+                    row.domain = contact.domain
+                if contact.keyword:
+                    row.keyword = contact.keyword
+                row.last_seen = func.now()  # type: ignore[assignment]
+        s.commit()
+    log.info("Upserted %d emails (%d new)", len(contacts), new)
+    return new, len(contacts)
+
+
+def count_emails() -> int:
+    """Return the total number of unique harvested addresses stored."""
+    with get_session() as s:
+        return s.scalar(select(func.count()).select_from(EmailRow)) or 0

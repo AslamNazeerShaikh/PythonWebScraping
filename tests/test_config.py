@@ -43,3 +43,15 @@ def test_settings_singleton_has_expected_defaults():
     assert "pune" in config.SETTINGS.locations
     assert config.SETTINGS.experience >= 1
     assert config.SETTINGS.output_dir.name == "output"
+
+
+def test_email_collector_settings_defaults():
+    s = config.SETTINGS
+    # The 11 target domains from docs/SPEC-linkedin-email-collector.md
+    assert s.email_domains == [
+        "cognizant.com", "capgemini.com", "ltm.com", "hexaware.com",
+        "infosys.com", "tcs.com", "wipro.com", "epam.com", "kforce.com",
+        "persistent.com", "xoriant.com",
+    ]
+    assert s.email_max_scrolls == 6
+    assert s.email_date_facet == "past-month"

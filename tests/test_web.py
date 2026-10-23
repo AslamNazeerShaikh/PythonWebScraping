@@ -660,7 +660,7 @@ def test_db_explorer_tables_and_rows(fresh_db):
 
     upsert_jobs([make_job("11111111")])
     tables = {t["name"]: t for t in list_tables()}
-    assert set(tables) == {"jobs", "scrape_runs"}
+    assert set(tables) == {"jobs", "scrape_runs", "contact_emails"}
     assert "job_id" in tables["jobs"]["columns"] and tables["jobs"]["rows"] == 1
     cols, rows, total = table_rows("jobs", page=1, page_size=10)
     assert total == 1 and rows[0]["job_id"] == "11111111" and "title" in cols
@@ -676,7 +676,7 @@ def test_db_explorer_tables_and_rows(fresh_db):
 def test_ops_db_and_log_endpoints(web_env):
     client, orch = web_env
     tables = client.get("/api/db/tables").json()
-    assert {t["name"] for t in tables} == {"jobs", "scrape_runs"}
+    assert {t["name"] for t in tables} == {"jobs", "scrape_runs", "contact_emails"}
     page = client.get("/api/db/tables/jobs", params={"page_size": 1}).json()
     assert page["total"] == 2 and len(page["data"]) == 1
     assert client.get("/api/db/tables/nope").status_code == 404

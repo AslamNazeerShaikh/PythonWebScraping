@@ -75,6 +75,25 @@ class Settings:
     max_jobs_total: int = _get_int("MAX_JOBS_TOTAL", 60)
     enrich_details: bool = _get_bool("ENRICH_DETAILS", True)
 
+    # -- LinkedIn email collector (docs/SPEC-linkedin-email-collector.md) ----
+    email_domains: list[str] = field(
+        default_factory=lambda: [
+            s.strip().lower()
+            for s in _get(
+                "EMAIL_DOMAINS",
+                "cognizant.com,capgemini.com,ltm.com,hexaware.com,"
+                "infosys.com,tcs.com,wipro.com,epam.com,kforce.com,"
+                "persistent.com,xoriant.com",
+            ).split(",")
+            if s.strip()
+        ]
+    )
+    #: Scrolls per domain in the (infinite) content-search feed.
+    email_max_scrolls: int = _get_int("EMAIL_MAX_SCROLLS", 6)
+    #: LinkedIn date facet — only past-24h/past-week/past-month are valid;
+    #: unknown values are silently ignored by LinkedIn (validated at URL build).
+    email_date_facet: str = _get("EMAIL_DATE_FACET", "past-month")
+
     # -- Browser engine (Chrome-only stack) --------------------------------
     browser: str = _get("BROWSER", "chromium")
     headless: bool = _get_bool("HEADLESS", False)

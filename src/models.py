@@ -16,6 +16,7 @@ Converters (:meth:`JobRow.from_job` / :meth:`JobRow.to_job`) bridge them.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
@@ -157,3 +158,114 @@ class ScrapeRun(Base):
     pages: Mapped[int] = mapped_column(default=0)
     found: Mapped[int] = mapped_column(default=0)
     new_jobs: Mapped[int] = mapped_column(default=0)
+
+
+# ---------------------------------------------------------------------------
+# LinkedIn email collector (see docs/SPEC-linkedin-email-collector.md)
+# ---------------------------------------------------------------------------
+#: Email format gate — JobSpy's regex pattern, doubled-TLD tolerant.
+EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}")
+
+#: Snippet cap — evidence window around the email, not the whole post.
+SNIPPET_CAP = 300
+
+
+class EmailContact(BaseModel):
+    """One validated email harvested from a LinkedIn post body.
+
+    Attributes:
+        email: Lowercased, format-validated address (primary key downstream).
+        domain: Target domain whose search surfaced the post (e.g.
+            ``"cognizant.com"`` for keyword ``"@cognizant.com"``). Empty
+            only if caller omits it.
+        post_url / author / posted: Best-effort post evidence — LinkedIn's
+            content search renders no permalink anchor, so ``post_url`` may
+            stay empty while the email still stands.
+        snippet: ~200-char window around the email (whitespace-squeezed,
+            capped at :data:`SNIPPET_CAP`).
+        keyword: Search keyword that found the post.
+        first_seen / last_seen: Set by the DB layer on insert/re-sighting.
+    """
+
+    email: str
+    domain: str = ""
+    post_url: str = ""
+    author: str = ""
+    posted: str = ""
+    snippet: str = ""
+    keyword: str = ""
+    first_seen: datetime | None = None
+    last_seen: datetime | None = None
+
+    @field_validator("email")
+    @classmethod
+    def _valid_email(cls, v: str) -> str:
+        """Trim + lowercase the address; reject anything unmailable."""
+        v = (v or "").strip().lower()
+        if not EMAIL_RE.fullmatch(v):
+            raise ValueError(f"invalid email address: {v!r}")
+        return v
+
+    @field_validator("post_url")
+    @classmethod
+    def _strip_url(cls, v: str) -> str:
+        """Trim whitespace; keep the URL as-is (LinkedIn adds params itself)."""
+        return (v or "").strip()
+
+    @field_validator("snippet", "author", "posted", "keyword", "domain")
+    @classmethod
+    def _squeeze(cls, v: str) -> str:
+        """Collapse whitespace; cap snippet so Excel rows stay readable."""
+        v = " ".join((v or "").split())
+        return v[:SNIPPET_CAP]
+
+
+class EmailRow(Base):
+    """``contact_emails`` table: one row per unique harvested address.
+
+    ``email`` is the primary key — re-sightings (other posts/domains
+    repeating the same address) bump ``last_seen`` and backfill empty
+    evidence fields instead of duplicating rows.
+    """
+
+    __tablename__ = "contact_emails"
+
+    email: Mapped[str] = mapped_column(String(320), primary_key=True)
+    domain: Mapped[str] = mapped_column(String(255), default="")
+    post_url: Mapped[str] = mapped_column(String(1000), default="")
+    author: Mapped[str] = mapped_column(String(300), default="")
+    posted: Mapped[str] = mapped_column(String(128), default="")
+    snippet: Mapped[str] = mapped_column(Text, default="")
+    keyword: Mapped[str] = mapped_column(String(255), default="")
+    first_seen: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    last_seen: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
+
+    @classmethod
+    def from_contact(cls, contact: EmailContact) -> "EmailRow":
+        """Build a new ORM row from a validated :class:`EmailContact`."""
+        return cls(
+            email=contact.email,
+            domain=contact.domain,
+            post_url=contact.post_url,
+            author=contact.author,
+            posted=contact.posted,
+            snippet=contact.snippet,
+            keyword=contact.keyword,
+        )
+
+    def to_contact(self) -> EmailContact:
+        """Convert a DB row back into a validated :class:`EmailContact`."""
+        return EmailContact(
+            email=self.email,
+            domain=self.domain,
+            post_url=self.post_url,
+            author=self.author,
+            posted=self.posted,
+            snippet=self.snippet,
+            keyword=self.keyword,
+            first_seen=self.first_seen,
+            last_seen=self.last_seen,
+        )
+
