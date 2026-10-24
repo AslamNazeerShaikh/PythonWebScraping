@@ -152,6 +152,11 @@ class FakePage:
         self.evals: list[str] = []
         #: Card batches served per LinkedIn content-extract evaluate call.
         self.cards_queue: list[list[dict]] = []
+        #: URL to switch to after each successful goto (None = leave url
+        #: unchanged), mirroring ``goto_plan`` — lets tests model where a
+        #: navigation "lands" (e.g. a signed-in redirect, or a bounce back
+        #: to the login wall).
+        self.goto_set_url: list[str | None] = []
         #: Current URL (search-bar submit returns this as the landed URL).
         self.url = "https://www.naukri.com/"
 
@@ -162,6 +167,10 @@ class FakePage:
             exc = self.goto_plan.pop(0)
             if exc is not None:
                 raise exc
+        if self.goto_set_url:
+            landed = self.goto_set_url.pop(0)
+            if landed is not None:
+                self.url = landed          # navigation "lands" here
         return {"ok": True}
 
     # -- waiting / sensing -----------------------------------------------

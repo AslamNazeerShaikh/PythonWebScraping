@@ -192,6 +192,16 @@ def _check_bot_wall(page: Page) -> bool:
 #: unauthenticated search lands on ``/uas/login?session_redirect=…``).
 LOGIN_WALL_RE = re.compile(r"/uas/login|authwall|checkpoint", re.I)
 
+#: Passive poll cadence (s) while waiting for the human to finish signing in.
+LOGIN_POLL_S = 2.0
+
+#: Max passive wait (s) for sign-in before giving up with guidance. Generous
+#: on purpose: it covers typing credentials + 2FA/OTP. It is a passive URL
+#: poll — it never navigates or reloads the page, so it cannot interrupt the
+#: human the way a re-``goto`` did (that reload was the "page refreshes at
+#: login" bug).
+LOGIN_GRACE_S = 300.0
+
 
 def _on_login_wall(page: Page) -> bool:
     """True when the page landed on LinkedIn's sign-in redirect.
@@ -217,6 +227,41 @@ def _prompt_manual_login() -> bool:
     except EOFError:
         return False
     human_pause(2, 4)
+    return True
+
+
+def _wait_for_login(page: Page,
+                    grace_s: float | None = None,
+                    poll_s: float | None = None) -> bool:
+    """Passively wait until the human has finished signing in.
+
+    Polls ``page.url`` until the sign-in wall clears. It NEVER navigates or
+    reloads — the human may need a while to type credentials and clear 2FA,
+    and a re-``goto`` would reload the login page and discard what they typed
+    (the reported "page refreshes at login" bug).
+
+    Args:
+        page: The page showing the sign-in wall.
+        grace_s: Max wait in seconds; defaults to :data:`LOGIN_GRACE_S`.
+        poll_s: Poll cadence in seconds; defaults to :data:`LOGIN_POLL_S`.
+
+    Returns:
+        True once the URL is off the login wall (signed in); False if still
+        on the wall after ``grace_s`` — the caller then stops with guidance
+        rather than reloading the page.
+    """
+    if grace_s is None:
+        grace_s = LOGIN_GRACE_S
+    if poll_s is None:
+        poll_s = LOGIN_POLL_S
+    waited = 0.0
+    while _on_login_wall(page):
+        if waited >= grace_s:
+            return False
+        # Passive wait — Playwright sleeps the Node worker; the browser window
+        # stays live for the human. It does NOT reload or re-navigate.
+        page.wait_for_timeout(int(poll_s * 1000))
+        waited += poll_s
     return True
 
 
@@ -257,16 +302,25 @@ def run_collect(context: BrowserContext,
         _safe_goto(page, url)
         page.wait_for_timeout(SETTLE_MS)      # SDUI hydration settle
         if _on_login_wall(page):
-            # Signed out: one manual-login attempt, then re-goto once.
+            # Signed out: hand the window to the human and WAIT. Do NOT
+            # re-navigate here — a reload would interrupt sign-in and discard
+            # whatever they have typed (the "page refreshes at login" bug).
             if not _prompt_manual_login():
                 log.warning("Signed out and no TTY — stopping. Run headful "
                             "once, log in, and rerun (session persists).")
                 break
+            if not _wait_for_login(page):
+                log.warning("Still on the sign-in page %.0fs after the prompt "
+                            "— NOT reloading it (that would interrupt your "
+                            "login). Finish signing in in the open window, "
+                            "then rerun; the session persists.", LOGIN_GRACE_S)
+                break
+            # Signed in → one clean navigation to the target search page.
             _safe_goto(page, url)
             page.wait_for_timeout(SETTLE_MS)
-            if _on_login_wall(page):
-                log.warning("Still on the sign-in wall after the manual "
-                            "attempt — stopping the run.")
+            if _on_login_wall(page):       # bounced back to the wall anyway
+                log.warning("Navigation landed back on the sign-in page — "
+                            "stopping the run.")
                 break
         if _check_bot_wall(page):
             log.warning("Bot-wall on %r — stopping the run. Solve any check "

@@ -32,6 +32,6 @@
   - Files: `docs/SPEC-linkedin-email-collector.md`, `docs/LINKEDIN_RESEARCH.md`, `README.md`, `.env.example`, `docs/TESTING.md`
 - [ ] Task 8: Gates + live run (gates done; live run pending one-time login)
   - Acceptance: `python3 -m pytest` 100 % branch coverage; `graphify update .`; live `collect-emails` on logged-in profile produces `output/linkedin_emails_*.xlsx`.
-  - Verify: pytest 242 passed, 100% branch coverage; graphify updated. LIVE RUN DEFERRED (user decision 2026-10-23): the persistent profile has no LinkedIn session; authwall detected + manual-login prompt shipped (`277be18`). First live run: `python -m src.main collect-emails` (headed) → log in at the ENTER prompt once → reruns reuse the session. If 0 emails while signed in, run `scripts/probe_content_search.py "@ltm.com"` to re-census selectors.
+  - Verify: pytest 242 passed, 100% branch coverage; graphify updated. LIVE RUN DEFERRED (user decision 2026-10-23): the persistent profile has no LinkedIn session; authwall detected + manual-login prompt shipped (`277be18`). First live run: `python -m src.main collect-emails` (headed) → log in in the opened window (the collector now WAITS passively for sign-in — it no longer reloads the login page) → reruns reuse the session. If 0 emails while signed in, run `scripts/probe_content_search.py "@ltm.com"` to re-census selectors.
   - Files: `graphify-out/`, `output/`
 - [ ] Checkpoint: Complete — spec success criteria met; commit + push

@@ -10,6 +10,7 @@ from src.linkedin_email_scraper import (
     CONTENT_EXTRACT_JS,
     _contacts_from_cards,
     _safe_goto,
+    _wait_for_login,
     build_content_search_url,
     extract_emails,
 )
@@ -219,14 +220,83 @@ def test_run_collect_logs_in_manually_then_proceeds(monkeypatch, fresh_db):
     assert len(page.goto_urls) == 2        # initial + post-login re-goto
 
 
-def test_run_collect_still_signed_out_after_prompt_stops(monkeypatch, fresh_db):
+def test_run_collect_gives_up_when_login_never_completes(monkeypatch, fresh_db):
+    """ENTER pressed but the wall never clears → STOP; never re-navigate.
+
+    Regression for "page refreshes at login": the fix must NOT reload the
+    sign-in page. After the prompt it waits passively for the URL to leave
+    the wall; on timeout it bails, so the login page is left untouched for
+    the human to finish.
+    """
     from src.linkedin_email_scraper import run_collect
 
     page = FakePage()
-    page.url = "https://www.linkedin.com/authwall"
+    page.url = ("https://www.linkedin.com/uas/login?session_redirect=%2Fsearch"
+                "&skipRedirect=true")
     ctx = FakeContext(page)
+    monkeypatch.setattr("builtins.input", lambda *a, **k: "")  # pressed ENTER
+    monkeypatch.setattr("src.linkedin_email_scraper.LOGIN_GRACE_S", 0.06)
+    monkeypatch.setattr("src.linkedin_email_scraper.LOGIN_POLL_S", 0.03)
 
-    monkeypatch.setattr("builtins.input", lambda *a, **k: "")  # lied: no login
     out = run_collect(ctx, domains=["tcs.com"], max_scrolls=1)
     assert out == []
-    assert len(page.goto_urls) == 2        # one retry, then give up
+    assert len(page.goto_urls) == 1        # initial only — NO post-login reload
+
+
+def test_run_collect_stops_if_bounced_back_to_wall_after_login(monkeypatch, fresh_db):
+    """Login clears the wall, then the target navigation lands back on it."""
+    from src.linkedin_email_scraper import run_collect
+
+    wall = ("https://www.linkedin.com/uas/login?session_redirect=%2Fsearch"
+            "&skipRedirect=true")
+    page = FakePage()
+    page.url = wall
+    # initial goto stays on the wall; post-login goto bounces back to it
+    page.goto_set_url = [None, wall]
+    ctx = FakeContext(page)
+
+    def _signed_in(*a, **k):               # human completes login before ENTER
+        page.url = "https://www.linkedin.com/feed/"
+        return ""
+
+    monkeypatch.setattr("builtins.input", _signed_in)
+    out = run_collect(ctx, domains=["ltm.com"], max_scrolls=1)
+    assert out == []
+    assert len(page.goto_urls) == 2        # initial + post-login, then stop
+
+
+# -- passive login wait (never reloads the sign-in page) ---------------------
+def test_wait_for_login_true_when_already_signed_in():
+    from src.linkedin_email_scraper import _wait_for_login
+
+    page = FakePage()
+    page.url = "https://www.linkedin.com/feed/"
+    assert _wait_for_login(page, grace_s=5, poll_s=1) is True
+    assert page.timeouts == []             # signed in → no waiting at all
+
+
+def test_wait_for_login_waits_until_wall_clears():
+    from src.linkedin_email_scraper import _wait_for_login
+
+    class _FlipPage:
+        """Wall that clears after the first passive poll (human logs in)."""
+        url = "https://www.linkedin.com/uas/login?x=1"
+
+        def __init__(self):
+            self.waits = 0
+
+        def wait_for_timeout(self, ms):
+            self.waits += 1
+            self.url = "https://www.linkedin.com/feed/"   # login completed
+
+    fp = _FlipPage()
+    assert _wait_for_login(fp, grace_s=30, poll_s=2) is True
+    assert fp.waits == 1                   # waited once, then proceeded
+
+
+def test_wait_for_login_gives_up_after_grace():
+    from src.linkedin_email_scraper import _wait_for_login
+
+    page = FakePage()
+    page.url = "https://www.linkedin.com/uas/login?x=1"   # never clears
+    assert _wait_for_login(page, grace_s=0.06, poll_s=0.03) is False

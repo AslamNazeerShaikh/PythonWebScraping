@@ -236,6 +236,17 @@ the one-time sign-in (`scripts/probe_content_search.py --login`, then
 not yet live-confirmed — the probe reports a selector census if the first
 signed-in run still finds nothing.
 
+**Login-wait fix (2026-10-24):** the sequence "prompt ENTER → immediately
+re-`goto` the search" was reloading the sign-in page out from under the user
+(the reported "page refreshes too early at login"). Replaced with
+`_wait_for_login()` — a **passive `page.url` poll that never navigates**, giving
+the human unlimited time to type credentials + clear 2FA (`LOGIN_GRACE_S`,
+default 300 s), followed by **one** clean navigation to the target search once
+the wall has cleared. If the wall never clears it stops with guidance rather
+than reloading the page (regression test pins `goto` at 1 — no reload).
+`pytest`: 246 passed, 100 % branch coverage. The persistent profile means the
+one-time login then persists across domains and reruns.
+
 ## Open Questions
 
 1. **Scroll depth default** — proposal: `--max-scrolls 6` per domain
