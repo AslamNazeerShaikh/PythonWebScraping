@@ -26,6 +26,8 @@ https://github.com/addyosmani/agent-skills/blob/main/docs/opencode-setup.md.
   them. Project gates are non-negotiable: `pytest` must stay at
   100% coverage (`--cov-fail-under=100`), SQLite stays the source of truth,
   no CAPTCHA solving, no secrets in commits.
+- Commit messages follow Conventional Commits v1.0.0
+  (see `docs/CONVENTIONAL_COMMITS.md`): `<type>[scope]: <description>`.
 - Framework calls must be source-driven: verify against official docs and
   cite URLs (spec in `docs/WEB_API.md` lists the canonical sources).
 
