@@ -184,6 +184,7 @@ def test_collect_emails_upserts_exports_and_reports(monkeypatch, fresh_db,
         "--headless"])
     assert res.exit_code == 0
     assert captured["domains"] == ["ltm.com"]
+    assert captured["targets"] == {"ltm.com": main.SETTINGS.email_default_target}
     assert captured["max_scrolls"] == 2
     assert callable(captured["on_batch"])
     assert fresh_db.count_emails() == 1
@@ -197,7 +198,11 @@ def test_collect_emails_defaults_to_settings_domains(monkeypatch, fresh_db):
     captured = _wire_email_pipeline(monkeypatch, [])
     res = runner.invoke(main.app, ["collect-emails"])
     assert res.exit_code == 0
-    assert captured["domains"] is None            # SETTINGS.email_domains
+    assert captured["domains"] == main.SETTINGS.email_domains
+    assert captured["targets"] == {
+        d: main.SETTINGS.email_default_target
+        for d in main.SETTINGS.email_domains
+    }
     assert captured["max_scrolls"] is None        # SETTINGS.email_max_scrolls
 
 
@@ -241,3 +246,77 @@ def test_export_emails_command_rejects_bad_fmt(fresh_db):
     res = runner.invoke(main.app, ["export-emails", "--format", "pdf"])
     assert res.exit_code == 2
     assert "--format must be csv or excel" in res.output
+
+
+def test_collect_emails_reads_csv_targets_in_order(monkeypatch, fresh_db,
+                                                   tmp_path):
+    csv_path = tmp_path / "targets.csv"
+    csv_path.write_text("@cognizant.com:5,@capgemini.com:2\n", encoding="utf-8")
+    captured = _wire_email_pipeline(monkeypatch, [])
+    res = runner.invoke(main.app, ["collect-emails",
+                                   "--input-csv", str(csv_path)])
+    assert res.exit_code == 0
+    assert captured["domains"] == ["cognizant.com", "capgemini.com"]
+    assert captured["targets"] == {"cognizant.com": 5,
+                                   "capgemini.com": 2}
+    assert "cognizant.com:5" in res.output
+    assert "capgemini.com:2" in res.output
+
+
+def test_collect_emails_csv_missing_file_exits_2(monkeypatch, fresh_db,
+                                                 tmp_path):
+    res = runner.invoke(main.app, [
+        "collect-emails", "--input-csv", str(tmp_path / "missing.csv")])
+    assert res.exit_code == 2
+    assert "Invalid --input-csv" in res.output
+
+
+def test_collect_emails_csv_without_domains_exits_2(monkeypatch, fresh_db,
+                                                    tmp_path):
+    csv_path = tmp_path / "empty.csv"
+    csv_path.write_text("domain,target\n", encoding="utf-8")
+    res = runner.invoke(main.app, ["collect-emails",
+                                   "--input-csv", str(csv_path)])
+    assert res.exit_code == 2
+    assert "no company domains" in res.output
+
+
+def test_collect_emails_csv_end_to_end_writes_clean_deduped_workbook(
+        monkeypatch, fresh_db, tmp_path):
+    """CSV targets → checkpoint hook → domain-pure, one-row-per-email Excel."""
+    import pandas as pd
+    from src.models import EmailContact
+
+    csv_path = tmp_path / "targets.csv"
+    csv_path.write_text("@tcs.com:2,@wipro.com:1\n", encoding="utf-8")
+    contacts = [
+        EmailContact(email="a@tcs.com", domain="tcs.com", posted="2d",
+                     post_id="new"),
+        EmailContact(email="a@tcs.com", domain="tcs.com", posted="1mo",
+                     post_id="old"),
+        EmailContact(email="b@tcs.com", domain="tcs.com", posted="5d",
+                     post_id="b"),
+        EmailContact(email="c@wipro.com", domain="wipro.com", posted="1w",
+                     post_id="c"),
+        EmailContact(email="outsider@gmail.com", domain="tcs.com",
+                     posted="1h", post_id="junk"),
+    ]
+
+    def _run(_ctx, **kw):
+        kw["on_batch"](contacts)
+        return contacts
+
+    monkeypatch.setattr(main, "sync_playwright", lambda: _FakePW(object()))
+    monkeypatch.setattr(main, "launch_context", lambda p: FakeContext())
+    monkeypatch.setattr(main, "run_collect", _run)
+    monkeypatch.setattr(main.SETTINGS, "output_dir", tmp_path)
+    res = runner.invoke(main.app, ["collect-emails",
+                                   "--input-csv", str(csv_path)])
+    assert res.exit_code == 0
+    written = sorted(tmp_path.glob("linkedin_emails_*.xlsx"))
+    assert any(p.name == "linkedin_emails_partial.xlsx" for p in written)
+    final = [p for p in written if p.name != "linkedin_emails_partial.xlsx"][0]
+    df = pd.read_excel(final)
+    assert list(df["email"]) == ["a@tcs.com", "b@tcs.com", "c@wipro.com"]
+    assert df[df.email == "a@tcs.com"].iloc[0]["post_id"] == "new"
+    assert "outsider@gmail.com" not in set(df["email"])

@@ -260,33 +260,66 @@ one-time login then persists across domains and reruns.
 2. **"Show more" expansion**: `_expand_show_more` clicks `…see more` /
    `Show more` affordances before extraction so emails hidden behind
    truncated bodies are revealed (best-effort, never raises).
-3. **Relevance gate**: posts surfaced by LinkedIn that carry neither the
-   `@<domain>` keyword nor an email on the target domain are dropped
-   (`_contacts_from_cards`), filtering the "weird unrelated posts".
-4. **Both search surfaces, one search**: each domain is typed once into the
-   global search box. The collector first scrolls the blended all-results
-   Posts cluster (URL 1), then clicks the native **Posts** tab (URL 2
-   `origin=SWITCH_SEARCH_VERTICAL`), selects **Latest** + **Past month** via
-   the real radio controls and **Show results**, and scrolls again. No
-   per-domain URL navigation, no relaunch. This is the fix for the
-   "unusual search traffic" wall triggered by repeated URL hits.
+3. **Domain-only filtering**: only addresses whose own domain equals the
+   searched domain are stored. A post containing `jobs@cognizant.com` plus
+   `personal@gmail.com` contributes the Cognizant address only. Multiple
+   matching addresses in one post become separate rows.
+4. **URL-2-only, one search per domain**: each domain is typed once into the
+   global search box, switched to the native **Posts** tab
+   (`origin=SWITCH_SEARCH_VERTICAL`), then **Latest** + **Past month** are
+   applied via the real radio controls and **Show results**. The blended
+   all-results cluster (URL 1) is no longer scraped — the sorted content
+   feed is the single source of truth and saves search requests.
 5. **Verified SDUI selectors (live 2026-10-25)**: posts are
    `[role="listitem"]` units inside `[data-testid="lazy-column"]`, each with
    one `[data-testid="expandable-text-box"]` body. The previous direct-child
    logic treated a *chunk* of posts as one post and lost most emails.
-6. **Deep, human-like scrolling**: mouse-wheel bursts over the feed, with
-   the true scroll container (`<main>`) nudged to the lazy sentinel when a
-   batch stalls. Default target is 100 posts per view (`EMAIL_TARGET_POSTS`),
-   capped by `EMAIL_MAX_SCROLLS` rounds; three no-growth rounds end a view.
-7. **Crash-safe checkpoints**: `run_collect(..., on_batch=…)` hands each new
+6. **Expand before reading**: every post's `expandable-text-button`
+   ("… more") is clicked once, then a short settle precedes extraction. The
+   button is marked so a later checkpoint cannot toggle it back closed.
+7. **Targeted, human-like scrolling**: mouse-wheel bursts over the feed,
+   with the true scroll container (`<main>`) nudged to the lazy sentinel when
+   a batch stalls. Scrolling stops as soon as the domain's unique-email
+   target is met; `EMAIL_MAX_SCROLLS` (default 40 rounds) is only a safety
+   cap. Three no-growth rounds end a sparse feed.
+8. **Crash-safe checkpoints**: `run_collect(..., on_batch=…)` hands each new
    batch to the CLI, which upserts into SQLite and rewrites
    `output/linkedin_emails_partial.xlsx`. A broken session still leaves the
    harvested emails on disk; a final timestamped snapshot is written at the
    end.
-8. **Config additions**: `EMAIL_TARGET_POSTS` (default 100);
-   `EMAIL_MAX_SCROLLS` now means wheel rounds per view (default 40). The
-   obsolete `EMAIL_TARGET_MIN` / `EMAIL_FALLBACK_SCROLLS` all-time fallback
-   was removed — URL 2's native Past-month facet replaces it.
+9. **Config**: `EMAIL_DEFAULT_TARGET` (default 10) is used when a CSV
+   domain has no `:N`; `EMAIL_MAX_SCROLLS` is the per-domain round cap.
+
+## Input CSV + export rules (2026-10-26)
+
+`collect-emails --input-csv targets.csv` accepts any of:
+
+```csv
+@cognizant.com:5
+@capgemini.com:2
+```
+
+```csv
+domain,target
+@cognizant.com,5
+@capgemini.com,2
+```
+
+```csv
+"@cognizant.com:5,@capgemini.com:2"
+```
+
+Domains may omit `@`; targets are positive integers, defaulting to
+`EMAIL_DEFAULT_TARGET`. Rows are processed in first-seen CSV order.
+
+The workbook is derived from SQLite with these guarantees:
+
+* **No foreign domains** — a row whose email domain differs from the row's
+  searched domain is discarded at export time (legacy contamination included).
+* **One row per email** — duplicate sightings collapse to the newest post
+  (parsed from `posted`, falling back to `last_seen`), preserving that post's
+  `post_id`, author, date, URL, and snippet.
+* **Grouped and alphabetical** — output is ordered by `domain`, then `email`.
 
 ## Open Questions
 

@@ -279,3 +279,168 @@ def test_export_emails_default_path_is_timestamped(fresh_db, tmp_path,
     assert p.parent == tmp_path
     pc = export.export_emails(fmt="csv")
     assert pc.suffix == ".csv"
+
+
+# -- email export: domain purity, latest-post dedupe, sorting ----------------
+def _seed_mixed_emails():
+    from src.db import upsert_emails
+    from src.models import EmailContact
+
+    contacts = [
+        EmailContact(email="zeta@tcs.com", domain="tcs.com", posted="2d",
+                     post_id="tcs-new", author="New"),
+        EmailContact(email="zeta@tcs.com", domain="tcs.com", posted="1mo",
+                     post_id="tcs-old", author="Old"),
+        EmailContact(email="zeta@tcs.com", domain="tcs.com", posted="5d",
+                     post_id="tcs-mid", author="Mid"),
+        EmailContact(email="alpha@tcs.com", domain="tcs.com", posted="3h",
+                     post_id="tcs-alpha"),
+        EmailContact(email="beta@wipro.com", domain="wipro.com", posted="1w",
+                     post_id="wipro-beta"),
+        # Contamination: searched tcs.com but the post also had a Gmail.
+        EmailContact(email="outsider@gmail.com", domain="tcs.com",
+                     posted="1h", post_id="junk"),
+    ]
+    upsert_emails(contacts)
+
+
+def test_email_export_drops_other_domains_and_keeps_latest_post(fresh_db):
+    _seed_mixed_emails()
+    df = export.load_email_frame()
+    assert list(df["email"]) == ["alpha@tcs.com", "zeta@tcs.com",
+                                 "beta@wipro.com"]
+    assert "outsider@gmail.com" not in set(df["email"])
+    assert list(df["domain"]) == ["tcs.com", "tcs.com", "wipro.com"]
+    zeta = df[df["email"] == "zeta@tcs.com"].iloc[0]
+    assert zeta["post_id"] == "tcs-new"       # 2d beats 5d and 1mo
+    assert zeta["author"] == "New"
+
+
+def test_email_export_returns_columns_when_all_rows_are_mismatched(fresh_db):
+    from src.db import upsert_emails
+    from src.models import EmailContact
+
+    upsert_emails([EmailContact(email="x@gmail.com", domain="tcs.com",
+                                posted="1h", post_id="bad")])
+    df = export.load_email_frame()
+    assert df.empty
+    assert list(df.columns) == export.EMAIL_COLUMNS
+
+
+def test_email_export_domain_falls_back_to_keyword(fresh_db):
+    from src.db import upsert_emails
+    from src.models import EmailContact
+
+    upsert_emails([EmailContact(email="a@tcs.com", domain="",
+                                keyword="@tcs.com", posted="1d",
+                                post_id="p")])
+    df = export.load_email_frame()
+    assert list(df["email"]) == ["a@tcs.com"]
+    assert list(df["domain"]) == ["tcs.com"]
+
+
+def test_email_export_ignores_rows_without_any_domain(fresh_db):
+    from src.db import upsert_emails
+    from src.models import EmailContact
+
+    upsert_emails([EmailContact(email="a@tcs.com", domain="", keyword="",
+                                posted="1d", post_id="p")])
+    assert export.load_email_frame().empty
+
+
+def test_posted_timestamp_relative_and_absolute_labels():
+    ref = pd.Timestamp("2026-10-25 12:00:00")
+    assert export._posted_timestamp("19h", ref) == ref - pd.Timedelta(hours=19)
+    assert export._posted_timestamp("2d", ref) == ref - pd.Timedelta(days=2)
+    assert export._posted_timestamp("1w", ref) == ref - pd.Timedelta(days=7)
+    assert export._posted_timestamp("3mo", ref) == ref - pd.Timedelta(days=90)
+    assert export._posted_timestamp("1yr", ref) == ref - pd.Timedelta(days=365)
+    assert export._posted_timestamp("45m", ref) == ref - pd.Timedelta(minutes=45)
+    assert export._posted_timestamp("30s", ref) == ref - pd.Timedelta(seconds=30)
+    assert export._posted_timestamp("just now", ref) == ref
+    assert export._posted_timestamp("Oct 13", ref) == pd.Timestamp("2026-10-13")
+    assert export._posted_timestamp("Dec 31", pd.Timestamp("2026-01-05")) == \
+        pd.Timestamp("2025-12-31")
+    assert export._posted_timestamp("Oct 13, 2025", ref) == \
+        pd.Timestamp("2025-10-13")
+    assert export._posted_timestamp("2026-10-01", ref) == \
+        pd.Timestamp("2026-10-01")
+
+
+def test_posted_timestamp_fallbacks_never_raise():
+    ref = pd.Timestamp("2026-10-25 12:00:00")
+    assert pd.isna(export._posted_timestamp("", ref))
+    assert pd.isna(export._posted_timestamp("yesterday-ish", ref))
+    assert pd.isna(export._posted_timestamp("Feb 30", ref))
+    assert pd.isna(export._posted_timestamp("Feb 29",
+                                            pd.Timestamp("2026-01-01")))
+    assert export._posted_timestamp("Dec 31", pd.Timestamp("2025-01-01")) == \
+        pd.Timestamp("2024-12-31")
+
+
+def test_posted_timestamp_handles_missing_reference_and_timezone():
+    now = export._posted_timestamp("2d", None)
+    assert not pd.isna(now)
+    aware = pd.Timestamp("2026-10-25T12:00:00+00:00")
+    assert export._posted_timestamp("1d", aware) == \
+        pd.Timestamp("2026-10-24 12:00:00")
+    assert export._posted_timestamp("2026-10-01T00:00:00+00:00", aware) == \
+        pd.Timestamp("2026-10-01 00:00:00")
+
+
+def test_email_domain_and_naive_timestamp_helpers():
+    assert export._email_domain("A@TCS.com") == "tcs.com"
+    assert export._email_domain("malformed") == "malformed"
+    assert export._email_domain("") == ""
+    assert export._naive_timestamp(
+        pd.Timestamp("2026-10-25T12:00:00+05:30")) == \
+        pd.Timestamp("2026-10-25 12:00:00")
+
+
+def test_posted_timestamp_invalid_month_and_leap_year_fallback():
+    ref = pd.Timestamp("2026-10-25 12:00:00")
+    assert pd.isna(export._posted_timestamp("Foo 13", ref))
+    assert pd.isna(export._posted_timestamp("Feb 29, 2024",
+                                            pd.Timestamp("2023-01-01")))
+
+
+def test_latest_email_frame_empty_input_returns_empty():
+    empty = pd.DataFrame(columns=export.EMAIL_COLUMNS)
+    out = export._latest_email_frame(empty)
+    assert out.empty
+    assert list(out.columns) == export.EMAIL_COLUMNS
+
+
+def test_hyperlink_titles_skips_rows_without_apply_url(fresh_db, tmp_path):
+    from src.db import upsert_jobs
+    upsert_jobs([make_job("11111111"),
+                 make_job("22222222", title="Data Engineer",
+                          apply_url="")])
+    dest = export.export_jobs(fmt="excel", out_path=tmp_path / "jobs.xlsx")
+    assert dest.exists()
+
+
+def test_hyperlink_titles_directly_skips_empty_target(tmp_path):
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["title", "apply_url"])
+    ws.append(["No link", ""])
+    ws.append(["Has link", "https://example.com/job"])
+    path = tmp_path / "direct.xlsx"
+    wb.save(path)
+    export._hyperlink_titles(path)
+    assert path.exists()
+
+
+def test_posted_timestamp_rejects_non_iso_numbers_and_invalid_iso():
+    ref = pd.Timestamp("2026-10-25 12:00:00")
+    assert pd.isna(export._posted_timestamp("5", ref))
+    assert pd.isna(export._posted_timestamp("2026-13-40", ref))
+
+
+def test_email_export_limit_applies_after_dedupe(fresh_db):
+    _seed_mixed_emails()
+    df = export.load_email_frame(limit=2)
+    assert list(df["email"]) == ["alpha@tcs.com", "zeta@tcs.com"]

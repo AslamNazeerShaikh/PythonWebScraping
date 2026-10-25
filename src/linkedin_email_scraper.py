@@ -1,20 +1,21 @@
 """LinkedIn content-search email collector (spec: docs/SPEC-linkedin-email-collector.md).
 
-Flow per domain (ONE browser, ONE search, no per-domain navigation):
+Flow per domain (ONE browser, ONE search, no per-domain URL navigation):
 
-1. Type ``"@<domain>"`` into LinkedIn's global search box and press Enter →
-   the blended "all results" page (URL 1).
-2. Scroll that page's Posts section and harvest emails from the post bodies.
-3. Click the native **Posts** filter → the content-search page (URL 2).
-4. Apply the native **Latest** sort and **Past month** date facets through
-   their real dropdowns (radio + "Show results"), then scroll that feed.
-5. Move to the next domain by clearing/retyping the SAME search box.
+1. Type ``"@<domain>"`` into LinkedIn's global search box and press Enter.
+2. Click the native **Posts** tab → content search (URL 2).
+3. Apply **Latest** sort + **Past month** via the real radio controls and
+   **Show results**.
+4. Expand every post's "… more" button, then scroll the newest-first feed
+   only until the domain's unique-email target is met (or the feed ends).
+5. Move to the next CSV domain by clearing/retyping the SAME search box.
 
 Why this shape: repeated direct URL hits (and per-domain browser relaunches)
-are what triggered LinkedIn's "unusual search traffic" wall. In-page typing,
-clicking, and mouse-wheel scrolling behave like a human session, and one
-search per domain minimises query traffic.
+triggered LinkedIn's "unusual search traffic" wall. In-page typing, clicking,
+and mouse-wheel scrolling behave like a human session; the sorted content
+feed is the single source of truth so URL 1 is never scraped.
 
+Only emails whose own domain equals the searched domain survive extraction.
 The extractor targets LinkedIn's current SDUI DOM (verified live 2026-10-25):
 each post is a ``[role="listitem"]`` inside ``[data-testid="lazy-column"]``,
 with exactly one ``[data-testid="expandable-text-box"]`` holding the body.
@@ -102,7 +103,9 @@ SCROLL_WAIT_MS = 2500
 STALL_WAIT_MS = 5000
 MAX_STALLS = 3
 #: Extract + persist a checkpoint every N scroll rounds (partial-save safety).
-CHECKPOINT_EVERY = 6
+CHECKPOINT_EVERY = 2
+#: Settle time after clicking "more" so the expanded body is readable (ms).
+EXPAND_WAIT_MS = 1200
 
 #: In-page extractor: one dict per POST (not per DOM chunk/comment).
 #: Marker ``/*content-email-cards*/`` lets tests dispatch on it (FakePage).
@@ -318,20 +321,23 @@ def _contacts_from_cards(cards: list[dict], domain: str,
                          keyword: str) -> list[EmailContact]:
     """Turn raw card dicts (untrusted) into validated contacts.
 
-    One contact per email; cards without emails yield nothing. The snippet
-    keeps the evidence window, :class:`EmailContact` squeezes/caps it.
+    Only emails on the **searched domain** are kept. A post may contain
+    ``@cognizant.com`` alongside Gmail addresses; the outsiders must never
+    reach the workbook. Multiple matching addresses in one post become
+    separate contacts (one row each downstream).
+
+    Args:
+        cards: Raw ``{text, post_id, author, posted, url}`` cards.
+        domain: Target company domain, e.g. ``"cognizant.com"``.
+        keyword: Search keyword, e.g. ``"@cognizant.com"`` (evidence only).
     """
     out: list[EmailContact] = []
+    target = domain.strip().lower().lstrip("@")
     for card in cards:
         text = str(card.get("text") or "")
-        emails = extract_emails(text)
+        emails = [e for e in extract_emails(text)
+                  if e.rsplit("@", 1)[-1] == target]
         if not emails:
-            continue
-        # Relevance gate: drop posts LinkedIn surfaced that do not actually
-        # carry the searched keyword nor an email on the target domain (the
-        # "weird unrelated posts" the content search sometimes returns).
-        if keyword and keyword.lower() not in text.lower() and \
-                not any(e.rsplit("@", 1)[-1] == domain.lower() for e in emails):
             continue
         # "Show more" expansion may have appended text; re-extract defensively.
         post_id = str(card.get("post_id") or card.get("urn") or "")
@@ -348,7 +354,7 @@ def _contacts_from_cards(cards: list[dict], domain: str,
             out.append(EmailContact(
                 email=email,
                 post_id=post_id,
-                domain=domain,
+                domain=target,
                 keyword=keyword,
                 author=author,
                 posted=posted,
@@ -391,32 +397,48 @@ LOGIN_POLL_S = 2.0
 LOGIN_GRACE_S = 300.0
 
 
-#: JS that clicks any "...see more / Show more" affordance so truncated post
-#: bodies (and the emails hiding inside them) are expanded before extraction.
+#: JS that clicks every post's "… more" button so the full body (and any
+#: emails past the truncation point) is readable. Each button is clicked at
+#: most once per DOM node — LinkedIn toggles to "see less", and re-clicking
+#: would collapse the text we just revealed.
 _EXPAND_SHOW_MORE_JS = r"""
 () => {
   /*expand-more*/
-  document.querySelectorAll('[data-testid="expandable-text-button"], button').forEach((el) => {
+  let clicked = 0;
+  const buttons = document.querySelectorAll(
+    '[data-testid="expandable-text-button"], [role="listitem"] button');
+  buttons.forEach((el) => {
+    if (el.getAttribute('data-scraper-expanded') === '1') return;
     const t = (el.innerText || el.textContent || '').trim().toLowerCase();
     if (!t || t.includes('less')) return;
     const byTestId = el.getAttribute('data-testid') === 'expandable-text-button';
     const byLabel = t === 'more' || t.endsWith(' more') ||
                     t.includes('see more') || t.includes('show more');
-    if (byTestId || byLabel) {
-      try { el.click(); } catch (e) { /* ignore */ }
-    }
+    if (!byTestId && !byLabel) return;
+    try {
+      el.click();
+      el.setAttribute('data-scraper-expanded', '1');
+      clicked += 1;
+    } catch (e) { /* ignore */ }
   });
-  return null;
+  return clicked;
 }
 """
 
 
-def _expand_show_more(page: Page) -> None:
-    """Best-effort expansion of truncated LinkedIn post bodies (never raises)."""
+def _expand_show_more(page: Page) -> int:
+    """Click every visible post "more" button; return how many were clicked.
+
+    Best-effort and never raises. A short settle follows the clicks so the
+    extractor reads the fully expanded body, not the truncated preview.
+    """
     try:
-        page.evaluate(_EXPAND_SHOW_MORE_JS)
+        clicked = int(page.evaluate(_EXPAND_SHOW_MORE_JS) or 0)
     except Exception:
-        pass
+        return 0
+    if clicked:
+        page.wait_for_timeout(EXPAND_WAIT_MS)
+    return clicked
 
 
 def _on_login_wall(page: Page) -> bool:
@@ -727,9 +749,10 @@ def _scroll_to_bottom(page: Page) -> bool:
 
 def _extract_fresh(page: Page, domain: str, keyword: str,
                    seen: set[tuple[str, str]],
+                   emails_seen: set[str],
                    on_batch: Callable[[list[EmailContact]], None] | None
                    ) -> list[EmailContact]:
-    """Expand, extract, and return contacts not yet seen in this run."""
+    """Expand every post, extract, and return contacts not seen in this run."""
     _expand_show_more(page)
     try:
         cards = page.evaluate(CONTENT_EXTRACT_JS) or []
@@ -737,6 +760,7 @@ def _extract_fresh(page: Page, domain: str, keyword: str,
         cards = []
     batch: list[EmailContact] = []
     for contact in _contacts_from_cards(cards, domain, keyword):
+        emails_seen.add(contact.email)
         key = (contact.email, contact.post_id)
         if key in seen:
             continue
@@ -748,18 +772,32 @@ def _extract_fresh(page: Page, domain: str, keyword: str,
 
 
 def _collect_view(page: Page, keyword: str, domain: str, rounds: int,
-                  target: int, seen: set[tuple[str, str]],
+                  target_emails: int, seen: set[tuple[str, str]],
+                  emails_seen: set[str],
                   on_batch: Callable[[list[EmailContact]], None] | None
                   ) -> list[EmailContact]:
-    """Scroll one results view and harvest posts, with periodic checkpoints.
+    """Scroll the Latest/Past-month feed until the unique-email target is met.
 
-    A "round" is a mouse-wheel burst + wait. When the wheel stops producing
-    new posts, the real ``<main>`` scroller is nudged to its end to wake the
-    lazy spinner; three consecutive no-growth rounds end the view.
+    The feed is already newest-first, so stopping as soon as ``target_emails``
+    distinct matching addresses have been seen yields the latest posts, not
+    the whole archive. ``rounds`` is a safety cap; three no-growth rounds end
+    the feed early when a domain simply doesn't have that many addresses.
     """
+    target_emails = max(1, int(target_emails))
     found: list[EmailContact] = []
     stalled = 0
+    hit_target = False
+
     for round_no in range(max(0, rounds)):
+        # Read the initial batch before spending a scroll — most small
+        # targets (5-10 emails) are satisfied by the first few posts.
+        if round_no == 0:
+            found.extend(_extract_fresh(page, domain, keyword, seen,
+                                        emails_seen, on_batch))
+            if len(emails_seen) >= target_emails:
+                hit_target = True
+                break
+
         before = _count_posts(page)
         if before == 0:
             break
@@ -774,15 +812,25 @@ def _collect_view(page: Page, keyword: str, domain: str, rounds: int,
         else:
             stalled = 0
 
-        if round_no % CHECKPOINT_EVERY == 0 or after >= target or stalled:
-            found.extend(_extract_fresh(page, domain, keyword, seen, on_batch))
-        if after >= target:
-            log.info("%s: reached the %d-post target", domain, target)
-            break
+        if round_no % CHECKPOINT_EVERY == 0 or stalled:
+            found.extend(_extract_fresh(page, domain, keyword, seen,
+                                        emails_seen, on_batch))
+            if len(emails_seen) >= target_emails:
+                hit_target = True
+                break
         if stalled >= MAX_STALLS:
             log.info("%s: no more posts after %d posts", domain, after)
             break
-    found.extend(_extract_fresh(page, domain, keyword, seen, on_batch))
+
+    if not hit_target:
+        found.extend(_extract_fresh(page, domain, keyword, seen,
+                                    emails_seen, on_batch))
+    if len(emails_seen) >= target_emails:
+        log.info("%s: reached target (%d/%d unique emails)", domain,
+                 len(emails_seen), target_emails)
+    else:
+        log.warning("%s: only %d/%d unique emails after scrolling",
+                    domain, len(emails_seen), target_emails)
     return found
 
 
@@ -790,30 +838,37 @@ def run_collect(context: BrowserContext,
                 domains: list[str] | None = None,
                 max_scrolls: int | None = None,
                 date_facet: str | None = None,
-                on_batch: Callable[[list[EmailContact]], None] | None = None
+                on_batch: Callable[[list[EmailContact]], None] | None = None,
+                targets: dict[str, int] | None = None
                 ) -> list[EmailContact]:
-    """Search LinkedIn posts per domain and return deduped contacts.
+    """Search the Latest/Past-month content feed until each target is met.
 
-    One page, one search per domain. For each domain the collector scrapes
-    the blended all-results Posts cluster (URL 1), clicks the native Posts
-    tab, applies Latest + the date facet (URL 2), and scrolls both views to
-    the configured post target or exhaustion.
+    One page, one search per domain. The flow is deliberately URL-2-only:
+    type ``"@domain"`` in the search box → click the native **Posts** tab →
+    apply **Latest** + the date facet → scroll the content feed until the
+    domain has ``targets[domain]`` distinct matching email addresses.
 
     Args:
         context: Open browser context (caller owns close()).
-        domains: Target domains; defaults to ``SETTINGS.email_domains``.
-        max_scrolls: Max scroll rounds per view (URL 1 and URL 2);
-            defaults to ``SETTINGS.email_max_scrolls``.
+        domains: Target domains; used when ``targets`` is omitted. Defaults
+            to ``SETTINGS.email_domains``.
+        max_scrolls: Max scroll rounds per domain (safety cap); defaults to
+            ``SETTINGS.email_max_scrolls``.
         date_facet: LinkedIn date facet; defaults to ``SETTINGS``.
         on_batch: Optional persistence hook called with each new batch of
-            contacts (checkpoint after each scroll block and each view), so
-            a broken session still leaves harvested emails in SQLite/Excel.
+            contacts, so a broken session still leaves partial Excel.
+        targets: Ordered ``{domain: unique_email_target}`` map. When given,
+            ``domains`` is ignored and the CSV order is preserved.
 
     Returns:
         Contacts in discovery order, one per unique (email, post).
     """
-    if domains is None:
-        domains = SETTINGS.email_domains
+    if targets is None:
+        if domains is None:
+            domains = SETTINGS.email_domains
+        targets = {d: SETTINGS.email_default_target for d in domains}
+    else:
+        domains = list(targets)
     if max_scrolls is None:
         max_scrolls = SETTINGS.email_max_scrolls
     if date_facet is None:
@@ -822,7 +877,6 @@ def run_collect(context: BrowserContext,
         raise ValueError(
             f"unsupported date facet {date_facet!r}; one of {DATE_FACETS}")
 
-    target = SETTINGS.email_target_posts
     page = context.new_page()
     contacts: dict[tuple[str, str], EmailContact] = {}
     seen: set[tuple[str, str]] = set()
@@ -831,8 +885,11 @@ def run_collect(context: BrowserContext,
         return []
 
     for domain in domains:
+        target = max(1, int(targets.get(domain,
+                                         SETTINGS.email_default_target)))
         keyword = "@" + domain
-        log.info("Searching LinkedIn posts for %r", keyword)
+        log.info("Searching LinkedIn posts for %r (target %d unique emails)",
+                 keyword, target)
         if not _submit_search(page, keyword):
             break
         if _check_bot_wall(page):
@@ -840,30 +897,26 @@ def run_collect(context: BrowserContext,
                         "wall — stopping. Wait 30-60 minutes before searching "
                         "again. SQLite and output/linkedin_emails_partial.xlsx "
                         "already hold every email harvested so far; rerun the "
-                        "remaining domains with --domains.")
+                        "remaining domains with --input-csv.")
             break
 
-        log.info("%s: view 1/2 — all-results Posts cluster", domain)
-        for contact in _collect_view(page, keyword, domain, max_scrolls,
-                                     target, seen, on_batch):
-            contacts.setdefault((contact.email, contact.post_id), contact)
-
         if not _open_posts_view(page):
-            log.warning("%s: Posts tab unavailable — skipping the content "
-                        "view for this domain", domain)
+            log.warning("%s: Posts tab unavailable — skipping this domain",
+                        domain)
+        elif not _apply_content_filters(page, date_facet):
+            log.warning("%s: could not apply Latest + %s — skipping this "
+                        "domain so unsorted results never reach the sheet",
+                        domain, date_facet or "date filter")
         else:
-            if not _apply_content_filters(page, date_facet):
-                log.warning("%s: some native filters were unavailable — "
-                            "scraping the content view with LinkedIn's "
-                            "default order/facets", domain)
             if _check_bot_wall(page):
                 log.warning("LinkedIn paused search activity after the "
                             "filters — stopping. Partial Excel is preserved.")
                 break
-            log.info("%s: view 2/2 — content search (newest, %s)",
-                     domain, date_facet or "all time")
+            log.info("%s: content search (newest, %s)", domain,
+                     date_facet or "all time")
+            emails_seen: set[str] = set()
             for contact in _collect_view(page, keyword, domain, max_scrolls,
-                                         target, seen, on_batch):
+                                         target, seen, emails_seen, on_batch):
                 contacts.setdefault((contact.email, contact.post_id), contact)
 
         page.wait_for_timeout(SETTINGS.email_domain_pause_s * 1000)

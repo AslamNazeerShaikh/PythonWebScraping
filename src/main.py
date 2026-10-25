@@ -27,7 +27,8 @@ from rich.table import Table
 from .config import BASE_DIR, SETTINGS
 from .db import (count_emails, count_jobs, fetch_all_jobs, init_db,
                  record_run, upsert_emails, upsert_jobs)
-from .export import export_emails, export_jobs
+from .domain_targets import DomainTarget, parse_domain_targets
+from .export import export_emails, export_jobs, load_email_frame
 from .linkedin_email_scraper import run_collect
 from .log import setup_logging
 from .models import Job
@@ -86,17 +87,20 @@ def do_scrape() -> int:
 
 
 def do_collect_emails(domains: list[str] | None,
-                      max_scrolls: int | None = None) -> int:
+                      max_scrolls: int | None = None,
+                      targets: dict[str, int] | None = None) -> int:
     """Run the LinkedIn email collector; return process exit code.
 
-    Opens ONE browser, searches posts per domain (``"@<domain>"`` keyword)
-    through the in-page search box, scrapes both the all-results Posts
-    cluster and the Latest/Past-month content feed, and upserts each new
-    batch into ``contact_emails``. A checkpoint Excel is rewritten after
-    every batch so a broken session never loses already-harvested emails.
+    One browser, one search per domain. Each domain is searched for
+    ``"@<domain>"``, switched to the native Posts view, sorted Latest +
+    Past month, and scrolled only until its unique-email target is met.
+    Every batch is upserted and the checkpoint workbook is rewritten.
     """
     setup_logging(SETTINGS.log_level)
     init_db()
+    if targets is None:
+        domains = domains or SETTINGS.email_domains
+        targets = {d: SETTINGS.email_default_target for d in domains}
     totals = {"new": 0}
     persisted: set[tuple[str, str]] = set()
     out_dir = SETTINGS.output_dir
@@ -118,9 +122,9 @@ def do_collect_emails(domains: list[str] | None,
     with sync_playwright() as p:
         context = launch_context(p)
         try:
-            contacts = run_collect(context, domains=domains,
+            contacts = run_collect(context, domains=list(targets),
                                    max_scrolls=max_scrolls,
-                                   on_batch=_persist)
+                                   on_batch=_persist, targets=targets)
         finally:
             context.close()
 
@@ -134,7 +138,8 @@ def do_collect_emails(domains: list[str] | None,
                       "(first run headful) or widen the date facet.[/yellow]")
         return 0
     dest = export_emails(fmt="excel")
-    console.print(f"[green]Done:[/green] {count_emails()} emails "
+    unique = len(load_email_frame())
+    console.print(f"[green]Done:[/green] {unique} unique emails "
                   f"({totals['new']} new) -> SQLite + {dest}")
     console.print(f"[dim]Checkpoints:[/dim] {partial}")
     return 0
@@ -222,25 +227,45 @@ def export(
 def collect_emails(
     domains: str = typer.Option(
         "", help="Comma-separated domains (default: EMAIL_DOMAINS, 11 targets)"),
+    input_csv: Optional[str] = typer.Option(
+        None, "--input-csv", "--csv",
+        help="CSV of '@domain:unique_email_target' entries (searched in order)"),
     max_scrolls: Optional[int] = typer.Option(
-        None, help="Feed scrolls per domain (default: EMAIL_MAX_SCROLLS=6)"),
+        None, help="Max scroll rounds per domain (default: EMAIL_MAX_SCROLLS)"),
     headless: bool = typer.Option(False, "--headless", help="Background run"),
 ) -> None:
-    """Harvest recruiter emails from LinkedIn posts (last ~30 days) -> Excel.
+    """Harvest domain-matching emails from the Latest/Past-month posts feed.
 
-    Searches LinkedIn content/posts for ``"@<domain>"`` with the native
-    ``past-month`` facet, newest first, then extracts every email from the
-    post bodies. Personal use only — polite delays are built in.
+    Each CSV entry ``@cognizant.com:5`` searches for ``"@cognizant.com"``,
+    opens the native Posts tab, sorts Latest + Past month, and scrolls only
+    until 5 distinct ``@cognizant.com`` addresses are found. Non-matching
+    domains are discarded, and the Excel keeps one row per address.
     """
     _ensure_env()
-    doms = [d.strip().lower() for d in domains.split(",") if d.strip()] or None
+    targets: dict[str, int] | None = None
+    parsed: list[DomainTarget] = []
+    if input_csv:
+        try:
+            parsed = parse_domain_targets(input_csv,
+                                          SETTINGS.email_default_target)
+        except (OSError, ValueError) as exc:
+            console.print(f"[red]Invalid --input-csv:[/red] {exc}")
+            raise typer.Exit(code=2)
+        targets = {item.domain: item.target for item in parsed}
+        doms: list[str] | None = list(targets)
+    else:
+        doms = [d.strip().lower().lstrip("@")
+                for d in domains.split(",") if d.strip()] or None
+        if doms:
+            targets = {d: SETTINGS.email_default_target for d in doms}
     SETTINGS.headless = headless or SETTINGS.headless
-    console.print(f"[bold]Collecting emails[/bold] for "
-                  f"{doms or SETTINGS.email_domains} "
+    description = (", ".join(f"{d}:{t}" for d, t in targets.items())
+                   if targets else str(doms or SETTINGS.email_domains))
+    console.print(f"[bold]Collecting emails[/bold] for {description} "
                   f"| facet={SETTINGS.email_date_facet} "
-                  f"| scrolls={max_scrolls or SETTINGS.email_max_scrolls}")
+                  f"| max-scrolls={max_scrolls or SETTINGS.email_max_scrolls}")
     console.print("[dim]Personal use only — never auto-solves CAPTCHAs.[/dim]")
-    raise typer.Exit(code=do_collect_emails(doms, max_scrolls))
+    raise typer.Exit(code=do_collect_emails(doms, max_scrolls, targets))
 
 
 @app.command("export-emails")

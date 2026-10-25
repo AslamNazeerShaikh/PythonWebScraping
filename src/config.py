@@ -88,13 +88,12 @@ class Settings:
             if s.strip()
         ]
     )
-    #: Max mouse-wheel scroll rounds per view (URL 1 and URL 2). The
-    #: collector stops earlier once the target is reached or the feed stops
-    #: appending new posts.
+    #: Max mouse-wheel scroll rounds per domain (safety cap). The collector
+    #: stops earlier once the domain's unique-email target is reached or
+    #: the feed stops appending new posts.
     email_max_scrolls: int = _get_int("EMAIL_MAX_SCROLLS", 40)
-    #: Desired number of posts to load per view before stopping early.
-    #: LinkedIn keeps appending on scroll; 100 matches the requested depth.
-    email_target_posts: int = _get_int("EMAIL_TARGET_POSTS", 100)
+    #: Default unique-email target for a domain entered without ``:N``.
+    email_default_target: int = _get_int("EMAIL_DEFAULT_TARGET", 10)
     #: Cooldown between domains (seconds). LinkedIn applies a rolling
     #: search-rate limit; 5 minutes is deliberately conservative.
     email_domain_pause_s: int = _get_int("EMAIL_DOMAIN_PAUSE_S", 300)

@@ -54,6 +54,6 @@ def test_email_collector_settings_defaults():
         "persistent.com", "xoriant.com",
     ]
     assert s.email_max_scrolls == 40
-    assert s.email_target_posts == 100
+    assert s.email_default_target == 10
     assert s.email_domain_pause_s == 300
     assert s.email_date_facet == "past-month"

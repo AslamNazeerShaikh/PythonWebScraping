@@ -7,6 +7,7 @@ export never touches the database.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -226,27 +227,164 @@ def _hyperlink_titles(path: Path) -> None:
 EMAIL_COLUMNS = ["email", "post_id", "domain", "author", "posted", "post_url",
                  "snippet", "keyword", "first_seen", "last_seen"]
 
+_MONTHS = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+
+#: ``2h``, ``19h``, ``1w``, ``3mo``, ``1yr``.
+_RELATIVE_RE = re.compile(r"^(\d+)\s*(mo|yr|[smhdw])$", re.I)
+
+#: ``Oct 13`` or ``Oct 13, 2025``.
+_MONTH_DAY_RE = re.compile(
+    r"^([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})(?:,\s*(\d{4}))?$")
+
+#: ISO-ish fallback (``2026-10-13`` / ``2026-10-13T09:00:00``).
+_ISO_RE = re.compile(r"^\d{4}-\d{1,2}-\d{1,2}(?:[t ].*)?$")
+
+
+def _email_domain(email: str) -> str:
+    """Return the lowercased domain after ``@`` (empty for malformed rows)."""
+    return str(email or "").rsplit("@", 1)[-1].strip().lower()
+
+
+def _naive_timestamp(value: object) -> pd.Timestamp:
+    """Coerce to a naive UTC-ish Timestamp (SQLite stores naive UTC)."""
+    ts = pd.Timestamp(value)
+    if ts.tzinfo is not None:
+        ts = ts.tz_localize(None)
+    return ts
+
+
+def _posted_timestamp(posted: str, reference: object) -> pd.Timestamp:
+    """Approximate a post's publication time from LinkedIn's label.
+
+    ``posted`` is what the feed shows (``19h``, ``2d``, ``Oct 13``,
+    ``Oct 13, 2025``). Relative labels resolve against ``reference``
+    (``last_seen``/``first_seen``); month-day labels without a year use the
+    reference year, stepping back one year when that would be in the future.
+
+    Returns ``NaT`` for an empty/unparseable label. That is deliberate: an
+    unknown date must never outrank a post with a real date during the
+    "newest post" collapse (the caller falls back to ``last_seen`` only when
+    every candidate is unknown).
+    """
+    ref = _naive_timestamp(reference)
+    if pd.isna(ref):
+        ref = pd.Timestamp.now(tz="UTC").tz_localize(None)
+    text = str(posted or "").strip().lower()
+    if not text:
+        return pd.NaT
+    if text in ("just now", "now", "today"):
+        return ref
+
+    relative = _RELATIVE_RE.fullmatch(text)
+    if relative:
+        amount = int(relative.group(1))
+        unit = relative.group(2).lower()
+        days = {"d": 1, "w": 7}.get(unit, 0)
+        if unit == "mo":
+            days = 30
+        elif unit == "yr":
+            days = 365
+        if days:
+            return ref - pd.Timedelta(days=amount * days)
+        hours = {"h": 1}.get(unit, 0)
+        if hours:
+            return ref - pd.Timedelta(hours=amount)
+        minutes = {"m": 1}.get(unit, 0)
+        if minutes:
+            return ref - pd.Timedelta(minutes=amount)
+        return ref - pd.Timedelta(seconds=amount)
+
+    month_day = _MONTH_DAY_RE.fullmatch(text)
+    if month_day:
+        month = _MONTHS.get(month_day.group(1).lower())
+        if month:
+            day = int(month_day.group(2))
+            year = int(month_day.group(3)) if month_day.group(3) else ref.year
+            try:
+                stamp = pd.Timestamp(year=year, month=month, day=day)
+            except ValueError:
+                return pd.NaT
+            if stamp > ref + pd.Timedelta(days=1):
+                try:
+                    stamp = stamp.replace(year=year - 1)
+                except ValueError:      # 29 Feb in a non-leap year
+                    return pd.NaT
+            return stamp
+
+    if not _ISO_RE.fullmatch(text):
+        return pd.NaT
+    try:
+        stamp = pd.Timestamp(text)
+    except (TypeError, ValueError):
+        return pd.NaT
+    return _naive_timestamp(stamp)
+
+
+def _latest_email_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep one row per email (newest post) and sort domain → email.
+
+    Rules:
+      * the row's searched ``domain`` must equal the email's own domain —
+        legacy/contaminated rows are discarded, never exported;
+      * duplicate addresses collapse to the row with the newest post label;
+      * output is grouped alphabetically by domain, then by email.
+    """
+    if df.empty:
+        return df
+    df = df.copy()
+    df["email"] = df["email"].astype(str).str.strip().str.lower()
+    df["domain"] = df["domain"].fillna("").astype(str).str.strip().str.lower()
+    keyword_domain = (df["keyword"].fillna("").astype(str).str.strip()
+                      .str.lower().str.lstrip("@"))
+    searched = df["domain"].str.lstrip("@")
+    searched = searched.where(searched.ne(""), keyword_domain)
+    df["domain"] = searched
+
+    email_domain = df["email"].map(_email_domain)
+    df = df[searched.ne("") & searched.eq(email_domain)].copy()
+    if df.empty:
+        return pd.DataFrame(columns=EMAIL_COLUMNS)
+
+    reference = df["first_seen"].where(df["first_seen"].notna(),
+                                       df["last_seen"])
+    df["_latest_at"] = [
+        _posted_timestamp(posted, ref)
+        for posted, ref in zip(df["posted"], reference)
+    ]
+    df = df.sort_values(
+        ["domain", "email", "_latest_at", "last_seen"],
+        ascending=[True, True, False, False],
+        kind="mergesort",
+    )
+    df = df.drop_duplicates(subset=["email"], keep="first")
+    df["_domain_key"] = df["domain"].str.casefold()
+    df["_email_key"] = df["email"].str.casefold()
+    df = df.sort_values(["_domain_key", "_email_key"], kind="mergesort")
+    return df[EMAIL_COLUMNS].reset_index(drop=True)
+
 
 def load_email_frame(limit: int = 5000) -> pd.DataFrame:
-    """Load harvested emails from SQLite into a :class:`~pandas.DataFrame`.
-
-    Sorted ``domain → email`` so one company's contacts sit together in
-    the sheet. Empty DB still yields the documented columns (a sheet with
-    headers, not a crash).
+    """Load harvested emails, one row per address, newest post evidence.
 
     Args:
-        limit: Max rows after sorting (default 5000 — far past a 11-domain
-            run's realistic volume).
+        limit: Max unique addresses returned (default 5000). All raw rows are
+            read so the newest-post choice is never truncated mid-email.
+
+    Returns:
+        A DataFrame with :data:`EMAIL_COLUMNS`: mismatched-domain rows are
+        dropped, duplicate addresses keep their newest post, and rows are
+        ordered by domain then email. Empty DB still yields the columns.
     """
     engine = get_engine()
-    stmt = (select(EmailRow)
-            .order_by(EmailRow.domain, EmailRow.email)
-            .limit(limit))
+    stmt = select(EmailRow).order_by(EmailRow.last_seen.desc())
     with engine.connect() as conn:
         df = pd.read_sql(stmt, conn)
     if df.empty:
         return pd.DataFrame(columns=EMAIL_COLUMNS)
-    return df[EMAIL_COLUMNS]
+    return _latest_email_frame(df).head(limit).reset_index(drop=True)
 
 
 def export_emails(fmt: str = "excel", out_path: str | None = None,

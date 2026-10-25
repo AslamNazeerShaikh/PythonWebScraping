@@ -58,10 +58,15 @@ source .venv/bin/activate
 python -m src.main scrape --keywords "python backend api" --locations "remote" --days 7 --pages 3
 python -m src.main scrape --no-enrich --pages 2   # fast link sweep without detail visits
 
-# LinkedIn email collector: recruiter emails from posts, last ~30 days
+# LinkedIn email collector: domain-matching emails from Latest/Past-month posts
 python -m src.main collect-emails                                  # all 11 target domains
-python -m src.main collect-emails --domains cognizant.com,ltm.com  # subset, --max-scrolls N
+python -m src.main collect-emails --domains cognizant.com,ltm.com  # subset
+python -m src.main collect-emails --input-csv targets.csv          # @domain:unique_target
 python -m src.main export-emails --format excel                    # re-export contact snapshot
+
+# targets.csv (one per line, or domain,target columns):
+#   @cognizant.com:5
+#   @capgemini.com:2
 
 # Inspect and export
 python -m src.main stats
@@ -90,14 +95,22 @@ Everything is `.env`-driven (see `.env.example`); CLI flags and API fields overr
 | `MAX_PAGES_PER_SEARCH` / `MAX_JOBS_TOTAL` | `3` / `60` | Politeness caps |
 | `ENRICH_DETAILS` | `true` | Visit each posting page for full text/skills |
 | `EMAIL_DOMAINS` | 11 targets (cognizant, capgemini, ltm, …) | LinkedIn post-search domains for `collect-emails` |
-| `EMAIL_MAX_SCROLLS` / `EMAIL_TARGET_POSTS` | `40` / `100` | Max wheel-scroll rounds per view · posts to load before stopping |
+| `EMAIL_MAX_SCROLLS` / `EMAIL_DEFAULT_TARGET` | `40` / `10` | Max wheel-scroll rounds per domain · default unique-email target when CSV omits `:N` |
 | `EMAIL_DOMAIN_PAUSE_S` | `300` | Cooldown between domain searches (avoids LinkedIn's rolling search limit) |
-| `EMAIL_DATE_FACET` | `past-month` | LinkedIn content-search date window |
+| `EMAIL_DATE_FACET` | `past-month` | LinkedIn content-search date window (Latest sort is always applied) |
 | `DATABASE_URL` | `sqlite:///jobs.db` | SQLite file (or any SQLAlchemy URL) |
 | `WEB_HOST` / `WEB_PORT` | `127.0.0.1` / `8000` | Control-plane bind |
 | `HEADLESS` | `false` | Background runs (do the first run headful) |
 
 SQLite is the source of truth; every export is a disposable snapshot.
+
+**Email workbook rules** (`collect-emails` / `export-emails`): only addresses
+whose own domain matches the searched domain are exported; duplicate addresses
+collapse to their newest post; rows are grouped by domain and sorted
+alphabetically by email. The checkpoint file is rewritten after every batch.
+
+`--input-csv` accepts `@domain:unique_email_target` per row (or a
+`domain,target` table). Example: `@cognizant.com:5`, `@capgemini.com:2`.
 
 ## Architecture
 

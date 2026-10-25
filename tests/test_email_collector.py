@@ -549,18 +549,42 @@ def test_wheel_feed_swallows_mouse_failures():
 def test_wheel_feed_swallows_rect_probe_error():
     _wheel_feed(_BrokenPage())              # rect probe raises → no-op
 
-
 # -- extraction checkpoints ------------------------------------------------------
-def test_extract_fresh_dedupes_and_calls_hook():
+def test_contacts_from_cards_keeps_only_searched_domain():
+    card = {
+        "text": ("@cognizant.com roles: jobs@cognizant.com, personal@gmail.com "
+                 "and recruiter@cognizant.com"),
+        "post_id": "mixed-1",
+    }
+    out = _contacts_from_cards([card], domain="cognizant.com",
+                               keyword="@cognizant.com")
+    assert [c.email for c in out] == ["jobs@cognizant.com",
+                                      "recruiter@cognizant.com"]
+    assert {c.post_id for c in out} == {"mixed-1"}
+
+
+def test_expand_show_more_clicks_and_waits():
+    page = FakePage()
+    page.js_returns["/*expand-more*/"] = 2
+    assert _expand_show_more(page) == 2
+    assert page.timeouts[-1] == mod.EXPAND_WAIT_MS
+    assert _expand_show_more(_BrokenPage()) == 0
+
+
+def test_extract_fresh_dedupes_and_updates_email_set():
     page = FakePage()
     page.cards_queue = [[CARD, dict(CARD)], [CARD]]
     seen: set[tuple[str, str]] = set()
+    emails: set[str] = set()
     batches: list[list[EmailContact]] = []
-    out = _extract_fresh(page, "ltm.com", "@ltm.com", seen, batches.append)
+    out = _extract_fresh(page, "ltm.com", "@ltm.com", seen, emails,
+                         batches.append)
     assert [c.email for c in out] == ["neha.pandey@ltm.com"]
+    assert emails == {"neha.pandey@ltm.com"}
     assert batches and batches[0] == out
     # Second extraction sees the same post → nothing new, no second hook.
-    assert _extract_fresh(page, "ltm.com", "@ltm.com", seen, batches.append) == []
+    assert _extract_fresh(page, "ltm.com", "@ltm.com", seen, emails,
+                          batches.append) == []
     assert len(batches) == 1
     assert any(CONTENT_EXTRACT_JS in js for js in page.evals)
 
@@ -572,85 +596,128 @@ def test_extract_fresh_survives_extractor_error_without_hook():
                 raise RuntimeError("detached")
             return super().evaluate(js)
 
-    assert _extract_fresh(_CardBroken(), "ltm.com", "@ltm.com", set(), None) == []
+    emails: set[str] = set()
+    assert _extract_fresh(_CardBroken(), "ltm.com", "@ltm.com", set(),
+                          emails, None) == []
+    assert emails == set()
 
 
-def test_collect_view_grows_until_target():
+def test_collect_view_stops_at_email_target_before_scrolling():
     page = FakePage()
-    counts = iter([6, 12, 18, 24])
-    contacts = [EmailContact(email="a@ltm.com", post_id="a", domain="ltm.com")]
-    extracted: list[list[EmailContact]] = []
+    calls: list[int] = []
     monkeypatch = pytest.MonkeyPatch()
     try:
-        monkeypatch.setattr(mod, "_count_posts", lambda p: next(counts))
-        monkeypatch.setattr(mod, "_extract_fresh",
-                            lambda *a, **k: extracted.append(list(contacts))
-                            or list(contacts))
-        out = _collect_view(page, "@ltm.com", "ltm.com", rounds=5, target=24,
-                            seen=set(), on_batch=None)
+        def _fake_extract(_p, _domain, _keyword, _seen, emails, _hook):
+            emails.add("a@ltm.com")
+            calls.append(1)
+            return [EmailContact(email="a@ltm.com", post_id="p",
+                                 domain="ltm.com")]
+
+        monkeypatch.setattr(mod, "_extract_fresh", _fake_extract)
+        monkeypatch.setattr(mod, "_count_posts", lambda p: 6)
+        emails: set[str] = set()
+        out = _collect_view(page, "@ltm.com", "ltm.com", 5, 0,
+                            set(), emails, None)
     finally:
         monkeypatch.undo()
-    assert len(out) == 3                    # round 0 + target round + final
-    assert len(extracted) == 3
+    assert len(out) == 1
+    assert calls == [1]                    # no scroll needed
+    assert page.mouse.wheeled == []
+
+
+def test_collect_view_reaches_target_after_scroll():
+    page = FakePage()
+    counts = iter([6, 12])
+    additions = iter([["a@ltm.com", "b@ltm.com"],
+                      ["c@ltm.com", "d@ltm.com"]])
+    extracted: list[list[str]] = []
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        def _fake_extract(_p, _domain, _keyword, _seen, emails, _hook):
+            batch = next(additions)
+            emails.update(batch)
+            extracted.append(batch)
+            return [EmailContact(email=e, post_id=batch[0],
+                                 domain="ltm.com") for e in batch]
+
+        monkeypatch.setattr(mod, "_extract_fresh", _fake_extract)
+        monkeypatch.setattr(mod, "_count_posts", lambda p: next(counts))
+        emails: set[str] = set()
+        out = _collect_view(page, "@ltm.com", "ltm.com", 5, 4,
+                            set(), emails, None)
+    finally:
+        monkeypatch.undo()
+    assert len(out) == 4
+    assert len(extracted) == 2
+    assert len(emails) == 4
 
 
 def test_collect_view_stops_after_three_stalls():
     page = FakePage()
     extracted: list[int] = []
     monkeypatch = pytest.MonkeyPatch()
+    nudges: list[int] = []
     try:
         monkeypatch.setattr(mod, "_count_posts", lambda p: 6)
-        monkeypatch.setattr(mod, "_scroll_to_bottom", lambda p: True)
+        monkeypatch.setattr(mod, "_scroll_to_bottom",
+                            lambda p: nudges.append(1) or True)
         monkeypatch.setattr(mod, "_extract_fresh",
                             lambda *a, **k: extracted.append(1) or [])
-        _collect_view(page, "@ltm.com", "ltm.com", rounds=10, target=100,
-                      seen=set(), on_batch=None)
+        _collect_view(page, "@ltm.com", "ltm.com", 10, 100, set(), set(), None)
     finally:
         monkeypatch.undo()
-    # Checkpoint on round 0, each stalled round, and the final extraction.
-    assert len(extracted) == 4
+    # Initial read + each stalled checkpoint + final extraction.
+    assert len(extracted) == 5
+    assert len(nudges) == mod.MAX_STALLS
 
 
 def test_collect_view_breaks_on_empty_feed_and_zero_rounds():
     page = FakePage()
+    extracted: list[int] = []
     monkeypatch = pytest.MonkeyPatch()
     try:
         monkeypatch.setattr(mod, "_count_posts", lambda p: 0)
-        monkeypatch.setattr(mod, "_extract_fresh", lambda *a, **k: [])
+        monkeypatch.setattr(mod, "_extract_fresh",
+                            lambda *a, **k: extracted.append(1) or [])
         assert _collect_view(page, "@ltm.com", "ltm.com", 5, 100,
-                             set(), None) == []
+                             set(), set(), None) == []
         assert _collect_view(page, "@ltm.com", "ltm.com", 0, 100,
-                             set(), None) == []
+                             set(), set(), None) == []
     finally:
         monkeypatch.undo()
+    # First call: initial + final read. Zero rounds: final read only.
+    assert len(extracted) == 3
 
 
-def test_collect_view_growth_without_checkpoint_branch():
+def test_collect_view_growth_without_checkpoint_and_final_extract():
     page = FakePage()
-    counts = iter([6, 12, 18, 24, 30, 36])
+    counts = iter([6, 12, 18, 24])
     extracted: list[int] = []
     monkeypatch = pytest.MonkeyPatch()
     try:
         monkeypatch.setattr(mod, "_count_posts", lambda p: next(counts))
         monkeypatch.setattr(mod, "_extract_fresh",
                             lambda *a, **k: extracted.append(1) or [])
-        # rounds=2 → round 0 checkpoint, round 1 growth with no checkpoint,
-        # then the final extraction after the loop.
-        _collect_view(page, "@ltm.com", "ltm.com", 2, 100, set(), None)
+        _collect_view(page, "@ltm.com", "ltm.com", 2, 100,
+                      set(), set(), None)
     finally:
         monkeypatch.undo()
-    assert len(extracted) == 2
+    # initial + round-0 checkpoint + final (round 1 had no checkpoint).
+    assert len(extracted) == 3
 
 
 # -- collect loop ---------------------------------------------------------------
 def _wire_run(monkeypatch, batches, *, feed=True, search=True, posts=True,
               wall_values=None, filter_result=True):
     """Monkeypatch run_collect's collaborators; record important calls."""
-    calls: dict = {"collect": [], "filters": []}
+    calls: dict = {"collect": [], "filters": [], "searched": []}
     monkeypatch.setattr(mod, "_open_feed", lambda p: feed)
-    monkeypatch.setattr(mod, "_submit_search",
-                        lambda p, kw: calls.setdefault("searched", []).append(kw)
-                        or search)
+
+    def _search(_p, keyword):
+        calls["searched"].append(keyword)
+        return search
+
+    monkeypatch.setattr(mod, "_submit_search", _search)
     walls = _sequence(*(wall_values or [False, False, False, False]))
 
     def _wall(_p):
@@ -669,35 +736,37 @@ def _wire_run(monkeypatch, batches, *, feed=True, search=True, posts=True,
     monkeypatch.setattr(mod, "_apply_content_filters", _filters)
     queue = list(batches)
 
-    def _collect(_p, keyword, domain, rounds, target, seen, on_batch):
+    def _collect(_p, keyword, domain, rounds, target, seen, emails_seen,
+                 on_batch):
         calls["collect"].append((domain, rounds, target))
         batch = queue.pop(0) if queue else []
-        if batch and on_batch:
-            new = [c for c in batch
-                   if (c.email, c.post_id) not in seen]
-            seen.update((c.email, c.post_id) for c in new)
-            if new:
-                on_batch(new)
+        for contact in batch:
+            emails_seen.add(contact.email)
+        new = [c for c in batch
+               if (c.email, c.post_id) not in seen]
+        seen.update((c.email, c.post_id) for c in new)
+        if new and on_batch:
+            on_batch(new)
         return batch
 
     monkeypatch.setattr(mod, "_collect_view", _collect)
     return calls
 
 
-def test_run_collect_happy_path_two_views_and_dedupes(monkeypatch):
+def test_run_collect_happy_path_content_only_and_dedupes(monkeypatch):
     c1 = EmailContact(email="a@ltm.com", post_id="p1", domain="ltm.com")
     c2 = EmailContact(email="b@ltm.com", post_id="p2", domain="ltm.com")
-    calls = _wire_run(monkeypatch, [[c1], [c1, c2], [c2]])
+    calls = _wire_run(monkeypatch, [[c1, c2]])
     batches: list[list[EmailContact]] = []
     page = FakePage()
     ctx = FakeContext(page)
-    out = run_collect(ctx, domains=["ltm.com"], max_scrolls=3,
+    out = run_collect(ctx, targets={"ltm.com": 2}, max_scrolls=3,
                       date_facet="past-month", on_batch=batches.append)
     assert {c.email for c in out} == {"a@ltm.com", "b@ltm.com"}
     assert calls["searched"] == ["@ltm.com"]
     assert calls["filters"] == ["past-month"]
-    assert calls["collect"] == [("ltm.com", 3, mod.SETTINGS.email_target_posts)] * 2
-    assert batches and all(b for b in batches)
+    assert calls["collect"] == [("ltm.com", 3, 2)]   # ONE content view
+    assert batches and batches[0] == [c1, c2]
     assert ctx.closed is False                    # caller owns close()
 
 
@@ -706,13 +775,25 @@ def test_run_collect_defaults_from_settings(monkeypatch):
     monkeypatch.setattr(config.SETTINGS, "email_domains", ["one.com"])
     monkeypatch.setattr(config.SETTINGS, "email_max_scrolls", 7)
     monkeypatch.setattr(config.SETTINGS, "email_date_facet", "past-week")
-    monkeypatch.setattr(config.SETTINGS, "email_target_posts", 55)
+    monkeypatch.setattr(config.SETTINGS, "email_default_target", 5)
     calls = _wire_run(monkeypatch, [])
     out = run_collect(FakeContext(FakePage()))
     assert out == []
     assert calls["searched"] == ["@one.com"]
     assert calls["filters"] == ["past-week"]
-    assert calls["collect"] == [("one.com", 7, 55), ("one.com", 7, 55)]
+    assert calls["collect"] == [("one.com", 7, 5)]
+
+
+def test_run_collect_uses_explicit_targets_in_order(monkeypatch):
+    c1 = EmailContact(email="a@tcs.com", post_id="p1", domain="tcs.com")
+    c2 = EmailContact(email="b@wipro.com", post_id="p2", domain="wipro.com")
+    calls = _wire_run(monkeypatch, [[c1], [c2]])
+    out = run_collect(FakeContext(FakePage()),
+                      targets={"tcs.com": 1, "wipro.com": 4},
+                      max_scrolls=2)
+    assert [c.email for c in out] == ["a@tcs.com", "b@wipro.com"]
+    assert calls["searched"] == ["@tcs.com", "@wipro.com"]
+    assert calls["collect"] == [("tcs.com", 2, 1), ("wipro.com", 2, 4)]
 
 
 def test_run_collect_rejects_unknown_facet():
@@ -733,46 +814,43 @@ def test_run_collect_stops_when_search_box_fails(monkeypatch):
 
 
 def test_run_collect_stops_on_search_wall(monkeypatch):
-    calls = _wire_run(monkeypatch, [], wall_values=[True, False])
+    calls = _wire_run(monkeypatch, [], wall_values=[True])
     assert run_collect(FakeContext(FakePage()), domains=["tcs.com"]) == []
     assert calls["collect"] == []
 
 
-def test_run_collect_skips_content_view_without_posts_tab(monkeypatch):
-    c1 = EmailContact(email="a@ltm.com", post_id="p1", domain="ltm.com")
-    calls = _wire_run(monkeypatch, [[c1], []], posts=False)
+def test_run_collect_skips_domain_without_posts_tab(monkeypatch):
+    calls = _wire_run(monkeypatch, [], posts=False)
     out = run_collect(FakeContext(FakePage()), domains=["ltm.com"])
-    assert [c.email for c in out] == ["a@ltm.com"]
-    assert calls["filters"] == []                 # content view skipped
+    assert out == []
+    assert calls["filters"] == []
+    assert calls["collect"] == []
 
 
-def test_run_collect_still_scrapes_when_filters_unavailable(monkeypatch):
-    c1 = EmailContact(email="a@ltm.com", post_id="p1", domain="ltm.com")
-    c2 = EmailContact(email="b@ltm.com", post_id="p2", domain="ltm.com")
-    calls = _wire_run(monkeypatch, [[c1], [c2]], filter_result=False)
-    out = run_collect(FakeContext(FakePage()), domains=["ltm.com"],
-                      max_scrolls=2)
-    assert [c.email for c in out] == ["a@ltm.com", "b@ltm.com"]
-    assert calls["filters"] == ["past-month"]      # attempted, not applied
+def test_run_collect_skips_domain_when_filters_unavailable(monkeypatch):
+    calls = _wire_run(monkeypatch, [[EmailContact(
+        email="a@ltm.com", post_id="p1", domain="ltm.com")]],
+        filter_result=False)
+    out = run_collect(FakeContext(FakePage()), domains=["ltm.com"])
+    assert out == []
+    assert calls["filters"] == ["past-month"]
+    assert calls["collect"] == []                 # unsorted view never read
 
 
 def test_run_collect_stops_on_wall_after_filters(monkeypatch):
-    c1 = EmailContact(email="a@ltm.com", post_id="p1", domain="ltm.com")
-    # wall sequence: search-check False, filter-check True
-    calls = _wire_run(monkeypatch, [[c1], []], wall_values=[False, True])
+    calls = _wire_run(monkeypatch, [], wall_values=[False, True])
     out = run_collect(FakeContext(FakePage()), domains=["ltm.com"])
-    assert [c.email for c in out] == ["a@ltm.com"]
-    assert calls["collect"] == [("ltm.com", 40, 100)]   # URL2 never collected
+    assert out == []
+    assert calls["collect"] == []
 
 
 def test_run_collect_continues_after_one_domain_and_respects_wall(monkeypatch):
     c1 = EmailContact(email="a@ltm.com", post_id="p1", domain="ltm.com")
-    c2 = EmailContact(email="b@tcs.com", post_id="p2", domain="tcs.com")
-    # domain 1: search wall False, filters wall False; domain 2: search wall True
-    calls = _wire_run(monkeypatch, [[c1], [c1], [c2], [c2]],
-                      wall_values=[False, False, True])
+    # domain 1: search wall False, filters wall False; domain 2: search True
+    calls = _wire_run(monkeypatch, [[c1]], wall_values=[False, False, True])
     out = run_collect(FakeContext(FakePage()),
                       domains=["ltm.com", "tcs.com"], max_scrolls=2)
     assert [c.email for c in out] == ["a@ltm.com"]
     assert calls["searched"] == ["@ltm.com", "@tcs.com"]
     assert calls["filters"] == ["past-month"]     # second domain never filters
+    assert calls["collect"] == [("ltm.com", 2, 10)]
