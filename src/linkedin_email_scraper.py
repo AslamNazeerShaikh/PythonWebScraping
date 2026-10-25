@@ -1,28 +1,32 @@
 """LinkedIn content-search email collector (spec: docs/SPEC-linkedin-email-collector.md).
 
-Pipeline: content-search URL (``past-month`` facet, newest first) →
-persistent stealth profile → scroll the infinite feed → in-page JS card
-extract → regex every email out of the post body → :class:`EmailContact`
-(Pydantic) → caller upserts into ``contact_emails`` → Excel.
+Flow per domain (ONE browser, ONE search, no per-domain navigation):
 
-Patterns borrowed (credited in docs/LINKEDIN_RESEARCH.md §11, MIT/Apache-2.0):
+1. Type ``"@<domain>"`` into LinkedIn's global search box and press Enter →
+   the blended "all results" page (URL 1).
+2. Scroll that page's Posts section and harvest emails from the post bodies.
+3. Click the native **Posts** filter → the content-search page (URL 2).
+4. Apply the native **Latest** sort and **Past month** date facets through
+   their real dropdowns (radio + "Show results"), then scroll that feed.
+5. Move to the next domain by clearing/retyping the SAME search box.
 
-- URL grammar + facet validation — stickerdaniel/linkedin-mcp-server
-  (LinkedIn SILENTLY IGNORES unknown date facets, hence the ValueError).
-- Card selectors — joeyism/linkedin_scraper ``company_posts.py``.
-- Email regex — speedyapply/JobSpy ``extract_emails_from_text``.
+Why this shape: repeated direct URL hits (and per-domain browser relaunches)
+are what triggered LinkedIn's "unusual search traffic" wall. In-page typing,
+clicking, and mouse-wheel scrolling behave like a human session, and one
+search per domain minimises query traffic.
 
-Safety rails mirror ``src/naukri_scraper.py``: transient-only tenacity
-retries (never 403/429/security walls), bot-wall stop-with-guidance
-(never CAPTCHA-solve), politeness pauses between domains and scrolls.
-LinkedIn renders NO permalink anchor per post in content search (MCP
-server's live finding) — ``post_url`` is best-effort, empty is acceptable.
+The extractor targets LinkedIn's current SDUI DOM (verified live 2026-10-25):
+each post is a ``[role="listitem"]`` inside ``[data-testid="lazy-column"]``,
+with exactly one ``[data-testid="expandable-text-box"]`` holding the body.
+Older selectors (``div.feed-shared-update-v2``) no longer exist there.
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import urllib.parse
+from collections.abc import Callable
 
 from playwright.sync_api import BrowserContext, Page
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
@@ -35,17 +39,26 @@ from tenacity import (
 
 from .config import SETTINGS
 from .models import EMAIL_RE, EmailContact
-from .naukri_scraper import BOT_WALL_PATTERNS, human_scroll
+from .naukri_scraper import BOT_WALL_PATTERNS
 from .stealth_browser import human_pause
 
 log = logging.getLogger(__name__)
 
 #: Content (posts) search — NOT the jobs surface; keyword is ``"@<domain>"``.
 CONTENT_SEARCH = "https://www.linkedin.com/search/results/content/"
+ALL_SEARCH = "https://www.linkedin.com/search/results/all/"
+FEED_URL = "https://www.linkedin.com/feed/"
 
 #: The only date facets LinkedIn's content search honours (anything else
-#: is silently ignored — so we validate before navigating).
+#: is silently ignored — so we validate before using it).
 DATE_FACETS = ("past-24h", "past-week", "past-month")
+
+#: Facet token → label rendered in the "Date posted" dropdown.
+DATE_LABELS = {
+    "past-24h": "Past 24 hours",
+    "past-week": "Past week",
+    "past-month": "Past month",
+}
 
 #: File extensions that produce "logo@2x.png"-style false-positive emails.
 JUNK_TLDS = frozenset({
@@ -56,45 +69,167 @@ JUNK_TLDS = frozenset({
 #: Context characters captured around an email inside the snippet.
 SNIPPET_RADIUS = 120
 
-#: SDUI settle time after landing on search results (ms).
+#: SDUI settle time after landing on a page (ms).
 SETTLE_MS = 1500
 
-#: In-page extractor: one dict {text, author, posted, url} per post card.
+#: Global search input and the native Posts filter tab.
+SEARCH_INPUT_SELECTOR = 'input[placeholder="Search"]'
+POSTS_FILTER_SELECTOR = 'input[aria-label="Filter by Posts"]'
+POSTS_FILTER_JS = r"""
+() => {
+  /*open-posts*/
+  const inp = document.querySelector('input[aria-label="Filter by Posts"]');
+  if (!inp) return false;
+  const lab = inp.id ? document.querySelector('label[for="' + inp.id + '"]') : null;
+  (lab || inp).click();
+  return true;
+}
+"""
+
+#: Typing cadence for the search box — human-typed, not a paste.
+SEARCH_TYPE_DELAY_MS = 70
+#: How long to wait for the new result page to visibly carry the keyword.
+SEARCH_READY_TIMEOUT_MS = 15000
+SEARCH_READY_POLL_MS = 500
+#: Filter dropdown open/apply settle times.
+FILTER_OPEN_MS = 900
+FILTER_RADIO_MS = 300
+FILTER_APPLY_MS = 4000
+#: Feed scrolling: wheel burst, then wait for the lazy spinner / next batch.
+WHEEL_STEPS = 3
+WHEEL_DY = 1200
+SCROLL_WAIT_MS = 2500
+STALL_WAIT_MS = 5000
+MAX_STALLS = 3
+#: Extract + persist a checkpoint every N scroll rounds (partial-save safety).
+CHECKPOINT_EVERY = 6
+
+#: In-page extractor: one dict per POST (not per DOM chunk/comment).
 #: Marker ``/*content-email-cards*/`` lets tests dispatch on it (FakePage).
-CONTENT_EXTRACT_JS = """
+#: Raw string: ``\d`` / ``\n`` / ``\u2022`` must reach JS untouched.
+CONTENT_EXTRACT_JS = r"""
 () => {
   /*content-email-cards*/
   const cards = [];
   const seen = new Set();
-  document.querySelectorAll('div.feed-shared-update-v2').forEach((el) => {
-    const urn = el.getAttribute('data-urn') || '';
-    if (urn && seen.has(urn)) return;      // virtualised feed re-renders cards
-    if (urn) seen.add(urn);
-    const textEl = el.querySelector(
-      '.feed-shared-update-v2__description, .update-components-text, .feed-shared-text');
-    const text = textEl ? (textEl.innerText || '').trim() : '';
-    if (!text) return;
-    const authorEl = el.querySelector('[class*="actor__name"]');
-    const postedEl = el.querySelector('[class*="actor__sub-description"]');
-    const link = el.querySelector('a[href*="/feed/update/"], a[href*="/posts/"]');
-    let url = '';
-    if (link) {
-      const href = link.getAttribute('href') || '';
-      url = href.startsWith('http') ? href : ('https://www.linkedin.com' + href);
+  const lc = document.querySelector('[data-testid="lazy-column"]');
+  if (!lc) return cards;
+  const items = Array.from(lc.querySelectorAll('[role="listitem"]'))
+    .filter((it) => it.querySelector('[data-testid="expandable-text-box"]'));
+  for (const it of items) {
+    const box = it.querySelector('[data-testid="expandable-text-box"]');
+    const text = (box.innerText || '').trim();
+    if (!text) continue;
+    let author = '';
+    for (const a of it.querySelectorAll('a[href*="/in/"]')) {
+      const t = (a.innerText || '').trim();
+      if (t && t.indexOf('\u2022') !== -1) {
+        author = t.split('\u2022')[0].trim();
+        break;
+      }
     }
-    // Best-effort "Show more" expansion has already been attempted by the
-    // caller; re-read the (possibly expanded) text node defensively.
-    cards.push({
-      text,
-      post_id: urn || url || '',
-      author: authorEl ? (authorEl.innerText || '').trim() : '',
-      posted: postedEl ? (postedEl.innerText || '').trim() : '',
-      url,
-    });
-  });
+    if (!author) {
+      const a = it.querySelector('a[href*="/in/"]');
+      if (a) author = (a.innerText || '').trim().split('\n')[0].trim();
+    }
+    let posted = '';
+    for (const el of it.querySelectorAll('p, span')) {
+      const t = (el.innerText || '').trim();
+      if (/^(\d+[smhdw]|\d+mo|\d+yr|just now|(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2})$/i.test(t)) {
+        posted = t;
+        break;
+      }
+    }
+    let postId = it.getAttribute('componentkey') || '';
+    const m = postId.match(/update-card-focus(.+?)FeedType_/);
+    if (m) postId = m[1];
+    if (!postId) postId = (author || '') + '|' + (posted || '') + '|' + text.slice(0, 80);
+    if (seen.has(postId)) continue;
+    seen.add(postId);
+    let url = '';
+    const link = it.querySelector('a[href*="/feed/update/"], a[href*="/posts/"]');
+    if (link) url = link.href || '';
+    cards.push({ text, post_id: postId, author, posted, url });
+  }
   return cards;
 }
 """
+
+#: Count the real post units currently rendered (drives scroll progress).
+COUNT_POSTS_JS = r"""
+() => {
+  /*count-posts*/
+  const lc = document.querySelector('[data-testid="lazy-column"]');
+  if (!lc) return 0;
+  return Array.from(lc.querySelectorAll('[role="listitem"]'))
+    .filter((it) => it.querySelector('[data-testid="expandable-text-box"]')).length;
+}
+"""
+
+#: Feed column rectangle — used to park the mouse over the posts before
+#: wheeling, so the wheel scrolls the results feed, not the page chrome.
+FEED_RECT_JS = r"""
+() => {
+  /*feed-rect*/
+  const lc = document.querySelector('[data-testid="lazy-column"]');
+  if (!lc) return null;
+  const r = lc.getBoundingClientRect();
+  return { x: r.x, y: r.y, width: r.width, height: r.height };
+}
+"""
+
+#: Scroll the true scroll container (verified live: ``<main>``) to its end,
+#: which triggers LinkedIn's lazy-load sentinel.
+SCROLL_TO_BOTTOM_JS = r"""
+() => {
+  /*scroll-bottom*/
+  const lc = document.querySelector('[data-testid="lazy-column"]');
+  if (!lc) return false;
+  let el = lc;
+  while (el && el !== document.documentElement) {
+    const cs = getComputedStyle(el);
+    if (/(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 20) break;
+    el = el.parentElement;
+  }
+  if (!el || el === document.documentElement) {
+    el = document.scrollingElement || document.documentElement;
+  }
+  el.scrollTop = el.scrollHeight;
+  el.dispatchEvent(new Event('scroll', { bubbles: true }));
+  return true;
+}
+"""
+
+#: Filter bar / posts rendered? The search SPA updates its URL before the
+#: new SDUI body exists, so URL alone is not enough to start scraping.
+RESULTS_READY_JS = r"""
+() => {
+  /*results-ready*/
+  if (document.querySelector('input[aria-label="Filter by Posts"]')) return true;
+  if (document.querySelector('[data-testid="lazy-column"] [role="listitem"]')) return true;
+  const t = document.body ? (document.body.innerText || '').toLowerCase() : '';
+  return t.includes('no results') || t.includes('no matching');
+}
+"""
+
+SHOW_RESULTS_JS = r"""
+() => {
+  /*show-results*/
+  const els = Array.from(document.querySelectorAll('a, button, [role="button"]'));
+  const el = els.find((e) => {
+    const t = (e.innerText || '').trim();
+    const r = e.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && t === 'Show results';
+  });
+  if (!el) return false;
+  el.click();
+  return true;
+}
+"""
+
+#: LinkedIn's "search paused" wall ("unusual search traffic… activity paused").
+SEARCH_PAUSED_RE = re.compile(
+    r"unusual search traffic|search activity[^.]{0,120}paused", re.I | re.S)
 
 _TRANSIENT = (TimeoutError, PlaywrightTimeoutError)
 #: Transient navigation failures only — a 403/CAPTCHA wall is NOT retried.
@@ -110,6 +245,10 @@ def build_content_search_url(keyword: str,
                              date_facet: str | None = "past-month",
                              sort: str = "date_posted") -> str:
     """Return a LinkedIn content-search URL for ``keyword``.
+
+    Kept for the ``export``/diagnostic tooling and offline fixtures; the live
+    collector now reaches this page by CLICKING the native Posts tab instead
+    of navigating to a hard-coded URL.
 
     Args:
         keyword: Search string, e.g. ``"@cognizant.com"``.
@@ -136,6 +275,20 @@ def build_content_search_url(keyword: str,
         params["datePosted"] = f'["{date_facet}"]'
     query = urllib.parse.urlencode(params)
     return f"{CONTENT_SEARCH}?{query}"
+
+
+def build_all_search_url(keyword: str) -> str:
+    """Return LinkedIn's global (all-results) search URL for ``keyword``.
+
+    No date/location/type filters — matches the user's requested query shape:
+    ``/search/results/all/?keywords=<kw>&origin=TYPEAHEAD_HISTORY&position=0``.
+    """
+    query = urllib.parse.urlencode({
+        "keywords": keyword,
+        "origin": "TYPEAHEAD_HISTORY",
+        "position": "0",
+    })
+    return f"{ALL_SEARCH}?{query}"
 
 
 def extract_emails(text: str) -> list[str]:
@@ -205,14 +358,22 @@ def _contacts_from_cards(cards: list[dict], domain: str,
     return out
 
 
-def _check_bot_wall(page: Page) -> bool:
-    """True when the visible page is a block/CAPTCHA wall (never bypassed)."""
+def _body_text(page: Page) -> str:
+    """Visible body text (first 4 000 chars) — wall/readiness sensing only."""
     try:
-        visible = page.evaluate(
-            "document.body ? document.body.innerText.slice(0,4000) : ''") or ""
+        return str(page.evaluate(
+            "document.body ? document.body.innerText.slice(0,4000) : ''") or "")
     except Exception:
+        return ""
+
+
+def _check_bot_wall(page: Page) -> bool:
+    """True when the visible page is a block/CAPTCHA/search-paused wall."""
+    visible = _body_text(page)
+    if not visible:
         return False
-    return bool(BOT_WALL_PATTERNS.search(visible))
+    return bool(BOT_WALL_PATTERNS.search(visible)
+                or SEARCH_PAUSED_RE.search(visible))
 
 
 #: LinkedIn auth-wall redirect targets (probe-verified 2026-10-23: an
@@ -232,14 +393,16 @@ LOGIN_GRACE_S = 300.0
 
 #: JS that clicks any "...see more / Show more" affordance so truncated post
 #: bodies (and the emails hiding inside them) are expanded before extraction.
-_EXPAND_SHOW_MORE_JS = """
+_EXPAND_SHOW_MORE_JS = r"""
 () => {
-  const needles = ['see more', 'show more', 'more'];
-  document.querySelectorAll('button, a, span').forEach((el) => {
+  /*expand-more*/
+  document.querySelectorAll('[data-testid="expandable-text-button"], button').forEach((el) => {
     const t = (el.innerText || el.textContent || '').trim().toLowerCase();
-    if (!t) return;
-    if (needles.some((n) => t === n || t.endsWith(n) || t.includes('see more'))
-      && t.length <= 40) {
+    if (!t || t.includes('less')) return;
+    const byTestId = el.getAttribute('data-testid') === 'expandable-text-button';
+    const byLabel = t === 'more' || t.endsWith(' more') ||
+                    t.includes('see more') || t.includes('show more');
+    if (byTestId || byLabel) {
       try { el.click(); } catch (e) { /* ignore */ }
     }
   });
@@ -249,7 +412,7 @@ _EXPAND_SHOW_MORE_JS = """
 
 
 def _expand_show_more(page: Page) -> None:
-    '''Best-effort expansion of truncated LinkedIn post bodies (never raises).'''
+    """Best-effort expansion of truncated LinkedIn post bodies (never raises)."""
     try:
         page.evaluate(_EXPAND_SHOW_MORE_JS)
     except Exception:
@@ -318,26 +481,336 @@ def _wait_for_login(page: Page,
     return True
 
 
+def _open_feed(page: Page) -> bool:
+    """Open the feed once and clear any sign-in wall.
+
+    This is the ONLY navigation of a run. Every later domain reuses this
+    page and is driven through the global search box.
+    """
+    try:
+        _safe_goto(page, FEED_URL)
+    except Exception:
+        log.warning("Could not open the LinkedIn feed; continuing on the "
+                    "current page.")
+    page.wait_for_timeout(SETTLE_MS)
+    if _on_login_wall(page):
+        if not _prompt_manual_login():
+            log.warning("Signed out and no TTY — stopping. Run headful once, "
+                        "log in, and rerun (session persists).")
+            return False
+        if not _wait_for_login(page):
+            log.warning("Still on the sign-in page %.0fs after the prompt — "
+                        "NOT reloading it (that would interrupt your login). "
+                        "Finish signing in in the open window, then rerun; "
+                        "the session persists.", LOGIN_GRACE_S)
+            return False
+        try:
+            _safe_goto(page, FEED_URL)
+        except Exception:
+            log.warning("Could not reopen the feed after login; continuing.")
+        page.wait_for_timeout(SETTLE_MS)
+        if _on_login_wall(page):
+            log.warning("Navigation landed back on the sign-in page — "
+                        "stopping the run.")
+            return False
+    return True
+
+
+def _results_ui_ready(page: Page) -> bool:
+    """True once the search result surface has actually rendered."""
+    try:
+        return bool(page.evaluate(RESULTS_READY_JS))
+    except Exception:
+        return False
+
+
+def _wait_for_results(page: Page, keyword: str) -> bool:
+    """Wait until the rendered results visibly reflect ``keyword``.
+
+    Prevents scraping the previous domain's feed while the SPA swaps pages.
+    The URL changes before the new SDUI body exists, so this requires ALL of:
+    a search-results URL, the keyword visible in the body (or an explicit
+    "no results" message), and a rendered filter bar / post list.
+    Times out (and continues) rather than failing a run on a slow render.
+    """
+    needle = keyword.lower()
+    waited = 0
+    while waited <= SEARCH_READY_TIMEOUT_MS:
+        try:
+            url = (page.url or "").lower()
+        except Exception:
+            url = ""
+        low = _body_text(page).lower()
+        if "/search/results/" in url and _results_ui_ready(page) and (
+                needle in low or "no results" in low or "no matching" in low):
+            return True
+        page.wait_for_timeout(SEARCH_READY_POLL_MS)
+        waited += SEARCH_READY_POLL_MS
+    log.warning("Search results for %r were not confirmed after %.0fs — "
+                "continuing anyway", keyword, SEARCH_READY_TIMEOUT_MS / 1000)
+    return False
+
+
+def _submit_search(page: Page, keyword: str) -> bool:
+    """Type ``keyword`` into the SAME global search box and press Enter."""
+    try:
+        box = page.locator(SEARCH_INPUT_SELECTOR).first
+        box.click()
+        box.fill("")
+        box.type(keyword, delay=SEARCH_TYPE_DELAY_MS)
+        box.press("Enter")
+    except Exception as exc:
+        log.warning("Could not drive the LinkedIn search box for %r: %s",
+                    keyword, exc)
+        return False
+    page.wait_for_timeout(1500)
+    _wait_for_results(page, keyword)
+    return True
+
+
+def _open_posts_view(page: Page) -> bool:
+    """Click the native Posts tab (URL 1 → URL 2) without a URL goto.
+
+    The filter bar can finish rendering a few seconds after the search
+    results URL changes, so this retries briefly instead of skipping a
+    domain's entire content view on the first miss.
+    """
+    clicked = False
+    for _ in range(20):
+        try:
+            clicked = bool(page.evaluate(POSTS_FILTER_JS))
+        except Exception:
+            clicked = False
+        if clicked:
+            break
+        page.wait_for_timeout(500)
+    if not clicked:
+        log.warning("Posts filter tab not found on the all-results page")
+        return False
+    try:
+        page.wait_for_selector("text=Sort by", timeout=10000)
+    except Exception:
+        page.wait_for_timeout(5000)
+    page.wait_for_timeout(SETTLE_MS)
+    return True
+
+
+def _click_filter_button(page: Page, label: str) -> bool:
+    """Open a native search filter dropdown (e.g. ``"Sort by"``)."""
+    js = f"""
+    () => {{
+      /*click-filter*/
+      const wanted = {json.dumps(label)};
+      const els = Array.from(document.querySelectorAll('[role="button"], button'));
+      const el = els.find((e) => {{
+        const t = (e.innerText || '').trim();
+        const r = e.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && (t === wanted || t.startsWith(wanted));
+      }});
+      if (!el) return false;
+      el.click();
+      return true;
+    }}
+    """
+    try:
+        return bool(page.evaluate(js))
+    except Exception:
+        return False
+
+
+def _select_filter_radio(page: Page, label: str) -> bool:
+    """Select a native filter radio by its aria-label (click its label)."""
+    js = f"""
+    () => {{
+      /*select-radio*/
+      const wanted = {json.dumps(label)};
+      const inputs = Array.from(document.querySelectorAll('input[type="radio"]'));
+      const input = inputs.find(
+        (i) => (i.getAttribute('aria-label') || '') === wanted);
+      if (!input) return false;
+      const lab = input.id
+        ? document.querySelector('label[for="' + input.id + '"]') : null;
+      (lab || input).click();
+      return true;
+    }}
+    """
+    try:
+        return bool(page.evaluate(js))
+    except Exception:
+        return False
+
+
+def _show_filter_results(page: Page) -> bool:
+    """Apply the open filter panel via its native "Show results" control."""
+    try:
+        return bool(page.evaluate(SHOW_RESULTS_JS))
+    except Exception:
+        return False
+
+
+def _apply_content_filters(page: Page, date_facet: str | None) -> bool:
+    """Apply **Latest** + the requested date facet through LinkedIn's UI.
+
+    The dropdowns are custom SDUI panels whose radios do nothing until the
+    "Show results" link is clicked — navigating to a crafted URL instead is
+    exactly the behaviour that tripped the traffic wall, so this stays 100%
+    in-page clicks.
+    """
+    ok = True
+    if _click_filter_button(page, "Sort by"):
+        page.wait_for_timeout(FILTER_OPEN_MS)
+        if _select_filter_radio(page, "Latest"):
+            page.wait_for_timeout(FILTER_RADIO_MS)
+            if not _show_filter_results(page):
+                ok = False
+        else:
+            ok = False
+        page.wait_for_timeout(FILTER_APPLY_MS)
+    else:
+        log.debug("Sort-by control not found; keeping LinkedIn's default order")
+        ok = False
+
+    label = DATE_LABELS.get(date_facet or "")
+    if label:
+        if _click_filter_button(page, "Date posted"):
+            page.wait_for_timeout(FILTER_OPEN_MS)
+            if _select_filter_radio(page, label):
+                page.wait_for_timeout(FILTER_RADIO_MS)
+                if not _show_filter_results(page):
+                    ok = False
+            else:
+                ok = False
+            page.wait_for_timeout(FILTER_APPLY_MS)
+        else:
+            log.debug("Date-posted control not found; keeping all dates")
+            ok = False
+    return ok
+
+
+def _count_posts(page: Page) -> int:
+    """Number of real post units currently rendered in the lazy column."""
+    try:
+        return int(page.evaluate(COUNT_POSTS_JS) or 0)
+    except Exception:
+        return 0
+
+
+def _wheel_feed(page: Page) -> None:
+    """Mouse-wheel over the posts column (human scroll gesture)."""
+    try:
+        rect = page.evaluate(FEED_RECT_JS)
+    except Exception:
+        rect = None
+    if isinstance(rect, dict) and rect.get("width"):
+        try:
+            x = float(rect.get("x", 0)) + float(rect.get("width", 0)) / 2
+            y = float(rect.get("y", 0)) + 200
+            page.mouse.move(int(x), int(max(160.0, min(y, 620.0))))
+            for _ in range(WHEEL_STEPS):
+                page.mouse.wheel(0, WHEEL_DY)
+            return
+        except Exception:
+            pass
+    try:
+        page.mouse.wheel(0, WHEEL_DY * WHEEL_STEPS)
+    except Exception:
+        pass
+
+
+def _scroll_to_bottom(page: Page) -> bool:
+    """Jump the true scroll container to its end (lazy-load sentinel)."""
+    try:
+        return bool(page.evaluate(SCROLL_TO_BOTTOM_JS))
+    except Exception:
+        return False
+
+
+def _extract_fresh(page: Page, domain: str, keyword: str,
+                   seen: set[tuple[str, str]],
+                   on_batch: Callable[[list[EmailContact]], None] | None
+                   ) -> list[EmailContact]:
+    """Expand, extract, and return contacts not yet seen in this run."""
+    _expand_show_more(page)
+    try:
+        cards = page.evaluate(CONTENT_EXTRACT_JS) or []
+    except Exception:
+        cards = []
+    batch: list[EmailContact] = []
+    for contact in _contacts_from_cards(cards, domain, keyword):
+        key = (contact.email, contact.post_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        batch.append(contact)
+    if batch and on_batch is not None:
+        on_batch(batch)
+    return batch
+
+
+def _collect_view(page: Page, keyword: str, domain: str, rounds: int,
+                  target: int, seen: set[tuple[str, str]],
+                  on_batch: Callable[[list[EmailContact]], None] | None
+                  ) -> list[EmailContact]:
+    """Scroll one results view and harvest posts, with periodic checkpoints.
+
+    A "round" is a mouse-wheel burst + wait. When the wheel stops producing
+    new posts, the real ``<main>`` scroller is nudged to its end to wake the
+    lazy spinner; three consecutive no-growth rounds end the view.
+    """
+    found: list[EmailContact] = []
+    stalled = 0
+    for round_no in range(max(0, rounds)):
+        before = _count_posts(page)
+        if before == 0:
+            break
+        _wheel_feed(page)
+        page.wait_for_timeout(SCROLL_WAIT_MS)
+        after = _count_posts(page)
+        if after <= before:
+            _scroll_to_bottom(page)
+            page.wait_for_timeout(STALL_WAIT_MS)
+            after = max(after, _count_posts(page))
+            stalled = stalled + 1 if after <= before else 0
+        else:
+            stalled = 0
+
+        if round_no % CHECKPOINT_EVERY == 0 or after >= target or stalled:
+            found.extend(_extract_fresh(page, domain, keyword, seen, on_batch))
+        if after >= target:
+            log.info("%s: reached the %d-post target", domain, target)
+            break
+        if stalled >= MAX_STALLS:
+            log.info("%s: no more posts after %d posts", domain, after)
+            break
+    found.extend(_extract_fresh(page, domain, keyword, seen, on_batch))
+    return found
+
+
 def run_collect(context: BrowserContext,
                 domains: list[str] | None = None,
                 max_scrolls: int | None = None,
-                date_facet: str | None = None) -> list[EmailContact]:
+                date_facet: str | None = None,
+                on_batch: Callable[[list[EmailContact]], None] | None = None
+                ) -> list[EmailContact]:
     """Search LinkedIn posts per domain and return deduped contacts.
 
-    Flow per domain: ``"@<domain>"`` keyword URL → guarded goto → settle →
-    bot-wall check (stop-with-guidance, never bypass) → up to
-    ``max_scrolls`` extract/scroll passes (human-scroll + pause between) →
-    politeness pause before the next domain. First sighting of an email
-    wins within a run; cross-run dedupe is the DB's job (``upsert_emails``).
+    One page, one search per domain. For each domain the collector scrapes
+    the blended all-results Posts cluster (URL 1), clicks the native Posts
+    tab, applies Latest + the date facet (URL 2), and scrolls both views to
+    the configured post target or exhaustion.
 
     Args:
         context: Open browser context (caller owns close()).
         domains: Target domains; defaults to ``SETTINGS.email_domains``.
-        max_scrolls: Feed scrolls per domain; defaults to ``SETTINGS``.
+        max_scrolls: Max scroll rounds per view (URL 1 and URL 2);
+            defaults to ``SETTINGS.email_max_scrolls``.
         date_facet: LinkedIn date facet; defaults to ``SETTINGS``.
+        on_batch: Optional persistence hook called with each new batch of
+            contacts (checkpoint after each scroll block and each view), so
+            a broken session still leaves harvested emails in SQLite/Excel.
 
     Returns:
-        Contacts in discovery order, one per unique email.
+        Contacts in discovery order, one per unique (email, post).
     """
     if domains is None:
         domains = SETTINGS.email_domains
@@ -345,72 +818,57 @@ def run_collect(context: BrowserContext,
         max_scrolls = SETTINGS.email_max_scrolls
     if date_facet is None:
         date_facet = SETTINGS.email_date_facet
+    if date_facet and date_facet not in DATE_FACETS:
+        raise ValueError(
+            f"unsupported date facet {date_facet!r}; one of {DATE_FACETS}")
 
+    target = SETTINGS.email_target_posts
     page = context.new_page()
-    contacts: dict[tuple[str, str], EmailContact] = {}   # (email, post) → first sighting
+    contacts: dict[tuple[str, str], EmailContact] = {}
+    seen: set[tuple[str, str]] = set()
 
-    def _ensure_signed_in(url: str) -> bool:
-        '''Navigate (with login-wall handling) and return True if usable.'''
-        _safe_goto(page, url)
-        page.wait_for_timeout(SETTLE_MS)      # SDUI hydration settle
-        if _on_login_wall(page):
-            # Signed out: hand the window to the human and WAIT. Do NOT
-            # re-navigate here — a reload would interrupt sign-in and discard
-            # whatever they have typed (the "page refreshes at login" bug).
-            if not _prompt_manual_login():
-                log.warning("Signed out and no TTY — stopping. Run headful "
-                            "once, log in, and rerun (session persists).")
-                return False
-            if not _wait_for_login(page):
-                log.warning("Still on the sign-in page %.0fs after the prompt "
-                            "— NOT reloading it (that would interrupt your "
-                            "login). Finish signing in in the open window, "
-                            "then rerun; the session persists.", LOGIN_GRACE_S)
-                return False
-            # Signed in → one clean navigation to the target search page.
-            _safe_goto(page, url)
-            page.wait_for_timeout(SETTLE_MS)
-            if _on_login_wall(page):       # bounced back to the wall anyway
-                log.warning("Navigation landed back on the sign-in page — "
-                            "stopping the run.")
-                return False
-        if _check_bot_wall(page):
-            log.warning("Bot-wall on %r — stopping the run. Solve any check "
-                        "MANUALLY in the opened window, then rerun.", domain)
-            return False
-        return True
-
-    def _scroll_pass(keyword: str, domain: str, facet, scrolls: int) -> None:
-        '''One extract/scroll pass over the feed for a single domain.'''
-        for scroll in range(scrolls):
-            _expand_show_more(page)
-            cards = page.evaluate(CONTENT_EXTRACT_JS) or []
-            for contact in _contacts_from_cards(cards, domain, keyword):
-                contacts.setdefault((contact.email, contact.post_id), contact)
-            if scroll < scrolls - 1:      # scroll between passes only
-                human_scroll(page, rounds=1)
-                human_pause()
-                _expand_show_more(page)
+    if not _open_feed(page):
+        return []
 
     for domain in domains:
         keyword = "@" + domain
-        target = SETTINGS.email_target_min
-        before = len(contacts)
         log.info("Searching LinkedIn posts for %r", keyword)
-        url = build_content_search_url(keyword, date_facet)
-        if not _ensure_signed_in(url):
+        if not _submit_search(page, keyword):
             break
-        _scroll_pass(keyword, domain, date_facet, max_scrolls)
-        added = len(contacts) - before
-        # Fallback for sparse results: widen to all-time posts and scroll deeper
-        # so we still surface ~20-30 emails even when the last 60 days are thin.
-        if added < target:
-            log.info("Only %d emails for %r in the primary window — falling "
-                     "back to all-time posts (target %d).", added, domain, target)
-            url2 = build_content_search_url(keyword, None)
-            if _ensure_signed_in(url2):
-                _scroll_pass(keyword, domain, None, SETTINGS.email_fallback_scrolls)
+        if _check_bot_wall(page):
+            log.warning("LinkedIn paused search activity / served a block "
+                        "wall — stopping. Wait 30-60 minutes before searching "
+                        "again. SQLite and output/linkedin_emails_partial.xlsx "
+                        "already hold every email harvested so far; rerun the "
+                        "remaining domains with --domains.")
+            break
+
+        log.info("%s: view 1/2 — all-results Posts cluster", domain)
+        for contact in _collect_view(page, keyword, domain, max_scrolls,
+                                     target, seen, on_batch):
+            contacts.setdefault((contact.email, contact.post_id), contact)
+
+        if not _open_posts_view(page):
+            log.warning("%s: Posts tab unavailable — skipping the content "
+                        "view for this domain", domain)
+        else:
+            if not _apply_content_filters(page, date_facet):
+                log.warning("%s: some native filters were unavailable — "
+                            "scraping the content view with LinkedIn's "
+                            "default order/facets", domain)
+            if _check_bot_wall(page):
+                log.warning("LinkedIn paused search activity after the "
+                            "filters — stopping. Partial Excel is preserved.")
+                break
+            log.info("%s: view 2/2 — content search (newest, %s)",
+                     domain, date_facet or "all time")
+            for contact in _collect_view(page, keyword, domain, max_scrolls,
+                                         target, seen, on_batch):
+                contacts.setdefault((contact.email, contact.post_id), contact)
+
+        page.wait_for_timeout(SETTINGS.email_domain_pause_s * 1000)
         human_pause()                          # politeness between domains
+
     log.info("Collect pass done: %d unique (email, post) contacts",
              len(contacts))
     return list(contacts.values())

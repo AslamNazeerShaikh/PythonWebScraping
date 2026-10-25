@@ -53,5 +53,7 @@ def test_email_collector_settings_defaults():
         "infosys.com", "tcs.com", "wipro.com", "epam.com", "kforce.com",
         "persistent.com", "xoriant.com",
     ]
-    assert s.email_max_scrolls == 6
+    assert s.email_max_scrolls == 40
+    assert s.email_target_posts == 100
+    assert s.email_domain_pause_s == 300
     assert s.email_date_facet == "past-month"

@@ -84,8 +84,20 @@ def _login_wait(timeout_s: int = 600) -> int:
             deadline = time.time() + timeout_s
             while time.time() < deadline:
                 page.wait_for_timeout(2000)
-                if not _on_login_wall(page) and page.evaluate(
-                        "!!document.querySelector('header.global-nav, .global-nav')"):
+                try:
+                    url = page.url or ""
+                    on_wall = _on_login_wall(page)
+                    # LinkedIn's global-nav class names change often; treat any
+                    # non-auth URL on a known signed-in surface as success.
+                    signed_in_surface = any(tok in url for tok in
+                                            ("/feed", "/mynetwork", "/jobs",
+                                             "/search", "/messaging"))
+                    logged_in = (not on_wall) and signed_in_surface
+                except Exception:
+                    # Navigation during login destroys the execution context;
+                    # just keep polling.
+                    logged_in = False
+                if logged_in:
                     print("LOGGED_IN_OK — session persisted; closing.",
                           flush=True)
                     return 0

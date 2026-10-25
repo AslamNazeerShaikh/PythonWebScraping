@@ -88,13 +88,16 @@ class Settings:
             if s.strip()
         ]
     )
-    #: Scrolls per domain in the (infinite) content-search feed.
-    email_max_scrolls: int = _get_int("EMAIL_MAX_SCROLLS", 6)
-    #: Minimum emails to harvest per domain before falling back to an
-    #: all-time (no date filter) pass to find older posts (target 20-30).
-    email_target_min: int = _get_int("EMAIL_TARGET_MIN", 20)
-    #: Extra scrolls used by the fallback pass for older posts.
-    email_fallback_scrolls: int = _get_int("EMAIL_FALLBACK_SCROLLS", 12)
+    #: Max mouse-wheel scroll rounds per view (URL 1 and URL 2). The
+    #: collector stops earlier once the target is reached or the feed stops
+    #: appending new posts.
+    email_max_scrolls: int = _get_int("EMAIL_MAX_SCROLLS", 40)
+    #: Desired number of posts to load per view before stopping early.
+    #: LinkedIn keeps appending on scroll; 100 matches the requested depth.
+    email_target_posts: int = _get_int("EMAIL_TARGET_POSTS", 100)
+    #: Cooldown between domains (seconds). LinkedIn applies a rolling
+    #: search-rate limit; 5 minutes is deliberately conservative.
+    email_domain_pause_s: int = _get_int("EMAIL_DOMAIN_PAUSE_S", 300)
     #: LinkedIn date facet — only past-24h/past-week/past-month are valid;
     #: unknown values are silently ignored by LinkedIn (validated at URL build).
     #: Empty string means "no date filter" (all time) — used by the fallback.

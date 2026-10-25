@@ -109,6 +109,30 @@ class FakeKeyboard:
         self.presses.append(key)
 
 
+class FakeLocator:
+    """Minimal Playwright Locator double for the search-box flow."""
+
+    def __init__(self, selector: str, page: "FakePage") -> None:
+        self.selector = selector
+        self.page = page
+
+    @property
+    def first(self) -> "FakeLocator":
+        return self
+
+    def click(self) -> None:
+        self.page.locator_clicks.append(self.selector)
+
+    def fill(self, value: str) -> None:
+        self.page.locator_fills.append((self.selector, value))
+
+    def type(self, text: str, delay: int = 0) -> None:
+        self.page.locator_types.append((self.selector, text, delay))
+
+    def press(self, key: str) -> None:
+        self.page.locator_presses.append((self.selector, key))
+
+
 class FakePage:
     """Scriptable Page fake.
 
@@ -120,6 +144,8 @@ class FakePage:
         selector_fail: wait_for_selector raises when True.
         goto_plan: list of exceptions (None = success) consumed per goto.
         close_fail / mouse_fail: failure injection flags.
+        js_returns: marker → value (or callable returning the value) for
+            evaluate() calls the test wants to script.
     """
 
     LISTING_MARK = "const out = [];"
@@ -159,6 +185,17 @@ class FakePage:
         self.goto_set_url: list[str | None] = []
         #: Current URL (search-bar submit returns this as the landed URL).
         self.url = "https://www.naukri.com/"
+        #: Marker → value (or callable) returned by evaluate().
+        self.js_returns: dict[str, object] = {}
+        #: Search-box locator interactions.
+        self.locator_clicks: list[str] = []
+        self.locator_fills: list[tuple[str, str]] = []
+        self.locator_types: list[tuple[str, str, int]] = []
+        self.locator_presses: list[tuple[str, str]] = []
+
+    # -- locators (global search box) ------------------------------------
+    def locator(self, selector: str) -> FakeLocator:
+        return FakeLocator(selector, self)
 
     # -- navigation ------------------------------------------------------
     def goto(self, url: str, wait_until: str = "domcontentloaded"):
@@ -193,6 +230,9 @@ class FakePage:
     # -- JS evaluation (dispatches on markers in the real query strings) --
     def evaluate(self, js: str):
         self.evals.append(js)
+        for marker, value in self.js_returns.items():
+            if marker in js:
+                return value() if callable(value) else value
         if 'innerText.slice(0,4000)' in js:
             return self.body_text
         if '/*content-email-cards*/' in js:

@@ -25,7 +25,8 @@ from rich.console import Console
 from rich.table import Table
 
 from .config import BASE_DIR, SETTINGS
-from .db import count_jobs, fetch_all_jobs, init_db, record_run, upsert_emails, upsert_jobs
+from .db import (count_emails, count_jobs, fetch_all_jobs, init_db,
+                 record_run, upsert_emails, upsert_jobs)
 from .export import export_emails, export_jobs
 from .linkedin_email_scraper import run_collect
 from .log import setup_logging
@@ -88,27 +89,54 @@ def do_collect_emails(domains: list[str] | None,
                       max_scrolls: int | None = None) -> int:
     """Run the LinkedIn email collector; return process exit code.
 
-    Opens the browser, searches posts per domain (``"@<domain>"`` keyword,
-    ``past-month`` facet), upserts unique addresses into ``contact_emails``,
-    and writes the Excel snapshot. Empty result is exit ``0`` with guidance.
+    Opens ONE browser, searches posts per domain (``"@<domain>"`` keyword)
+    through the in-page search box, scrapes both the all-results Posts
+    cluster and the Latest/Past-month content feed, and upserts each new
+    batch into ``contact_emails``. A checkpoint Excel is rewritten after
+    every batch so a broken session never loses already-harvested emails.
     """
     setup_logging(SETTINGS.log_level)
     init_db()
+    totals = {"new": 0}
+    persisted: set[tuple[str, str]] = set()
+    out_dir = SETTINGS.output_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    partial = out_dir / "linkedin_emails_partial.xlsx"
+
+    def _persist(batch: list[EmailContact]) -> None:
+        """Upsert one batch and rewrite the checkpoint workbook."""
+        if not batch:
+            return
+        keys = {(c.email, c.post_id) for c in batch}
+        if not (keys - persisted):
+            return
+        new, _ = upsert_emails(batch)
+        totals["new"] += new
+        persisted.update(keys)
+        export_emails(fmt="excel", out_path=str(partial))
+
     with sync_playwright() as p:
         context = launch_context(p)
         try:
             contacts = run_collect(context, domains=domains,
-                                   max_scrolls=max_scrolls)
+                                   max_scrolls=max_scrolls,
+                                   on_batch=_persist)
         finally:
             context.close()
-    if not contacts:
+
+    # Mocked/legacy callers may return contacts without invoking the hook;
+    # persist anything the callback did not already see.
+    remaining = [c for c in contacts if (c.email, c.post_id) not in persisted]
+    if remaining:
+        _persist(remaining)
+    if not contacts and totals["new"] == 0 and count_emails() == 0:
         console.print("[yellow]No emails found — check login state "
                       "(first run headful) or widen the date facet.[/yellow]")
         return 0
-    new, total = upsert_emails(contacts)
     dest = export_emails(fmt="excel")
-    console.print(f"[green]Done:[/green] {total} emails ({new} new) "
-                  f"-> SQLite + {dest}")
+    console.print(f"[green]Done:[/green] {count_emails()} emails "
+                  f"({totals['new']} new) -> SQLite + {dest}")
+    console.print(f"[dim]Checkpoints:[/dim] {partial}")
     return 0
 
 

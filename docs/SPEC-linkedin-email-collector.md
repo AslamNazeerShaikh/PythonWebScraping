@@ -254,23 +254,39 @@ one-time login then persists across domains and reruns.
 1. **Dedupe unit is now `(email, post)`**, not `email` alone: recruiters
    re-posting the same address across several posts are kept (each post is a
    distinct row), while a re-sighting of the *same* post bumps `last_seen`.
-   `post_id` is captured from the card's `data-urn`, falling back to the
-   permalink, then to an `author|posted|text[:40]` key.
+   `post_id` comes from the post's SDUI `componentkey`
+   (`update-card-focus<hash>FeedType_…`), falling back to the permalink and
+   then an `author|posted|text[:40]` key.
 2. **"Show more" expansion**: `_expand_show_more` clicks `…see more` /
    `Show more` affordances before extraction so emails hidden behind
    truncated bodies are revealed (best-effort, never raises).
 3. **Relevance gate**: posts surfaced by LinkedIn that carry neither the
    `@<domain>` keyword nor an email on the target domain are dropped
    (`_contacts_from_cards`), filtering the "weird unrelated posts".
-4. **60-day window + older fallback**: LinkedIn only exposes `past-24h` /
-   `past-week` / `past-month` facets, so the primary pass uses `past-month`
-   (~30d, the nearest available). When a domain yields fewer than
-   `EMAIL_TARGET_MIN` (default 20) emails, a second all-time pass with
-   `EMAIL_FALLBACK_SCROLLS` (default 12) scrolls deeper to surface older
-   posts. `build_content_search_url` now accepts `None`/`""` for no date
-   filter.
-5. **Login wait** stays passive (no page reload) — unchanged.
-6. Config additions: `EMAIL_TARGET_MIN`, `EMAIL_FALLBACK_SCROLLS`.
+4. **Both search surfaces, one search**: each domain is typed once into the
+   global search box. The collector first scrolls the blended all-results
+   Posts cluster (URL 1), then clicks the native **Posts** tab (URL 2
+   `origin=SWITCH_SEARCH_VERTICAL`), selects **Latest** + **Past month** via
+   the real radio controls and **Show results**, and scrolls again. No
+   per-domain URL navigation, no relaunch. This is the fix for the
+   "unusual search traffic" wall triggered by repeated URL hits.
+5. **Verified SDUI selectors (live 2026-10-25)**: posts are
+   `[role="listitem"]` units inside `[data-testid="lazy-column"]`, each with
+   one `[data-testid="expandable-text-box"]` body. The previous direct-child
+   logic treated a *chunk* of posts as one post and lost most emails.
+6. **Deep, human-like scrolling**: mouse-wheel bursts over the feed, with
+   the true scroll container (`<main>`) nudged to the lazy sentinel when a
+   batch stalls. Default target is 100 posts per view (`EMAIL_TARGET_POSTS`),
+   capped by `EMAIL_MAX_SCROLLS` rounds; three no-growth rounds end a view.
+7. **Crash-safe checkpoints**: `run_collect(..., on_batch=…)` hands each new
+   batch to the CLI, which upserts into SQLite and rewrites
+   `output/linkedin_emails_partial.xlsx`. A broken session still leaves the
+   harvested emails on disk; a final timestamped snapshot is written at the
+   end.
+8. **Config additions**: `EMAIL_TARGET_POSTS` (default 100);
+   `EMAIL_MAX_SCROLLS` now means wheel rounds per view (default 40). The
+   obsolete `EMAIL_TARGET_MIN` / `EMAIL_FALLBACK_SCROLLS` all-time fallback
+   was removed — URL 2's native Past-month facet replaces it.
 
 ## Open Questions
 

@@ -183,11 +183,14 @@ def test_collect_emails_upserts_exports_and_reports(monkeypatch, fresh_db,
         "collect-emails", "--domains", "ltm.com", "--max-scrolls", "2",
         "--headless"])
     assert res.exit_code == 0
-    assert captured == {"domains": ["ltm.com"], "max_scrolls": 2}
+    assert captured["domains"] == ["ltm.com"]
+    assert captured["max_scrolls"] == 2
+    assert callable(captured["on_batch"])
     assert fresh_db.count_emails() == 1
     assert "(1 new)" in res.output
     written = list(tmp_path.glob("linkedin_emails_*.xlsx"))
-    assert len(written) == 1                      # Excel produced per run
+    assert len(written) == 2                      # checkpoint + final snapshot
+    assert any(p.name == "linkedin_emails_partial.xlsx" for p in written)
 
 
 def test_collect_emails_defaults_to_settings_domains(monkeypatch, fresh_db):
@@ -196,6 +199,30 @@ def test_collect_emails_defaults_to_settings_domains(monkeypatch, fresh_db):
     assert res.exit_code == 0
     assert captured["domains"] is None            # SETTINGS.email_domains
     assert captured["max_scrolls"] is None        # SETTINGS.email_max_scrolls
+
+
+def test_collect_emails_checkpoint_skips_empty_and_duplicate_batches(
+        monkeypatch, fresh_db, tmp_path):
+    """Checkpoint hook ignores empty/duplicate batches (no redundant exports)."""
+    from src.models import EmailContact
+
+    contact = EmailContact(email="neha.pandey@ltm.com", domain="ltm.com",
+                           keyword="@ltm.com", author="Neha Pandey")
+
+    def _run(_ctx, **kw):
+        kw["on_batch"]([])
+        kw["on_batch"]([contact])
+        kw["on_batch"]([contact])       # same (email, post_id) → skip
+        return [contact]
+
+    monkeypatch.setattr(main, "sync_playwright", lambda: _FakePW(object()))
+    monkeypatch.setattr(main, "launch_context", lambda p: FakeContext())
+    monkeypatch.setattr(main, "run_collect", _run)
+    monkeypatch.setattr(main.SETTINGS, "output_dir", tmp_path)
+    res = runner.invoke(main.app, ["collect-emails", "--domains", "ltm.com"])
+    assert res.exit_code == 0
+    assert fresh_db.count_emails() == 1
+    assert "(1 new)" in res.output
 
 
 def test_export_emails_command_excel(monkeypatch, fresh_db, tmp_path):
