@@ -90,8 +90,14 @@ class Settings:
     )
     #: Scrolls per domain in the (infinite) content-search feed.
     email_max_scrolls: int = _get_int("EMAIL_MAX_SCROLLS", 6)
+    #: Minimum emails to harvest per domain before falling back to an
+    #: all-time (no date filter) pass to find older posts (target 20-30).
+    email_target_min: int = _get_int("EMAIL_TARGET_MIN", 20)
+    #: Extra scrolls used by the fallback pass for older posts.
+    email_fallback_scrolls: int = _get_int("EMAIL_FALLBACK_SCROLLS", 12)
     #: LinkedIn date facet — only past-24h/past-week/past-month are valid;
     #: unknown values are silently ignored by LinkedIn (validated at URL build).
+    #: Empty string means "no date filter" (all time) — used by the fallback.
     email_date_facet: str = _get("EMAIL_DATE_FACET", "past-month")
 
     # -- Browser engine (Chrome-only stack) --------------------------------

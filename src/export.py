@@ -223,7 +223,7 @@ def _hyperlink_titles(path: Path) -> None:
 # LinkedIn email collector snapshots (docs/SPEC-linkedin-email-collector.md)
 # ---------------------------------------------------------------------------
 #: Column order for ``contact_emails`` exports (stable, spec-mandated).
-EMAIL_COLUMNS = ["email", "domain", "author", "posted", "post_url",
+EMAIL_COLUMNS = ["email", "post_id", "domain", "author", "posted", "post_url",
                  "snippet", "keyword", "first_seen", "last_seen"]
 
 

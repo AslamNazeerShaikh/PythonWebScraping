@@ -9,6 +9,7 @@ import pytest
 from src.linkedin_email_scraper import (
     CONTENT_EXTRACT_JS,
     _contacts_from_cards,
+    _expand_show_more,
     _safe_goto,
     _wait_for_login,
     build_content_search_url,
@@ -120,8 +121,10 @@ def test_run_collect_happy_path_scrolls_and_dedupes():
     # pass 1: two cards (same email twice); pass 2: one new email
     page.cards_queue = [
         [CARD, dict(CARD)],
-        [dict(CARD, text="also apply@epam.com", author="A")],
+        [dict(CARD, text="@ltm.com also apply@epam.com", author="A")],
     ]
+    from src import config
+    config.SETTINGS.email_target_min = 0
     out = run_collect(ctx, domains=["ltm.com"], max_scrolls=2,
                       date_facet="past-month")
     emails = [c.email for c in out]
@@ -209,6 +212,8 @@ def test_run_collect_logs_in_manually_then_proceeds(monkeypatch, fresh_db):
     page.url = "https://www.linkedin.com/uas/login?session_redirect=%2Fsearch"
     ctx = FakeContext(page)
     page.cards_queue = [[CARD]]
+    from src import config
+    config.SETTINGS.email_target_min = 0
 
     def _logged_in(*a, **k):               # ENTER pressed after real login
         page.url = "https://www.linkedin.com/feed/"
@@ -300,3 +305,74 @@ def test_wait_for_login_gives_up_after_grace():
     page = FakePage()
     page.url = "https://www.linkedin.com/uas/login?x=1"   # never clears
     assert _wait_for_login(page, grace_s=0.06, poll_s=0.03) is False
+
+
+# -- coverage: all-time URL builder -------------------------------------------
+def test_build_content_search_url_all_time():
+    url = build_content_search_url("@tcs.com", date_facet=None)
+    assert "datePosted" not in url
+    url2 = build_content_search_url("@tcs.com", date_facet="")
+    assert "datePosted" not in url2
+
+
+# -- coverage: relevance gate drops unrelated posts -----------------------------
+def test_contacts_from_cards_drops_unrelated_posts():
+    card = {"text": "random post with spam@other.com", "author": "X"}
+    out = _contacts_from_cards([card], domain="tcs.com", keyword="@tcs.com")
+    assert out == []
+
+
+# -- coverage: post_id taken from urn -----------------------------------------
+def test_contacts_from_cards_uses_urn_as_post_id():
+    card = {"text": "write to hr@wipro.com", "urn": "urn:li:activity:999",
+            "author": "X", "posted": "1d", "url": "https://lnkd.in/y"}
+    out = _contacts_from_cards([card], domain="wipro.com", keyword="@wipro.com")
+    assert len(out) == 1
+    assert out[0].post_id == "urn:li:activity:999"
+
+
+# -- coverage: show-more expansion swallows errors ------------------------------
+def test_expand_show_more_swallows_errors():
+    class _BrokenPage:
+        def evaluate(self, js):
+            raise RuntimeError("boom")
+    _expand_show_more(_BrokenPage())  # must not raise
+
+
+# -- coverage: sparse results trigger the all-time fallback ---------------------
+def test_run_collect_fallback_to_all_time(monkeypatch):
+    from src import config
+    config.SETTINGS.email_target_min = 5
+    config.SETTINGS.email_fallback_scrolls = 1
+    page = FakePage()
+    ctx = FakeContext(page)
+    page.cards_queue = [[CARD]]
+    from src.linkedin_email_scraper import run_collect
+    out = run_collect(ctx, domains=["ltm.com"], max_scrolls=1,
+                      date_facet="past-month")
+    assert len(page.goto_urls) == 2  # primary + fallback
+
+
+# -- coverage: fallback aborted by a bot wall ---------------------------------
+def test_run_collect_fallback_aborted_by_bot_wall(monkeypatch):
+    from src import config
+    from src.linkedin_email_scraper import run_collect
+    config.SETTINGS.email_target_min = 5
+    config.SETTINGS.email_fallback_scrolls = 1
+    page = FakePage()
+    ctx = FakeContext(page)
+    page.cards_queue = [[CARD]]
+    import src.linkedin_email_scraper as mod
+    calls = {"n": 0}
+
+    def fake_wall(p):
+        calls["n"] += 1
+        return calls["n"] >= 2
+
+    monkeypatch.setattr(mod, "_check_bot_wall", fake_wall)
+    monkeypatch.setattr(mod, "human_pause", lambda *a, **k: None)
+    import src.naukri_scraper as nk
+    monkeypatch.setattr(nk, "human_pause", lambda *a, **k: None)
+    out = run_collect(ctx, domains=["ltm.com"], max_scrolls=1,
+                      date_facet="past-month")
+    assert len(page.goto_urls) == 2  # primary + fallback attempt

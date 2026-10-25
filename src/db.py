@@ -148,7 +148,12 @@ def upsert_emails(contacts: list[EmailContact]) -> tuple[int, int]:
     new = 0
     with get_session() as s:
         for contact in contacts:
-            row = s.get(EmailRow, contact.email)
+            row = s.scalars(
+                select(EmailRow).where(
+                    EmailRow.email == contact.email,
+                    EmailRow.post_id == contact.post_id,
+                )
+            ).first()
             if row is None:
                 s.add(EmailRow.from_contact(contact))
                 new += 1

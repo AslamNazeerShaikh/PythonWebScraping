@@ -110,6 +110,7 @@ output/
 # Layer 3 — Pydantic validation gate
 class EmailContact(BaseModel):
     email: str            # lowercased, format+domain validated
+    post_id: str = ""     # activity URN / permalink / fallback key (dedupe unit)
     domain: str           # target domain this post was searched under (e.g. "cognizant.com")
     post_url: str = ""    # best-effort permalink; "" when LinkedIn exposes none
     author: str = ""      # post author name from the card
@@ -122,8 +123,9 @@ class EmailContact(BaseModel):
 
 ```python
 # Layer 4 — SQLAlchemy: table `contact_emails`
-# PK: (email) — one row per address; re-sightings bump last_seen,
-# fills empty post_url/author, and records the newest domain/keyword evidence.
+# PK: surrogate id; UNIQUE (email, post_id) — one row per (email, post)
+# sighting. The same address re-posted across several posts is kept (hiring
+# still ongoing); only a re-sighting of the *same* post bumps last_seen.
 ```
 
 ### Pipeline (mirrors README §3: Browser → Extract → Pydantic → SQLite → Excel)
@@ -246,6 +248,29 @@ the wall has cleared. If the wall never clears it stops with guidance rather
 than reloading the page (regression test pins `goto` at 1 — no reload).
 `pytest`: 246 passed, 100 % branch coverage. The persistent profile means the
 one-time login then persists across domains and reruns.
+
+## Implementation update (2026-10-25)
+
+1. **Dedupe unit is now `(email, post)`**, not `email` alone: recruiters
+   re-posting the same address across several posts are kept (each post is a
+   distinct row), while a re-sighting of the *same* post bumps `last_seen`.
+   `post_id` is captured from the card's `data-urn`, falling back to the
+   permalink, then to an `author|posted|text[:40]` key.
+2. **"Show more" expansion**: `_expand_show_more` clicks `…see more` /
+   `Show more` affordances before extraction so emails hidden behind
+   truncated bodies are revealed (best-effort, never raises).
+3. **Relevance gate**: posts surfaced by LinkedIn that carry neither the
+   `@<domain>` keyword nor an email on the target domain are dropped
+   (`_contacts_from_cards`), filtering the "weird unrelated posts".
+4. **60-day window + older fallback**: LinkedIn only exposes `past-24h` /
+   `past-week` / `past-month` facets, so the primary pass uses `past-month`
+   (~30d, the nearest available). When a domain yields fewer than
+   `EMAIL_TARGET_MIN` (default 20) emails, a second all-time pass with
+   `EMAIL_FALLBACK_SCROLLS` (default 12) scrolls deeper to surface older
+   posts. `build_content_search_url` now accepts `None`/`""` for no date
+   filter.
+5. **Login wait** stays passive (no page reload) — unchanged.
+6. Config additions: `EMAIL_TARGET_MIN`, `EMAIL_FALLBACK_SCROLLS`.
 
 ## Open Questions
 

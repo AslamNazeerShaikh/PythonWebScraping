@@ -82,8 +82,11 @@ CONTENT_EXTRACT_JS = """
       const href = link.getAttribute('href') || '';
       url = href.startsWith('http') ? href : ('https://www.linkedin.com' + href);
     }
+    // Best-effort "Show more" expansion has already been attempted by the
+    // caller; re-read the (possibly expanded) text node defensively.
     cards.push({
       text,
+      post_id: urn || url || '',
       author: authorEl ? (authorEl.innerText || '').trim() : '',
       posted: postedEl ? (postedEl.innerText || '').trim() : '',
       url,
@@ -104,7 +107,7 @@ _safe_goto = retry(
 
 
 def build_content_search_url(keyword: str,
-                             date_facet: str = "past-month",
+                             date_facet: str | None = "past-month",
                              sort: str = "date_posted") -> str:
     """Return a LinkedIn content-search URL for ``keyword``.
 
@@ -120,15 +123,18 @@ def build_content_search_url(keyword: str,
     Raises:
         ValueError: If ``date_facet`` is not a supported token.
     """
-    if date_facet not in DATE_FACETS:
-        raise ValueError(
-            f"unsupported date facet {date_facet!r}; one of {DATE_FACETS}")
-    query = urllib.parse.urlencode({
+    if date_facet:
+        if date_facet not in DATE_FACETS:
+            raise ValueError(
+                f"unsupported date facet {date_facet!r}; one of {DATE_FACETS}")
+    params = {
         "keywords": keyword,
         "origin": "FACETED_SEARCH",
-        "datePosted": f'["{date_facet}"]',
         "sortBy": f'"{sort}"',
-    })
+    }
+    if date_facet:
+        params["datePosted"] = f'["{date_facet}"]'
+    query = urllib.parse.urlencode(params)
     return f"{CONTENT_SEARCH}?{query}"
 
 
@@ -165,14 +171,35 @@ def _contacts_from_cards(cards: list[dict], domain: str,
     out: list[EmailContact] = []
     for card in cards:
         text = str(card.get("text") or "")
-        for email in extract_emails(text):
+        emails = extract_emails(text)
+        if not emails:
+            continue
+        # Relevance gate: drop posts LinkedIn surfaced that do not actually
+        # carry the searched keyword nor an email on the target domain (the
+        # "weird unrelated posts" the content search sometimes returns).
+        if keyword and keyword.lower() not in text.lower() and \
+                not any(e.rsplit("@", 1)[-1] == domain.lower() for e in emails):
+            continue
+        # "Show more" expansion may have appended text; re-extract defensively.
+        post_id = str(card.get("post_id") or card.get("urn") or "")
+        if not post_id:
+            post_id = str(card.get("url") or "")
+        if not post_id:
+            author = str(card.get("author") or "")
+            posted = str(card.get("posted") or "")
+            post_id = f"{author}|{posted}|{text[:40]}"
+        author = str(card.get("author") or "")
+        posted = str(card.get("posted") or "")
+        url = str(card.get("url") or "")
+        for email in emails:
             out.append(EmailContact(
                 email=email,
+                post_id=post_id,
                 domain=domain,
                 keyword=keyword,
-                author=str(card.get("author") or ""),
-                posted=str(card.get("posted") or ""),
-                post_url=str(card.get("url") or ""),
+                author=author,
+                posted=posted,
+                post_url=url,
                 snippet=_snippet_around(text, email),
             ))
     return out
@@ -201,6 +228,32 @@ LOGIN_POLL_S = 2.0
 #: human the way a re-``goto`` did (that reload was the "page refreshes at
 #: login" bug).
 LOGIN_GRACE_S = 300.0
+
+
+#: JS that clicks any "...see more / Show more" affordance so truncated post
+#: bodies (and the emails hiding inside them) are expanded before extraction.
+_EXPAND_SHOW_MORE_JS = """
+() => {
+  const needles = ['see more', 'show more', 'more'];
+  document.querySelectorAll('button, a, span').forEach((el) => {
+    const t = (el.innerText || el.textContent || '').trim().toLowerCase();
+    if (!t) return;
+    if (needles.some((n) => t === n || t.endsWith(n) || t.includes('see more'))
+      && t.length <= 40) {
+      try { el.click(); } catch (e) { /* ignore */ }
+    }
+  });
+  return null;
+}
+"""
+
+
+def _expand_show_more(page: Page) -> None:
+    '''Best-effort expansion of truncated LinkedIn post bodies (never raises).'''
+    try:
+        page.evaluate(_EXPAND_SHOW_MORE_JS)
+    except Exception:
+        pass
 
 
 def _on_login_wall(page: Page) -> bool:
@@ -294,11 +347,10 @@ def run_collect(context: BrowserContext,
         date_facet = SETTINGS.email_date_facet
 
     page = context.new_page()
-    contacts: dict[str, EmailContact] = {}   # email → first sighting wins
-    for domain in domains:
-        keyword = "@" + domain
-        url = build_content_search_url(keyword, date_facet)
-        log.info("Searching LinkedIn posts for %r", keyword)
+    contacts: dict[tuple[str, str], EmailContact] = {}   # (email, post) → first sighting
+
+    def _ensure_signed_in(url: str) -> bool:
+        '''Navigate (with login-wall handling) and return True if usable.'''
         _safe_goto(page, url)
         page.wait_for_timeout(SETTLE_MS)      # SDUI hydration settle
         if _on_login_wall(page):
@@ -308,31 +360,57 @@ def run_collect(context: BrowserContext,
             if not _prompt_manual_login():
                 log.warning("Signed out and no TTY — stopping. Run headful "
                             "once, log in, and rerun (session persists).")
-                break
+                return False
             if not _wait_for_login(page):
                 log.warning("Still on the sign-in page %.0fs after the prompt "
                             "— NOT reloading it (that would interrupt your "
                             "login). Finish signing in in the open window, "
                             "then rerun; the session persists.", LOGIN_GRACE_S)
-                break
+                return False
             # Signed in → one clean navigation to the target search page.
             _safe_goto(page, url)
             page.wait_for_timeout(SETTLE_MS)
             if _on_login_wall(page):       # bounced back to the wall anyway
                 log.warning("Navigation landed back on the sign-in page — "
                             "stopping the run.")
-                break
+                return False
         if _check_bot_wall(page):
             log.warning("Bot-wall on %r — stopping the run. Solve any check "
                         "MANUALLY in the opened window, then rerun.", domain)
-            break
-        for scroll in range(max_scrolls):
+            return False
+        return True
+
+    def _scroll_pass(keyword: str, domain: str, facet, scrolls: int) -> None:
+        '''One extract/scroll pass over the feed for a single domain.'''
+        for scroll in range(scrolls):
+            _expand_show_more(page)
             cards = page.evaluate(CONTENT_EXTRACT_JS) or []
             for contact in _contacts_from_cards(cards, domain, keyword):
-                contacts.setdefault(contact.email, contact)
-            if scroll < max_scrolls - 1:      # scroll between passes only
+                contacts.setdefault((contact.email, contact.post_id), contact)
+            if scroll < scrolls - 1:      # scroll between passes only
                 human_scroll(page, rounds=1)
                 human_pause()
+                _expand_show_more(page)
+
+    for domain in domains:
+        keyword = "@" + domain
+        target = SETTINGS.email_target_min
+        before = len(contacts)
+        log.info("Searching LinkedIn posts for %r", keyword)
+        url = build_content_search_url(keyword, date_facet)
+        if not _ensure_signed_in(url):
+            break
+        _scroll_pass(keyword, domain, date_facet, max_scrolls)
+        added = len(contacts) - before
+        # Fallback for sparse results: widen to all-time posts and scroll deeper
+        # so we still surface ~20-30 emails even when the last 60 days are thin.
+        if added < target:
+            log.info("Only %d emails for %r in the primary window — falling "
+                     "back to all-time posts (target %d).", added, domain, target)
+            url2 = build_content_search_url(keyword, None)
+            if _ensure_signed_in(url2):
+                _scroll_pass(keyword, domain, None, SETTINGS.email_fallback_scrolls)
         human_pause()                          # politeness between domains
-    log.info("Collect pass done: %d unique emails", len(contacts))
+    log.info("Collect pass done: %d unique (email, post) contacts",
+             len(contacts))
     return list(contacts.values())

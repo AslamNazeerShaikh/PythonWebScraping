@@ -91,6 +91,7 @@ Everything is `.env`-driven (see `.env.example`); CLI flags and API fields overr
 | `ENRICH_DETAILS` | `true` | Visit each posting page for full text/skills |
 | `EMAIL_DOMAINS` | 11 targets (cognizant, capgemini, ltm, …) | LinkedIn post-search domains for `collect-emails` |
 | `EMAIL_MAX_SCROLLS` / `EMAIL_DATE_FACET` | `6` / `past-month` | Feed scrolls per domain · LinkedIn date window |
+| `EMAIL_TARGET_MIN` / `EMAIL_FALLBACK_SCROLLS` | `20` / `12` | Min emails per domain before all-time fallback · fallback scroll depth |
 | `DATABASE_URL` | `sqlite:///jobs.db` | SQLite file (or any SQLAlchemy URL) |
 | `WEB_HOST` / `WEB_PORT` | `127.0.0.1` / `8000` | Control-plane bind |
 | `HEADLESS` | `false` | Background runs (do the first run headful) |

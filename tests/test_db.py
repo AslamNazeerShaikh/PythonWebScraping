@@ -1,6 +1,8 @@
 """Tests for src.db — URL resolution, init, upsert/dedupe, fetch, audit."""
 from __future__ import annotations
 
+from sqlalchemy import select
+
 from src import db
 from src.config import SETTINGS
 from tests.conftest import make_job
@@ -95,7 +97,7 @@ def test_upsert_emails_resighting_no_duplicate_bumps_last_seen(fresh_db):
     assert db.count_emails() == 1
     from src.models import EmailRow
     with db.get_session() as s:
-        row = s.get(EmailRow, "neha.pandey@ltm.com")
+        row = s.scalars(select(EmailRow).where(EmailRow.email == "neha.pandey@ltm.com")).first()
     assert row.last_seen is not None
 
 
@@ -105,7 +107,7 @@ def test_upsert_emails_backfills_empty_evidence(fresh_db):
     db.upsert_emails([_contact(author="Neha P.", post_url="https://lnkd.in/x")])
     from src.models import EmailRow
     with db.get_session() as s:
-        row = s.get(EmailRow, "neha.pandey@ltm.com")
+        row = s.scalars(select(EmailRow).where(EmailRow.email == "neha.pandey@ltm.com")).first()
     assert row.author == "Neha P."
     assert row.post_url == "https://lnkd.in/x"
 
@@ -115,7 +117,7 @@ def test_upsert_emails_keeps_existing_evidence_when_new_is_empty(fresh_db):
     db.upsert_emails([_contact(post_url="", author="", snippet="")])
     from src.models import EmailRow
     with db.get_session() as s:
-        row = s.get(EmailRow, "neha.pandey@ltm.com")
+        row = s.scalars(select(EmailRow).where(EmailRow.email == "neha.pandey@ltm.com")).first()
     assert row.author == "Neha Pandey"          # not clobbered by empties
     assert row.post_url.endswith("urn:li:activity:1/")
 
@@ -125,7 +127,7 @@ def test_upsert_emails_domain_tag_newest_wins(fresh_db):
     db.upsert_emails([_contact(domain="cognizant.com", keyword="@cognizant.com")])
     from src.models import EmailRow
     with db.get_session() as s:
-        row = s.get(EmailRow, "neha.pandey@ltm.com")
+        row = s.scalars(select(EmailRow).where(EmailRow.email == "neha.pandey@ltm.com")).first()
     assert row.domain == "cognizant.com"        # newest search's tag wins
     assert row.keyword == "@cognizant.com"
 
@@ -135,5 +137,5 @@ def test_upsert_emails_resighting_without_tag_keeps_old_tag(fresh_db):
     db.upsert_emails([_contact(domain="", keyword="")])  # tag-less re-sighting
     from src.models import EmailRow
     with db.get_session() as s:
-        row = s.get(EmailRow, "neha.pandey@ltm.com")
+        row = s.scalars(select(EmailRow).where(EmailRow.email == "neha.pandey@ltm.com")).first()
     assert row.domain == "ltm.com" and row.keyword == "@ltm.com"

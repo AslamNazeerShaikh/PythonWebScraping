@@ -20,7 +20,7 @@ import re
 from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import DateTime, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -188,6 +188,7 @@ class EmailContact(BaseModel):
     """
 
     email: str
+    post_id: str = ""
     domain: str = ""
     post_url: str = ""
     author: str = ""
@@ -212,7 +213,7 @@ class EmailContact(BaseModel):
         """Trim whitespace; keep the URL as-is (LinkedIn adds params itself)."""
         return (v or "").strip()
 
-    @field_validator("snippet", "author", "posted", "keyword", "domain")
+    @field_validator("snippet", "author", "posted", "keyword", "domain", "post_id")
     @classmethod
     def _squeeze(cls, v: str) -> str:
         """Collapse whitespace; cap snippet so Excel rows stay readable."""
@@ -221,16 +222,21 @@ class EmailContact(BaseModel):
 
 
 class EmailRow(Base):
-    """``contact_emails`` table: one row per unique harvested address.
+    """``contact_emails`` table: one row per harvested (email, post) sighting.
 
-    ``email`` is the primary key — re-sightings (other posts/domains
-    repeating the same address) bump ``last_seen`` and backfill empty
-    evidence fields instead of duplicating rows.
+    ``email`` alone is no longer the primary key — the same address may be
+    re-posted by recruiters across several posts (hiring still ongoing), and
+    each distinct post is a distinct row. Dedupe happens on
+    ``(email, post_id)``: a re-sighting of the *same* post bumps
+    ``last_seen`` and backfills empty evidence instead of duplicating.
     """
 
     __tablename__ = "contact_emails"
+    __table_args__ = (UniqueConstraint("email", "post_id", name="uq_email_post"),)
 
-    email: Mapped[str] = mapped_column(String(320), primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(320), index=True)
+    post_id: Mapped[str] = mapped_column(String(500), default="")
     domain: Mapped[str] = mapped_column(String(255), default="")
     post_url: Mapped[str] = mapped_column(String(1000), default="")
     author: Mapped[str] = mapped_column(String(300), default="")
@@ -247,6 +253,7 @@ class EmailRow(Base):
         """Build a new ORM row from a validated :class:`EmailContact`."""
         return cls(
             email=contact.email,
+            post_id=contact.post_id,
             domain=contact.domain,
             post_url=contact.post_url,
             author=contact.author,
@@ -259,6 +266,7 @@ class EmailRow(Base):
         """Convert a DB row back into a validated :class:`EmailContact`."""
         return EmailContact(
             email=self.email,
+            post_id=self.post_id,
             domain=self.domain,
             post_url=self.post_url,
             author=self.author,
