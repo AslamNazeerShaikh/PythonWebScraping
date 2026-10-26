@@ -226,6 +226,7 @@ Live browser/network probes live in `scripts/` (practice suite, e-commerce spot 
 - `docs/TESTING.md`, `docs/BOT_DETECTION.md` — practice progression, measurement-first bot-wall notes
 - `docs/GRAPHIFY.md` — queryable knowledge graph of the repo (`graphify query "<q>"`)
 - `docs/TOKEI.md` — how to use Tokei for codebase language statistics
+- `docs/FASTFETCH.md` — Fastfetch system-information snapshot
 
 ## Fair use
 
