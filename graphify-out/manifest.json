@@ -162,9 +162,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1793026002.778879,
-    "seen": 1793026093.445927,
-    "ast_hash": "2cfb73f3a2acaacd03f703faaf20f0e5",
+    "mtime": 1793029656.8156273,
+    "seen": 1793029791.960125,
+    "ast_hash": "1d5b602b9eb657b9c8fb93afb608f144",
     "semantic_hash": ""
   },
   "docs/BOT_DETECTION.md": {
@@ -180,15 +180,15 @@
     "semantic_hash": ""
   },
   "docs/GRAPHIFY.md": {
-    "mtime": 1789764745.801633,
-    "seen": 1789811993.082047,
-    "ast_hash": "16bc037dfd591e86751104825759c426",
+    "mtime": 1793029682.3966997,
+    "seen": 1793029791.9601548,
+    "ast_hash": "477833e055ae5c390801a4a9eaaedf8a",
     "semantic_hash": ""
   },
   "docs/PROJECT.md": {
-    "mtime": 1793025915.837048,
-    "seen": 1793026093.445976,
-    "ast_hash": "aed74be48d68b24f36115e34a193d1ae",
+    "mtime": 1793029675.8503032,
+    "seen": 1793029791.960186,
+    "ast_hash": "0b0e730107422c42b67ec7dca97e642c",
     "semantic_hash": ""
   },
   "docs/TESTING.md": {
@@ -744,9 +744,15 @@
     "semantic_hash": ""
   },
   "docs/SPEC-naukri-skills-scan.md": {
-    "mtime": 1793024818.8285756,
-    "seen": 1793025078.012906,
-    "ast_hash": "28ea5f037b7b01d014dab3961d98e23b",
+    "mtime": 1793029669.4921925,
+    "seen": 1793029791.960207,
+    "ast_hash": "9fb12bb91cf372b8b5b9d7d5b41f17fa",
+    "semantic_hash": ""
+  },
+  "docs/NAUKRI_MARKET_SNAPSHOT.md": {
+    "mtime": 1793029766.161492,
+    "seen": 1793029791.9601762,
+    "ast_hash": "f52cd6f7feca2b7c0521c3955dc16c2b",
     "semantic_hash": ""
   }
 }
