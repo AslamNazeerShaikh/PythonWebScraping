@@ -185,6 +185,38 @@ pytest   # 336 tests, 100% coverage gate — no browser or network needed (fakes
 
 Live browser/network probes live in `scripts/` (practice suite, e-commerce spot checks) and are separate from the unit gate by design.
 
+## Codebase stats (tokei)
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Language              Files        Lines         Code     Comments       Blanks
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ CSS                      18         2757         2439          141          177
+ JavaScript              338       130804       113802        11071         5931
+ JSON                    524       865876       865875            0            1
+ Python                   46        10941         8798          422         1721
+ Shell                     1           27           18            6            3
+ SVG                       1           69           69            0            0
+ Plain Text                4          787            0          648          139
+ TOML                      1           17           14            0            3
+ XML                       3            3            3            0            0
+─────────────────────────────────────────────────────────────────────────────────
+ HTML                     12          832          736           29           67
+ |- CSS                    2           82           82            0            0
+ |- HTML                   3           52           49            3            0
+ |- JavaScript             2          605          589           13            3
+ (Total)                             1571         1456           45           70
+─────────────────────────────────────────────────────────────────────────────────
+ Markdown                 33         9063            0         7400         1663
+ |- BASH                   9          113           79           23           11
+ |- JSON                   1           10           10            0            0
+ |- Python                 5           58           49            6            3
+ (Total)                             9244          138         7429         1677
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ Total                   981      1022096       992612        19762         9722
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
 ## Docs
 
 - `docs/PROJECT.md` — pipeline, modules, config, data model, reference-repo survey
