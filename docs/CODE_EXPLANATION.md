@@ -20,7 +20,7 @@
 │   ├── main.py             # START POINT — Typer CLI: scrape|export|stats|parse|schedule
 │   ├── config.py           # Layer 0 — env-driven SETTINGS singleton
 │   ├── log.py              # logging setup (std logging, one call at startup)
-│   ├── stealth_browser.py  # Layer 1 — Chromium launcher + uBO Lite + stealth
+│   ├── stealth_browser.py  # Layer 1 — Chromium launcher + uBO Lite + polite pacing
 │   ├── naukri_scraper.py   # Layer 2-live — search URLs, JS extractors, pipeline
 │   ├── parser.py           # Layer 2-offline — BS4+lxml twin of the JS extractors
 │   ├── models.py           # Layer 3+4 — Pydantic Job + SQLAlchemy JobRow/ScrapeRun
@@ -56,7 +56,7 @@ nothing imports main (except scheduler's deferred do_scrape import to avoid a cy
 |---|---|---|---|
 | 0 config | `config.py` | `.env`-driven `SETTINGS` singleton | `_get/_get_int/_get_float/_get_bool`, `Settings`, `SETTINGS`, `BASE_DIR` |
 | util | `log.py` | std-logging setup | `setup_logging` |
-| 1 browser | `stealth_browser.py` | Chromium launcher + uBO Lite wiring | `launch_context`, `_launch_chromium`, `_extension_args`, `_maybe_block_ads`, `human_pause`, `STEALTH_INIT_JS`, `BLOCKED_HOSTS` |
+| 1 browser | `stealth_browser.py` | Chromium launcher + uBO Lite wiring | `launch_context`, `_launch_chromium`, `_extension_args`, `_maybe_block_ads`, `human_pause`, `BLOCKED_HOSTS` |
 | 2 live extract | `naukri_scraper.py` | Search URLs, JS extractors, pipeline | `build_search_url`, `build_slug_search_url`, `scrape_search_page`, `_click_next_page`, `enrich_job`, `run_scrape`, `run_skills_scan`, `build_skills_report`, `save_results`, `coerce_job`, `normalize_raw`, `LISTING_EXTRACT_JS`, `DETAIL_EXTRACT_JS`, `check_bot_wall`, `handle_possible_block`, `human_scroll` |
 | 2 offline extract | `parser.py` | BS4+lxml twin (no browser) | `parse_search_html`, `parse_detail_html`, `_is_trap`, `_card_text` |
 | 3 validate | `models.py` | Pydantic `Job` contract | `Job`, `Job.skill_text` |
@@ -145,7 +145,7 @@ Exit codes: `0` success (including "0 jobs found" — guidance, not error);
    `False` on JS exceptions; `handle_possible_block` swallows `EOFError`;
    `human_scroll` falls back to JS scroll; debug-HTML save is try/except-pass.
 6. **Constants at top, screaming snake.** `BASE_SEARCH`, `BOT_WALL_PATTERNS`,
-   `JOB_URL_RE`, `BLOCKED_HOSTS`, `STEALTH_INIT_JS`, `LISTING/DETAIL_EXTRACT_JS`,
+   `JOB_URL_RE`, `BLOCKED_HOSTS`, `LISTING/DETAIL_EXTRACT_JS`,
    `COLUMNS`, `BASE_DIR`, `SETTINGS`.
 7. **Logging, not prints (except UX).** Library modules use
    `log = logging.getLogger(__name__)` + `log.info/warning/error`.
@@ -181,7 +181,7 @@ flowchart TB
         CLI["main.py<br/>Typer app + Rich tables"]
     end
     subgraph L1["Layer 1 — Browser"]
-        Brow["stealth_browser.py<br/>Chromium + uBOL + stealth"]
+        Brow["stealth_browser.py<br/>Chromium + uBOL + polite pacing"]
     end
     subgraph L2["Layer 2 — Extraction"]
         Live["naukri_scraper.py<br/>in-page JS"]
@@ -285,7 +285,7 @@ except through these functions (tests use `get_session` only to assert).
 | 1 | **Singleton** | `config.py:112` (`SETTINGS`), `db.py:25-26,41-49` (engine + session factory cache) | One process-wide settings object; one lazily-created engine. Tests reset via `fresh_db` / `monkeypatch`. |
 | 2 | **Factory Method** | `models.py:110-127` (`JobRow.from_job`), `conftest.py:19-43` (`make_job`, `raw_card`) | Encapsulated construction: ORM row from domain model; valid test fixtures from defaults+overrides. |
 | 3 | **Adapter** | `naukri_scraper.py:245-268` (`normalize_raw`), `models.py:129-145` (`to_job`) | Adapts in-page camelCase (`jobId`, `applyUrl`) → snake_case `Job`; adapts flat DB row ⇄ rich `Job`. |
-| 4 | **Facade** | `main.py:56-81` (`do_scrape`), `stealth_browser.py:178-191` (`launch_context`) | `do_scrape` hides browser+scrape+upsert+audit+snapshot+print behind one call; `launch_context` hides profile+args+stealth+blocker. |
+| 4 | **Facade** | `main.py:56-81` (`do_scrape`), `stealth_browser.py:178-191` (`launch_context`) | `do_scrape` hides browser+scrape+upsert+audit+snapshot+print behind one call; `launch_context` hides profile+args+blocker. |
 | 5 | **Strategy** | `naukri_scraper.LISTING_EXTRACT_JS` vs `parser.parse_search_html` | Two interchangeable extraction strategies (computed-style JS vs static BS4) behind the same raw-dict contract. |
 | 6 | **Template Method** | `parser.py:87-129` + `132-166` | `parse_search_html` / `parse_detail_html` share the skeleton (select anchors → trap-check → regex id → dedupe/merge); steps vary. Same shape in JS extractors. |
 | 7 | **Decorator** (retry) | `naukri_scraper.py:286-291` (`_safe_goto = retry(…)(lambda…)`) | tenacity decorates `goto` with retry-on-transient + exponential backoff (max 3). Declarative, non-invasive. |
@@ -307,7 +307,6 @@ except through these functions (tests use `get_session` only to assert).
 | Honeypot-guard extraction | `LISTING_EXTRACT_JS`, `parser._is_trap` | skip `display:none`/`aria-hidden`/href-traps/0-size/off-screen; dedupe by id |
 | Test Doubles (Fake/Mock/Stub) | `tests/conftest.py:69-231` | `FakePage/Context/BrowserType/Route/Mouse` — full pipeline at 100% coverage with no browser |
 | Dependency injection (test seam) | `monkeypatch.setattr(SETTINGS, …)`, `fresh_db` | config + engine swapped per-test; `_ensure_env(base_dir)` parameterised for tmp dirs |
-| Layered init script | `STEALTH_INIT_JS` | hides `webdriver`, stubs `chrome`/permissions at document-start |
 | Deferred import (cycle-breaker) | `scheduler.py:32`, `main.py:157-158,184` | `from .main import do_scrape` inside function; parser/scheduler imports inside commands |
 
 **Deliberately NOT used:** Abstract Factory / Builder (no product families need
@@ -333,12 +332,14 @@ CLI flags in `main.scrape` overwrite fields per-run; tests `monkeypatch` them.
 pinned to WARNING. Library modules only do `getLogger(__name__)`.
 
 ### `stealth_browser.py` — Layer 1, Chromium launcher
-Five sub-layers: (1) persistent profile (`<user_data_dir>-chromium`, cookies
+Four sub-layers: (1) persistent profile (`<user_data_dir>-chromium`, cookies
 survive); (2) uBO Lite via `--load-extension` (headed only — headless-shell
 can't load extensions); (3) fallback route-blocker (`BLOCKED_HOSTS` + pixel/
-track/beacon media); (4) `STEALTH_INIT_JS` (webdriver-undefined, plugins,
-chrome-stub, permissions, deviceMemory); (5) hardened prefs (DNT, locale/
-timezone, timeouts). `human_pause(a,b)` = randomised politeness sleep.
+track/beacon media); (4) hardened prefs (DNT, locale/timezone, timeouts).
+`human_pause(a,b)` = randomised politeness sleep. There is **no JS init
+script**: the old `STEALTH_INIT_JS` was inert (a bare arrow-function string
+never invoked by `add_init_script`) and was removed 2026-10-26. Headed BotD
+returns `bot: false`; headless is flagged; CDP/TLS/IP remain.
 `launch_context` raises `ValueError` for non-chromium (Firefox engines die on
 spawn here — verified, documented).
 
@@ -453,7 +454,7 @@ sequenceDiagram
     User->>CLI: scrape / schedule --hours 8,20
     CLI->>CLI: _ensure_env (.env + logging + init_db)
     Sched->>CLI: do_scrape() per cron trigger
-    CLI->>Brow: launch_context(p) Chromium+uBOL+stealth
+    CLI->>Brow: launch_context(p) Chromium+uBOL
     Brow->>Site: persistent profile, polite timing
     loop locations × pages (cap MAX_JOBS_TOTAL)
         CLI->>Site: _safe_goto(search URL) retry×3 transient
@@ -528,7 +529,7 @@ sequenceDiagram
     participant Google as accounts.google.com GSI
     participant Logger as logs.naukri.com / nLogger
     participant JS as LISTING_EXTRACT_JS
-    Script->>Chromium: launch_context (profile-chromium, stealth init JS)
+    Script->>Chromium: launch_context (profile-chromium, no JS spoofing)
     Chromium->>uBOL: --load-extension vendor/ubol-chrome (headed only)
     Chromium->>uBOL: context.route(**/*) fallback blocker
     Script->>Doc: GET /jobs?k=asp.net+core+c%23+.net&l=pune&...&page=1
@@ -684,7 +685,7 @@ flowchart TD
     Ext -->|no| F["fallback blocker only + note"]
     U --> P["launch_persistent_context profile-chromium"]
     F --> P
-    P --> S["add_init_script STEALTH_INIT_JS + timeouts"]
+    P --> S["set navigation/default timeouts"]
     S --> R{"ADBLOCK_FALLBACK?"}
     R -->|yes| B["_maybe_block_ads route"]
     R -->|no| Done["return context"]

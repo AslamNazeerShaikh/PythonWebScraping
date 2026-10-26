@@ -24,7 +24,7 @@ Scheduler (APScheduler, `schedule --hours 8,20`)
         │  one polite pass per trigger, max_instances=1
         ▼
 Browser (Playwright → bundled Chromium + uBO Lite)   stealth_browser.py
-        │  persistent profile · stealth init JS · uBlock + fallback blocker
+        │  persistent profile · genuine headed Chromium (no JS spoofing) · uBlock + fallback blocker
         │  human pauses/scrolls · manual-solve bot-wall handling
         ▼
 Extraction — LIVE: in-page JS (computed-style honeypot guards)

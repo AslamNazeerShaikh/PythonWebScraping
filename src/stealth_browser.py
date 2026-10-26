@@ -1,4 +1,4 @@
-"""Stealth Chromium launcher: persistent profile + uBlock Origin Lite.
+"""Chromium launcher: persistent profile + uBlock Origin Lite + polite pacing.
 
 Stack (Chrome-only by decision):
     Playwright -> Chromium (persistent profile) -> uBOL (unpacked MV3) + site.
@@ -15,11 +15,15 @@ Layers:
     3. Fallback request-blocker (``ADBLOCK_FALLBACK``): aborts known ad/tracker
        hosts even when uBOL is absent. Always on — harmless duplication when
        uBOL already blocked the request.
-    4. Stealth init script: hides ``webdriver``, plugins stub, ``chrome``
-       stub — measured live (Veil 23/23 human, BrowserScan 100 genuine).
+    4. Genuine headed Chromium: no ``webdriver``/plugins/``chrome`` JS spoofing.
+       A previous init script was inert (a bare arrow-function string passed to
+       ``add_init_script`` is never invoked); it was removed on 2026-10-26.
+       Headed Chromium passes open-source BotD; headless is still flagged, and
+       CDP/TLS/IP/behaviour signals remain (see ``docs/BOT_DETECTION.md``).
     5. Hardened prefs: tracking protection, DNT, no WebRTC/geo leaks.
 
-We do NOT bypass CAPTCHAs — on bot-walls we pause for manual solve.
+We do NOT bypass CAPTCHAs — on bot-walls we pause for manual solve. This is a
+low-signal polite browser, **not** an anti-detect stack.
 """
 from __future__ import annotations
 
@@ -50,33 +54,6 @@ BLOCKED_HOSTS = (
     "mixpanel.com",
     "segment.io",
 )
-
-STEALTH_INIT_JS = """
-() => {
-  // webdriver flag
-  Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-  // plugins
-  Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
-  // NOTE: navigator.languages is intentionally NOT overridden — Playwright's
-  // `locale` already sets it, and a stub here contradicts the Worker scope
-  // (BrowserScan flagged exactly this inconsistency).
-  // chrome stub (many detectors check window.chrome)
-  if (!window.chrome) { window.chrome = { runtime: {} }; }
-  // permissions
-  const origQuery = window.navigator.permissions && window.navigator.permissions.query;
-  if (origQuery) {
-    window.navigator.permissions.query = (p) =>
-      p && p.name === 'notifications'
-        ? Promise.resolve({ state: Notification.permission })
-        : origQuery(p);
-  }
-  // deviceMemory hint (Chromium ignores the redefine — property is
-  // non-configurable — so the genuine value shows; kept for consistency).
-  try {
-    Object.defineProperty(navigator, 'deviceMemory', { get: () => 8 });
-  } catch (e) { /* genuine value stays: consistency beats stubbing */ }
-}
-"""
 
 
 def human_pause(a: float | None = None, b: float | None = None) -> None:
@@ -140,10 +117,11 @@ def _extension_args() -> list[str]:
 
 
 def _launch_chromium(p: Playwright) -> BrowserContext:
-    """Launch persistent Chromium with stealth defaults + uBO Lite.
+    """Launch persistent Chromium with polite defaults + uBO Lite.
 
-    Own ``*-chromium`` profile dir, stealth init script, fallback blocker,
+    Own ``*-chromium`` profile dir, fallback blocker,
     ``--disable-blink-features=AutomationControlled``, and uBOL when headed.
+    There is deliberately no JS fingerprint spoofing.
     """
     profile = Path(str(SETTINGS.user_data_dir) + "-chromium")
     args = [
@@ -168,7 +146,6 @@ def _launch_chromium(p: Playwright) -> BrowserContext:
     )
     context.set_default_navigation_timeout(SETTINGS.nav_timeout_ms)
     context.set_default_timeout(20000)
-    context.add_init_script(STEALTH_INIT_JS)
     _maybe_block_ads(context)
     print(f"[browser] Chromium persistent profile ready | "
           f"headless={SETTINGS.headless} locale={SETTINGS.locale}")

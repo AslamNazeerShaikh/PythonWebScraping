@@ -31,6 +31,8 @@ The default board adapter targets Naukri.com (direct search-API fast path with a
 
 Deliberately **not** included: Selenium/Scrapy, fingerprint-spoofing or undetected-driver packages, proxy rotation, CAPTCHA solvers. Polite rate limits, honeypot-safe extraction, and manual-solve bot-wall handling are built in.
 
+Detection posture and cross-check against [CrowdSec](https://github.com/crowdsecurity/crowdsec), [FingerprintJS BotD](https://github.com/fingerprintjs/BotD), and [Scrapfly Antibot-Detector](https://github.com/scrapfly/Antibot-Detector): [`docs/BOT_DETECTION.md`](docs/BOT_DETECTION.md).
+
 ## Quickstart
 
 ```bash
@@ -135,7 +137,7 @@ Trigger (dashboard / REST / MCP / CLI / scheduler)
          │  one polite pass at a time, cancellable, progress + stage timeline
          ▼
 Collect ── fast path: board search API (RSA request token, 20/page)
-          fallback: Playwright Chromium + uBO Lite + stealth init JS
+          fallback: Playwright Chromium + uBO Lite (genuine headed profile, no JS spoofing)
          │  polite delays · honeypot-safe extraction · manual-solve walls
          ▼
 Validate (Pydantic Job — one contract; bad cards dropped with field name)

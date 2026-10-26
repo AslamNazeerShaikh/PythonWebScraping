@@ -4,6 +4,9 @@
 > They are diagnostic instruments, not obstacles to defeat. The collector stays
 > a normal, low-volume browser: persistent profile, human pacing, manual solves.
 > Never tune signals to fake a “Human” verdict.
+>
+> Cross-checked against CrowdSec, FingerprintJS BotD, and Scrapfly
+> Antibot-Detector on 2026-10-26 — see [§6](#6-external-detector-cross-check-2026-10-26).
 
 ## 1. Sites (comparison order)
 
@@ -39,7 +42,7 @@ against the same three sites; screenshot; diff against A. Example probe:
 
 ```python
 from playwright.sync_api import sync_playwright
-from src.stealth_browser import launch_context  # real profile + stealth init JS
+from src.stealth_browser import launch_context  # real headed profile (no JS spoofing)
 
 with sync_playwright() as p:
     ctx = launch_context(p)          # headed: HEADLESS=false in .env
@@ -62,7 +65,7 @@ noted; screenshots + `signals.json` under `output/botcheck*/`, gitignored):
 | Signal | Normal Fx (Test A) | PW headed (Test B) | PW headless (Test C) | Notes |
 |---|---|---|---|---|
 | User-Agent | — (see below) | genuine `Chrome/153` | `HeadlessChrome` brand | was pinned `126` → fixed, see §5 |
-| `navigator.webdriver` | n/a | `false` (+in iframe) | `false` | init script hides; iframe verified too |
+| `navigator.webdriver` | n/a | `false` (+in iframe) | `false` | genuine headed Chromium; no init-script spoof (see §6) |
 | Headless markers | n/a | none fired | software GL, 0 plugins, `window.chrome` absent, UA brands | headless-shell lights up 7+ checks |
 | Plugins / languages | n/a | 5 / `['en-IN']` (genuine) | 0 / `en-IN` | stub languages removed, see §5 |
 | Timezone vs IP | n/a | `Asia/Calcutta` ⇔ IN IP, consistent | same | `TIMEZONE=Asia/Kolkata` |
@@ -99,6 +102,16 @@ profile folder” on this macOS), and screen capture is denied. Manual step
 `output/botcheck2/headed/*.png` — expect green/human verdicts; the gap
 between those and Test B is the true automation delta.
 
+## 4. Reading the results
+
+- A **few** residual differences vs normal Firefox are normal and acceptable;
+  Naukri's wall for unknown sessions is handled by the manual-solve pause +
+  persistent cookies, not by signal forgery.
+- A **large** headed-vs-normal gap means re-check launcher prefs/profile
+  state rather than adding spoofing libraries (explicitly out of scope; there
+  is no init-script spoof — see §6).
+- Re-run A/B after any Playwright/Firefox upgrade; browsers drift, notes rot.
+
 ## 5. Fix applied from these measurements (2026-09-19)
 
 Two self-inflicted inconsistencies, both fixed as *consistency* (not spoofing):
@@ -108,12 +121,106 @@ Two self-inflicted inconsistencies, both fixed as *consistency* (not spoofing):
    **Fix:** override removed; Playwright `locale` (`en-IN`) is the single source.
 Result: BrowserScan 44 → 100; Veil unchanged at 23/23. DeviceAndBrowserInfo
 unchanged (CDP-inherent). Suite: 336 tests / 100% coverage.
+2026-10-26 follow-up: the old `STEALTH_INIT_JS` was never executed and has been
+removed; BotD headed `bot: false`, headless `bot: true` — see §6.
 
-## 4. Reading the results
+---
 
-- A **few** residual differences vs normal Firefox are normal and acceptable;
-  Naukri's wall for unknown sessions is handled by the manual-solve pause +
-  persistent cookies, not by signal forgery.
-- A **large** headed-vs-normal gap means re-check launcher prefs/init script
-  rather than adding spoofing libraries (explicitly out of scope).
-- Re-run A/B after any Playwright/Firefox upgrade; browsers drift, notes rot.
+## 6. External detector cross-check (2026-10-26)
+
+Three upstream projects were read and mapped to this codebase:
+
+| Project | What it actually is | Layer it observes | Link |
+|---|---|---|---|
+| **CrowdSec** | Open-source IDS/IPS + WAF + community IP blocklist; AppSec can issue a JS proof-of-work challenge | Server/network: logs, HTTP requests, IP reputation, rate/behaviour | [crowdsecurity/crowdsec](https://github.com/crowdsecurity/crowdsec) |
+| **FingerprintJS BotD** | Open-source browser-side bot detector (`@fingerprintjs/botd` v2) | Browser JS: automation globals, headless markers, plugins, WebGL, permissions, UA, timing | [fingerprintjs/BotD](https://github.com/fingerprintjs/BotD) |
+| **Scrapfly Antibot-Detector** | Chrome extension that **inventories a site's anti-bot vendors/CAPTCHAs/fingerprinting scripts** — it does not score our browser | Page/network content, cookies, headers, DOM, JS hooks | [scrapfly/Antibot-Detector](https://github.com/scrapfly/Antibot-Detector) |
+
+### 6.1 BotD source checks vs our implementation
+
+BotD v2's `src/sources/` checks: `app_version`, `distinctive_properties`,
+`document_element_keys`, `error_trace`, `eval_length`, `function_bind`,
+`languages`, `mime_types_consistence`, `notification_permissions`,
+`plugins_array`, `plugins_length`, `process`, `product_sub`, `rtt`,
+`user_agent`, `webdriver`, `webgl`, `window_external`, `window_size`.
+
+Live run against this repo's launcher on 2026-10-26 (headed, genuine profile,
+`locale=en-IN`, `https://example.com`; BotD v2 loaded from jsDelivr because the
+`openfpcdn.io` dynamic import failed in this environment):
+
+| Mode | BotD verdict | Key raw signals |
+|---|---|---|
+| Headed | `{"bot": false}` | `navigator.webdriver: false`, plugins 5, `plugins instanceof PluginArray: true`, `mimeTypes` consistent, `permissions.query('notifications') = 'prompt'`, `languages: ['en-IN']`, UA `Chrome/153`, WebGL `WebKit` |
+| Headless | `{"bot": true, "botKind": "headless_chrome"}` | UA `HeadlessChrome/153`, plugins 0, software WebGL, same locale |
+
+This confirms the earlier public-test results: **headed is low-signal; headless
+is explicitly bot-flagged.** It does not make the stack undetectable.
+
+### 6.2 Critical finding — the init script was inert
+
+The previous `STEALTH_INIT_JS` was a bare arrow-function string passed to
+`context.add_init_script(...)`. Playwright evaluates that string as a script;
+it never calls the arrow function. The headed run proves it: plugins were
+**5** (genuine), not the script's stubbed `3`, and `window.chrome` had the real
+`loadTimes`/`csi`/`app` properties, not the stub's `{runtime:{}}`.
+
+The inert script has been **removed**. The launcher now relies on a genuine
+headed Chromium + persistent profile. This is the correct interpretation of the
+project rule *measure exposure, don't chase “Human”*: the headed pass came from
+a real browser, not from JS spoofing.
+
+Had the old script actually run, BotD would have flagged it:
+
+- `navigator.webdriver` would be `undefined`; BotD's `getWebDriver()` throws
+  `State.Undefined` instead of returning `false`.
+- `navigator.plugins` would be a plain `Array`, failing
+  `plugins instanceof PluginArray`.
+- `navigator.permissions.query({name:'notifications'})` would return
+  `state: 'default'` (from `Notification.permission`), while the Permissions
+  API uses `'prompt'|'denied'|'granted'`; BotD's permission consistency check
+  would throw `UnexpectedBehaviour`.
+
+That is why the fix was deletion, not “fixing” the stubs.
+
+### 6.3 CrowdSec — network/application layer
+
+CrowdSec does not run in the target page and does not inspect Playwright JS.
+It analyses logs/HTTP requests, IP reputation and the community blocklist; its
+AppSec component can answer with a JavaScript proof-of-work challenge. Our
+exposure:
+
+- **Browser path:** headed Chromium on a residential IP with polite pauses is
+  the best case; datacenter/VPN/ASN reputation, high request rate or a PoW
+  challenge can still block it. No browser patch changes IP reputation.
+- **API path (`src/web/nkapi.py`):** `httpx` sends a Chrome UA and Naukri's
+  `appid`/`systemid`/`nkparam` headers, but the TLS/JA3/JA4 and HTTP/2
+  fingerprint is Python's, not Chrome's. The pinned UA is `Chrome/126` while
+  the browser engine is `Chrome/153` — a stale, inconsistent string. A
+  WAF/CrowdSec deployment can see that mismatch, the HTTP/1.1 client
+  behaviour and the request cadence. BotD sees nothing on this path (no JS).
+- Naukri's observed wall in this repo is **Akamai** (`errors.edgesuite.net`),
+  not CrowdSec; the same network-layer logic applies.
+
+### 6.4 Scrapfly Antibot-Detector — inventory, not a verdict
+
+The Scrapfly extension recognises 39 anti-bot systems, 21 CAPTCHAs and 21
+browser-fingerprinting techniques. It would likely report Akamai (and possibly
+FingerprintJS) on Naukri. That tells you **what is protecting the site**, not
+whether our browser passed. It is useful for choosing a compliant access path;
+it is not a pass/fail target to tune against.
+
+### 6.5 Verdict
+
+| Claim | Status |
+|---|---|
+| Headed browser passes open-source BotD | **Yes** (2026-10-26) |
+| Headless browser passes BotD | **No** (`headless_chrome`) |
+| Undetectable by CDP-aware/commercial systems | **No** — `hasCDP: true`, DeviceAndBrowserInfo bot, TLS/network/behaviour remain |
+| Undetectable by CrowdSec | **No guarantee** — IP/rate/WAF/JS-PoW layer |
+| Scrapfly detector is a bot score | **No** — it inventories site defences |
+| Repo adds anti-detect spoofing | **No** — inert script removed; no proxy rotation/CAPTCHA solving |
+
+The realistic goal remains a **polite, low-signal, manual-solve browser**:
+headed first contact, persistent profile, human pacing, low volume, and
+stopping on a wall. Anything stronger is an arms race this project explicitly
+does not enter.
