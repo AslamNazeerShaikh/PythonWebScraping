@@ -3,7 +3,7 @@
 [Graphify-Labs/graphify](https://github.com/Graphify-Labs/graphify) turns a
 codebase into a **queryable knowledge graph** (AST-parsed, no vector store):
 god nodes, communities, cross-file `calls`/`imports` edges, each tagged
-`EXTRACTED` (in source) or `INFERRED`. Installed here: CLI `graphify 0.9.58`
+`EXTRACTED` (in source) or `INFERRED`. Installed here: CLI `graphify 0.9.84`
 (package `graphifyy`) + the opencode skill (`.opencode/`, `AGENTS.md`).
 
 ## Artifacts (`graphify-out/`, committed)
@@ -15,8 +15,10 @@ god nodes, communities, cross-file `calls`/`imports` edges, each tagged
 | `graph.json` | Full graph — `query`/`path`/`explain` read this |
 | `cache/` + dotfiles | Incremental state (committed for speed) |
 
-Current snapshot: **364 nodes · 737 edges · 12 communities**, 97% EXTRACTED,
-0 API cost (code-only extraction — tree-sitter AST, nothing leaves the machine).
+Current snapshot: see the **Summary** section of
+[`graphify-out/GRAPH_REPORT.md`](../graphify-out/GRAPH_REPORT.md) for the
+current node/edge/community counts and extraction mix. Cost: 0 API (code-only
+extraction — tree-sitter AST, nothing leaves the machine).
 
 ## This repo's map (from `GRAPH_REPORT.md`)
 

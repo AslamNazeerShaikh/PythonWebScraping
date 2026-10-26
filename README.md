@@ -101,6 +101,15 @@ curl -s -X POST http://127.0.0.1:8000/api/skills \
 - `count_mode`: `companies` (default) or `postings`.
 - Deep dive: `docs/SPEC-naukri-skills-scan.md`.
 
+### C#/.NET market snapshot (2026-10-26)
+
+Point-in-time analysis combining the key-skills cross-check with a 30-day
+job-title scan: **top 10 skills** are C#, .NET, SQL, .NET Core, ASP.NET,
+Angular, Microsoft Azure, REST, JavaScript and MVC; the title count is led by
+**.NET Developer** and **.NET Full Stack Developer**. Full tables, the
+employer-breadth correction and data caveats:
+[`docs/NAUKRI_MARKET_SNAPSHOT.md`](docs/NAUKRI_MARKET_SNAPSHOT.md).
+
 ## Configuration
 
 Everything is `.env`-driven (see `.env.example`); CLI flags and API fields override per run. The knobs that matter most:

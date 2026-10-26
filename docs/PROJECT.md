@@ -43,6 +43,10 @@ Persistence (SQLAlchemy → SQLite, jobs.db)       db.py
 CLI (Typer) · output (Rich) · retries (tenacity, transient-only) · logging
 ```
 
+> **Market snapshot (2026-10-26).** `NAUKRI_MARKET_SNAPSHOT.md` records the
+> current C#/.NET top 10 key skills and job titles, the employer-breadth
+> correction and the data-quality caveats.
+
 **Key invariants**
 
 1. SQLite is the source of truth; every file export is a disposable snapshot.
@@ -134,7 +138,8 @@ a block page: back off, retry later.
 This repo ships a queryable map of itself ([details](GRAPHIFY.md),
 [upstream](https://github.com/Graphify-Labs/graphify),
 [code explanation](CODE_EXPLANATION.md)): `graphify-out/`
-(`graph.html`, `GRAPH_REPORT.md`, `graph.json`; 509 nodes, 30 communities).
+(`graph.html`, `GRAPH_REPORT.md`, `graph.json`; current node/edge/community
+counts are in `GRAPH_REPORT.md`).
 Query before grepping: `graphify query "<question>"`. Rebuild after code
 changes: `graphify update .` (free). Excludes: `vendor/`, `docs/evidence/`
 (see `.graphifyignore`).

@@ -157,10 +157,13 @@ The live UI count moved 438 → 442 → 447 during the runs. 398 postings were
 captured by both paths; their card and API skill lists matched. Raw top 15
 agreed on 14/15 entries; technology-only top 15 also agreed on 14/15.
 
-Technology-only consensus (generic Naukri chips removed): `C#`, `.Net`,
-`SQL`, `.Net Core`, `ASP.Net`, `Angular`, `Microsoft Azure`, `REST`,
-`JavaScript`, `MVC`, `HTML`, `CSS`, `Automation Testing`, `Java`, `React.js`
-/ `Software testing` at the tail.
+Top 10 technology-only consensus (generic Naukri chips removed): **C#,
+.NET, SQL, .NET Core, ASP.NET, Angular, Microsoft Azure, REST, JavaScript,
+MVC**. Tail: Automation Testing, CSS, HTML, React.js, Software testing.
+
+The market-facing summary — including the separate 30-day job-title scan,
+employer-breadth correction and caveats — is
+[`NAUKRI_MARKET_SNAPSHOT.md`](NAUKRI_MARKET_SNAPSHOT.md).
 
 Run artifacts (gitignored, regenerable):
 
@@ -177,3 +180,11 @@ Run artifacts (gitignored, regenerable):
 - `tests/test_web.py` — API/browser skills runners, raw-pool gating,
   postings/companies modes, caps.
 - `tests/test_export.py` / `tests/test_parser.py` — offline detail parsing.
+
+## 9. Related market analysis
+
+- [`NAUKRI_MARKET_SNAPSHOT.md`](NAUKRI_MARKET_SNAPSHOT.md) — dated C#/.NET
+  snapshot: top 10 skills, top 10 job titles, employer-breadth correction and
+  data-quality caveats (2026-10-26).
+- `output/naukri_titles_netcore_30d_20261026.md` — title-frequency report for
+  the separate `.net core` / 30-day / 4-city scan.
