@@ -98,6 +98,9 @@ unchanged. Browse via dashboard or `GET /api/logs[/{name}]`.
 
 ## Key-skills scan (API fast path + browser fallback)
 
+> Deep dive (DOM, pagination bug, verification snapshot):
+> [`docs/SPEC-naukri-skills-scan.md`](SPEC-naukri-skills-scan.md).
+
 `POST /api/skills` first tries Naukri's own search API — the JobSpy-port
 (`src/web/nkapi.py`): `GET jobapi/v3/search` with `appid: 109` and a fresh
 per-request RSA `nkparam` (`v0|<ms>|121_srp`, stdlib-only port of
@@ -108,29 +111,33 @@ any network failure falls back to the polite browser scan; the summary
 stamps `"source": "api"|"browser"` so you can see which path served.
 
 `POST /api/skills {keywords (comma titles), location, experience, days,
-pages, max_jobs (default 100, cap 200), count_mode}` — `companies`
+pages (cap 30), max_jobs (default 100, cap 600), count_mode}` — `companies`
 (default): each skill counts DISTINCT companies (`C#` in 20 Capgemini +
 10 TCS postings scores 2, over `companies_total`); `postings` keeps the
 legacy one-vote-per-posting count. The dashboard switch defaults ON.
-Page 1 is submitted through Naukri's own search bar (keyword/location suggestor
-fills resolved variant-tolerantly, location + `<N> years` options picked
-by visible text per ankitbaghel01's text-selector discipline, submitted
-with Enter — proven live to land the clean manual-style slug). Any bar
-failure falls back to a slug-style URL (`/<slug>-jobs-in-<loc>?k=&l=
-&experience=&jobAge=` — the lordzohar-bot `/{keyword}-jobs` pattern plus
-your verified `jobAge` freshness param; verified live with 20 anchors),
-then pages 2+ continue in the same session with filters re-asserted.
-Pagination follows Naukri's own link scheme (path suffix `...-pune-2`,
-the lordzohar pattern — `?page=` on slug URLs provably reloads page 1,
-which is why early runs stopped near ~20 jobs instead of covering all).
-The main collection loop uses the same slug paging (the legacy
-`/jobs?k=&page=` form provably redirects to one slug page, dropping `page`).
-Detail enrichment for key skills next (no relevance filter —
-the titles are the query), then a frequency
-report (top 30, one vote per posting, case-folded). Every skill carries a
-company breakdown (`companies: [{name, count}]`, count desc) so a skill
-repeated by 4–5 prolific hirers reads honestly — shown as tags under each
-bar (top 5 + "+N more") and as `@ Company xN` lines in the .txt.
+Both `exclude_unwanted` and `exclude_java` are pinned `False`: a skills scan
+is exploratory, and the raw result pool is the point.
+Page 1 is loaded from the slug URL
+(`/<keyword-slug>-jobs-in-<first-city>?k=&l=&experience=&jobAge=`). For a
+multi-city `location`, the full comma list goes in `l` while the path uses
+only the first city — exactly the URL Naukri itself generates. Putting the
+whole list in the path (`...-jobs-in-pune, hyderabad, bangalore-2`) makes
+Naukri redirect to page 1 and strip every filter; that was the old
+"pagination keeps reloading page 1" bug. Pages 2+ are reached by clicking
+the native **Next** control (`nav[aria-label="Pagination"]`), which keeps
+the SPA's experience/jobAge/multi-city state. A direct `...-2` load keeps
+the page number but loses those filters (verified live: 68 Pune-only rows
+instead of 442), so the browser scan never `goto()`s a `-N` URL.
+`?page=2` on a slug URL is likewise ignored by Naukri.
+Key skills come from each card's `ul.tags-gt > li.tag-li` chips (promoted
+cards use `.keyskill > span`), so no detail-page visits are needed — 438
+cards cost 22 page loads, not 438 job-page loads. This is the same list the
+search API returns as `tagsAndSkills`; the standard card also exposes
+`span.job-post-day` for freshness. The frequency report is top 30, one vote
+per posting, case-folded. Every skill carries a company breakdown
+(`companies: [{name, count}]`, count desc) so a skill repeated by 4–5
+prolific hirers reads honestly — shown as tags under each bar (top 5 +
+"+N more") and as `@ Company xN` lines in the .txt.
 Analysis-only: postings are NOT upserted to SQLite; the report + `skills_<ts>.txt` (same shape as
 the export download) is the artifact, with `verdict` + `duration_s` in the
 summary. Dashboard renders top-5 chips + ranked bars (top 10 numbered) +
@@ -229,7 +236,7 @@ connects, and verify with `opencode mcp debug <server-name>`.
 
 ## Evidence (verify-before-claim)
 
-- `pytest`: **127 passed, 100% coverage** (gate `--cov-fail-under=100` green).
+- `pytest`: **336 passed, 100% coverage** (gate `--cov-fail-under=100` green).
 - Live boot on `:8123` against the real `jobs.db` (45 jobs): health/stats/
   dashboard/scalar all 200; export run `export-0001` → succeeded → download
   200; cancel-after-finish → `409 RUN_NOT_CANCELLABLE`; jobs search returned

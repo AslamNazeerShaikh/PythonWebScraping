@@ -49,8 +49,8 @@ class SkillsRequest(BaseModel):
     location: str = "pune"
     experience: int | None = Field(default=6, gt=0)
     days: int | None = Field(default=7, gt=0)
-    pages: int | None = Field(default=5, gt=0, le=10)
-    max_jobs: int | None = Field(default=100, gt=0, le=200)
+    pages: int | None = Field(default=5, gt=0, le=30)
+    max_jobs: int | None = Field(default=100, gt=0, le=600)
     count_mode: str = Field(default="companies", pattern="^(companies|postings)$")
 
 

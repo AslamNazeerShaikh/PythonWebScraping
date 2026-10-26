@@ -92,8 +92,9 @@ Gates are governed by **`exclude_unwanted`** (default `true`) on
 `--include-unwanted` on the CLI) — opt out per-run with
 `"exclude_unwanted": false`; the Java gate stays on regardless. Collect
 progress reports drops as `excluded` (irrelevant/frontend/Java) and
-`external` (company-portal). Skills scans pin the gates **off** (the raw
-pool is the point). Because gates keep fewer rows per raw page, the daily
+`external` (company-portal). Skills scans pin **both** the lane-quality gates
+and the Java gate **off** (the raw pool is the point; card key-skill chips are
+read directly, so a skills scan never enrich-visits a job page). Because gates keep fewer rows per raw page, the daily
 apply-links run collects with `max_jobs: 150` per lane (the cap counts
 *kept* rows). 2026-10-21: full suite green at 100 % coverage (202 tests).
 

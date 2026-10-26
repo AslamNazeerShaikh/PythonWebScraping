@@ -91,8 +91,11 @@ cards have no anchor at all); Flipkart needs text-regex parsing
 (`Nx9bqj` → `QiMO5r`) and fields glue onto one line. Captcha/robot walls are
 screenshotted and recorded, never retried.
 
-- **93 tests, 100% statement + branch coverage** (`pyproject.toml` enforces
+- **336 tests, 100% statement + branch coverage** (`pyproject.toml` enforces
   `--cov-fail-under=100`).
+- Key-skills scan coverage: card-chip extraction, first-city URL building,
+  native Next paging (including timeout/detached-DOM paths), no-detail scan,
+  and API/browser raw-pool gates in `tests/test_scraper.py` / `test_web.py`.
 - No real browser or network: `tests/conftest.py` provides `FakePage`,
   `FakeContext`, fake browser types, and a `fresh_db` fixture (isolated tmp
   SQLite per test). Tenacity paths are exercised through `goto_plan`

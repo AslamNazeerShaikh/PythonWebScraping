@@ -35,12 +35,16 @@ def make_job(job_id: str = "12345678", **over) -> Job:
     return Job(**base)
 
 
-def raw_card(job_id: str = "12345678", title: str = "Senior .NET Developer") -> dict:
+def raw_card(job_id: str = "12345678", title: str = "Senior .NET Developer",
+             **over) -> dict:
     """Build an in-page-JS-style raw card dict (camelCase keys)."""
     url = f"https://www.naukri.com/job-listings-dev-{job_id}"
-    return {"jobId": job_id, "title": title, "company": "Acme",
+    card = {"jobId": job_id, "title": title, "company": "Acme",
             "location": "Pune", "experience": "6-8 Yrs", "salary": "10 Lacs",
-            "posted": "today", "snippet": "asp.net core c#", "url": url}
+            "posted": "today", "snippet": "asp.net core c#", "skills": [],
+            "url": url}
+    card.update(over)
+    return card
 
 
 # ---------------------------------------------------------------------------

@@ -144,8 +144,12 @@ def parse_detail_html(html: str, url: str) -> dict:
     soup = BeautifulSoup(html, "lxml")
     desc = soup.select_one(
         'section[class*="job-desc"], div[class*="job-desc"], div.dtl-section')
+    # Current detail DOM (2026-10): the "Key Skills" block is
+    # div[class*="key-skill"] with one <a class="styles_chip"> per skill.
+    # Older layouts used a[class*="skill"] / span[class*="skill"].
     skills = [e.get_text(strip=True) for e in
-              soup.select('a[class*="skill"], span[class*="skill"]')]
+              soup.select('div[class*="key-skill"] a, '
+                          'a[class*="skill"], span[class*="skill"]')]
     # Apply link: first VISIBLE external “apply/company site” anchor wins;
     # trap-styled ones are skipped by _is_trap.
     apply_url = url.split("?")[0]

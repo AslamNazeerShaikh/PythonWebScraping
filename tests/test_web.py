@@ -753,9 +753,12 @@ def test_default_skills_runner_full(fresh_db, tmp_path, monkeypatch):
     monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
     _tune_web(monkeypatch, tmp_path)
     page = FakePage()
-    page.listing_queue = [[raw_card("11111111")], [raw_card("22222222")]]
-    page.detail_result = {"skills": ["C#", "SQL"]}
+    page.listing_queue = [
+        [raw_card("11111111", skills=["C#", "SQL"])],
+        [raw_card("22222222", skills=["C#", "SQL"])],
+    ]
     _wire_browser(monkeypatch, page)
+    monkeypatch.setattr(ns, "_click_next_page", lambda p: True)
     rec = RunRecord(run_id="k", kind="skills", seq=1,
                     params={"keywords": "asp.net core, web api",
                             "location": "pune", "experience": 6,
@@ -1044,9 +1047,12 @@ def test_skills_runner_postings_mode(fresh_db, tmp_path, monkeypatch):
     monkeypatch.setattr(SETTINGS, "output_dir", tmp_path)
     _tune_web(monkeypatch, tmp_path)
     page = FakePage()
-    page.listing_queue = [[raw_card("11111111")], [raw_card("22222222")]]
-    page.detail_result = {"skills": ["C#"]}
+    page.listing_queue = [
+        [raw_card("11111111", skills=["C#"])],
+        [raw_card("22222222", skills=["C#"])],
+    ]
     _wire_browser(monkeypatch, page)
+    monkeypatch.setattr(ns, "_click_next_page", lambda p: True)
     rec = RunRecord(run_id="k", kind="skills", seq=1,
                     params={"keywords": "x", "count_mode": "postings",
                             "pages": 2, "max_jobs": 10})
@@ -1158,18 +1164,24 @@ def test_api_collect_jobs_drops_unwanted_rows(monkeypatch):
         ["300001", "300002", "300003", "300004"]
 
 
-def test_api_scan_skills_pins_unwanted_gates_off(monkeypatch):
+def test_api_scan_skills_pins_all_quality_gates_off(monkeypatch):
     import src.web.nkapi as nk
 
     monkeypatch.setattr(nk, "api_pause", lambda: None)
-    rows = [_api_job("400001", title="Product Owner", skills="Agile, Jira",
-                     desc="roadmap prioritisation")]
+    rows = [
+        _api_job("400001", title="Product Owner", skills="Agile, Jira",
+                 desc="roadmap prioritisation"),
+        _api_job("400002", title="Java Developer", skills="Java, Spring Boot",
+                 desc="spring boot microservices java backend"),
+    ]
     monkeypatch.setattr(nk.httpx, "get", lambda *a, **k: _Resp(
-        200, {"jobDetails": rows, "noOfJobs": 1}))
+        200, {"jobDetails": rows, "noOfJobs": 2}))
     rec = RunRecord(run_id="k", kind="skills", seq=1,
                     params=_api_params(max_jobs=10))
     rep = nk.api_scan_skills(rec.params, rec.should_stop, lambda p: None)
-    assert rep["jobs_scanned"] == 1  # exploratory scans keep the raw pool
+    # Exploratory scans keep the raw pool: irrelevant AND pure-Java rows
+    # still contribute to the skill frequencies.
+    assert rep["jobs_scanned"] == 2
 
 
 def test_default_collect_runner_api_and_fallback(fresh_db, tmp_path, monkeypatch):

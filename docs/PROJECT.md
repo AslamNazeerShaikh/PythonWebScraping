@@ -38,6 +38,7 @@ Validation (Pydantic Job)                        models.py
 Persistence (SQLAlchemy → SQLite, jobs.db)       db.py
         │  upsert by job_id · first_seen/last_seen · scrape_runs audit log
         ├──► Pandas → CSV / Excel snapshots      export.py
+        ├──► Skill scan → report + .txt          run_skills_scan / api_scan_skills
         └──► timestamped JSON/CSV snapshots      output/  (naukri_scraper.save_results)
 CLI (Typer) · output (Rich) · retries (tenacity, transient-only) · logging
 ```
@@ -51,6 +52,8 @@ CLI (Typer) · output (Rich) · retries (tenacity, transient-only) · logging
    solve instead of hammering.
 4. First run is headful (solve CAPTCHA / log in once); cookies persist in the
    profile, later runs succeed.
+5. Skill scans are analysis-only: they aggregate Naukri's card key-skill
+   chips and never write postings to SQLite.
 
 ## 2. Module reference
 
@@ -58,7 +61,7 @@ CLI (Typer) · output (Rich) · retries (tenacity, transient-only) · logging
 |---|---|---|
 | `config.py` | `.env`-driven `SETTINGS` singleton | `_get*` readers, `Settings`, `SETTINGS` |
 | `stealth_browser.py` | Chromium-only launcher + uBO Lite wiring | `launch_context`, `_launch_chromium`, `_extension_args`, `human_pause` |
-| `naukri_scraper.py` | Search URLs, extractors, pipeline | `build_search_url`, `scrape_search_page`, `enrich_job`, `run_scrape`, `save_results`, `coerce_job`, `normalize_raw` |
+| `naukri_scraper.py` | Search URLs, extractors, pipeline | `build_search_url`, `build_slug_search_url`, `scrape_search_page`, `_click_next_page`, `enrich_job`, `run_scrape`, `run_skills_scan`, `build_skills_report`, `save_results`, `coerce_job`, `normalize_raw` |
 | `parser.py` | Offline BS4+lxml twin of the JS extractors | `parse_search_html`, `parse_detail_html` |
 | `models.py` | Pydantic `Job` + ORM `JobRow`/`ScrapeRun` | `Job.skill_text`, `JobRow.from_job/to_job` |
 | `db.py` | Engine, sessions, upsert, audit | `init_db`, `upsert_jobs`, `record_run`, `fetch_all_jobs`, `count_jobs` |
@@ -94,7 +97,12 @@ python -m src.main stats                                  # DB overview
 python -m src.main export --format excel --location pune # filtered snapshot
 python -m src.main parse output/debug_last_search.html   # offline re-parse
 python -m src.main schedule --hours 8,20                 # daily 08:05 + 20:05
-pytest                                                    # 93 tests, 100% coverage gate
+pytest                                                    # 336 tests, 100% coverage gate
+
+# Key-skills scan (API fast path, browser fallback): POST /api/skills
+curl -s -X POST http://127.0.0.1:8000/api/skills -H 'Content-Type: application/json' \
+  -d '{"keywords":"c#, asp.net core, .net fullstack","location":"pune, hyderabad, bangalore",\
+"experience":6,"days":7,"pages":23,"max_jobs":500,"count_mode":"postings"}'
 ```
 
 ## 5. Data model

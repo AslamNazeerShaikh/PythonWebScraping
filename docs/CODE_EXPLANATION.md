@@ -27,7 +27,7 @@
 │   ├── db.py               # Layer 4 — engine, sessions, upsert, audit log
 │   ├── export.py           # Layer 5 — Pandas CSV/Excel snapshots
 │   └── scheduler.py        # Layer 6 — APScheduler daily cron triggers
-├── tests/                  # 93 tests, no browser/network (FakePage/FakeContext)
+├── tests/                  # 336 tests, no browser/network (FakePage/FakeContext)
 │   ├── conftest.py         # make_job/raw_card/fresh_db + Playwright fakes
 │   ├── test_*.py           # one file per src module
 ├── scripts/                # live practice probes (need real browser/network)
@@ -57,7 +57,7 @@ nothing imports main (except scheduler's deferred do_scrape import to avoid a cy
 | 0 config | `config.py` | `.env`-driven `SETTINGS` singleton | `_get/_get_int/_get_float/_get_bool`, `Settings`, `SETTINGS`, `BASE_DIR` |
 | util | `log.py` | std-logging setup | `setup_logging` |
 | 1 browser | `stealth_browser.py` | Chromium launcher + uBO Lite wiring | `launch_context`, `_launch_chromium`, `_extension_args`, `_maybe_block_ads`, `human_pause`, `STEALTH_INIT_JS`, `BLOCKED_HOSTS` |
-| 2 live extract | `naukri_scraper.py` | Search URLs, JS extractors, pipeline | `build_search_url`, `scrape_search_page`, `enrich_job`, `run_scrape`, `save_results`, `coerce_job`, `normalize_raw`, `LISTING_EXTRACT_JS`, `DETAIL_EXTRACT_JS`, `check_bot_wall`, `handle_possible_block`, `human_scroll`, `is_relevant` |
+| 2 live extract | `naukri_scraper.py` | Search URLs, JS extractors, pipeline | `build_search_url`, `build_slug_search_url`, `scrape_search_page`, `_click_next_page`, `enrich_job`, `run_scrape`, `run_skills_scan`, `build_skills_report`, `save_results`, `coerce_job`, `normalize_raw`, `LISTING_EXTRACT_JS`, `DETAIL_EXTRACT_JS`, `check_bot_wall`, `handle_possible_block`, `human_scroll` |
 | 2 offline extract | `parser.py` | BS4+lxml twin (no browser) | `parse_search_html`, `parse_detail_html`, `_is_trap`, `_card_text` |
 | 3 validate | `models.py` | Pydantic `Job` contract | `Job`, `Job.skill_text` |
 | 4 persist | `models.py` + `db.py` | ORM rows + engine/upsert/audit | `JobRow.from_job/to_job`, `ScrapeRun`, `get_engine`, `init_db`, `get_session`, `upsert_jobs`, `record_run`, `fetch_all_jobs`, `count_jobs` |
@@ -135,8 +135,8 @@ Exit codes: `0` success (including "0 jobs found" — guidance, not error);
 3. **Std-lib-only for plumbing.** `logging` (not structlog), `dataclasses`
    (not attrs/pydantic-settings), `pathlib`, `urllib.parse`, `csv/json`,
    `random/time`. Third-party deps are load-bearing only (see §8).
-4. **Pure functions where possible.** `build_search_url`, `normalize_raw`,
-   `is_relevant`, `parse_search_html`, `_resolve_url` are side-effect-free →
+4. **Pure functions where possible.** `build_search_url`, `build_slug_search_url`, `normalize_raw`,
+   `parse_search_html`, `_resolve_url` are side-effect-free →
    trivially unit-testable. I/O (browser, DB, files, clock) is pushed to the
    edges (`scrape_search_page`, `upsert_jobs`, `save_results`, `export_jobs`).
 5. **Defensive, never crashy.** Env readers fall back to defaults on
@@ -226,7 +226,7 @@ The whole app is an **Extract → Transform → Load** pipeline with a validatio
 
 ```
 Extract   = Playwright + JS (live)  |  BS4+lxml (offline twin)
-Transform = normalize_raw + coerce_job + is_relevant + enrich_job
+Transform = normalize_raw + coerce_job + lane/Java gates + enrich_job
 Load      = upsert_jobs + record_run (SQLite) + save_results/export_jobs (files)
 ```
 
@@ -344,13 +344,21 @@ spawn here — verified, documented).
 
 ### `naukri_scraper.py` — Layer 2-live, the pipeline core
 - `build_search_url` — stable `/jobs?k&l&experience&jobPostDate&page` builder.
+- `build_slug_search_url` — skills-scan slug URL: path uses the **first city**
+  only, while `l` keeps the full multi-city list (the old whole-list path made
+  Naukri redirect to page 1 and drop every filter).
+- `_click_next_page` — clicks the native **Next** control
+  (`nav[aria-label="Pagination"]`) and waits for the card range to swap. This
+  preserves the SPA's experience/`jobAge`/multi-city state; a direct `-2` URL
+  does not.
 - `LISTING_EXTRACT_JS` / `DETAIL_EXTRACT_JS` — in-page extractors with
   computed-style visibility guards + `jobId` dedupe (note the `window.location`
-  TDZ comment — a real bug that once zeroed results).
+  TDZ comment — a real bug that once zeroed results). `LISTING_EXTRACT_JS`
+  also reads card key skills (`ul.tags-gt > li.tag-li`, promoted `.keyskill`
+  spans) and `span.job-post-day`.
 - `check_bot_wall` / `handle_possible_block` — visible-text + anchor-count
   detection; manual ENTER-solve, never bypass.
 - `human_scroll` — wheel + settle + wiggle (lazy-load trigger), JS fallback.
-- `is_relevant` — high-recall `.NET` keyword gate.
 - `normalize_raw` → `coerce_job` — camelCase→snake, URL canon, length caps,
   Pydantic validate-or-`None`-with-warning.
 - `_safe_goto` — tenacity retry on **both** `TimeoutError`s (builtin +
@@ -361,6 +369,10 @@ spawn here — verified, documented).
   `apply_url` falls back); any failure returns the original.
 - `run_scrape` — locations × pages collection with dedupe + cap + politeness,
   then optional enrichment pass; returns `list[Job]`.
+- `run_skills_scan` — analysis-only card scan: page 1 URL + native Next paging,
+  card key skills, **no detail visits**, returns the frequency report.
+- `build_skills_report` — case-folded one-vote-per-posting aggregation with
+  distinct-company or per-posting counts + per-company breakdown.
 - `save_results` — timestamped JSON + CSV into `output/`.
 
 ### `parser.py` — Layer 2-offline, BS4 twin
@@ -450,7 +462,7 @@ sequenceDiagram
         Site->>JS: evaluate LISTING_EXTRACT_JS
         JS-->>CLI: raw dicts (visible only, deduped)
         CLI->>Val: coerce_job → Job | None(drop+warn)
-        CLI->>CLI: is_relevant filter + job_id dedupe
+        CLI->>CLI: lane/Java gates + job_id dedupe
     end
     opt enrich_details
         loop each job

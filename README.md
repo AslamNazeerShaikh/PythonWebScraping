@@ -8,7 +8,7 @@ The default board adapter targets Naukri.com (direct search-API fast path with a
 
 - **Collect listings** into SQLite (deduplicated by posting id, with first/last-seen tracking) via a direct search-API fast path, falling back to a polite Playwright/Chromium pass with human-like pacing.
 - **Filter at every stage** — relevance gating plus a configurable stack filter (e.g. drop pure-Java postings while keeping mixed-stack ones) applied at collect time and again at export time.
-- **Analyze skill demand** across fresh postings: top skills ranked by distinct-company or per-posting counts, each with a per-company breakdown, rendered in the dashboard and as a downloadable report.
+- **Analyze skill demand** across fresh postings: top skills ranked by distinct-company or per-posting counts, each with a per-company breakdown, rendered in the dashboard and as a downloadable report. The scan reads Naukri's own **Key Skills chips on the search-result card** (`ul.tags-gt > li.tag-li`), so it pages the SRP instead of opening every job. The API fast path uses the identical `tagsAndSkills` field.
 - **Export snapshots** — CSV or Excel where each job title is a true clickable hyperlink to the apply page.
 - **Serve a control plane** (one process, one port): dashboard UI, REST endpoints with cancel twins for every long run, live progress with stage timelines, run logs, and a DB explorer.
 - **Talk to AI agents** over Streamable HTTP MCP (curated tools: stats, search, start scrape/skill-scan/collect, run status, cancel) with an interactive Scalar API reference alongside Swagger/OpenAPI.
@@ -83,6 +83,22 @@ python -m src.main schedule --hours 8,20
 
 Typical dashboard flow: collect one lane per search profile (`POST /api/collect` with `keywords`, `location`, `experience`, `days`, `max_jobs`) → repeat for other profiles → `POST /api/exports {format: excel}` → open the spreadsheet and click titles to apply. See `docs/LANES_RUNBOOK.md` for a worked multi-lane example.
 
+### Key-skills scan
+
+`POST /api/skills` ranks the **Key Skills chips on the Naukri result cards** — no detail-page visits. The API fast path uses the same list (`tagsAndSkills`); both paths page the result set in 20-job blocks.
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/skills \
+  -H 'Content-Type: application/json' \
+  -d '{"keywords":"c#, asp.net core, .net fullstack","location":"pune, hyderabad, bangalore","experience":6,"days":7,"pages":23,"max_jobs":500,"count_mode":"postings"}'
+```
+
+- Multi-city `location`: the URL path uses the first city, the full list stays in `l`.
+- Pages 2+ click Naukri's native **Next** (the SPA keeps the filters; a direct `-2` URL does not).
+- Caps: `pages <= 30`, `max_jobs <= 600`.
+- `count_mode`: `companies` (default) or `postings`.
+- Deep dive: `docs/SPEC-naukri-skills-scan.md`.
+
 ## Configuration
 
 Everything is `.env`-driven (see `.env.example`); CLI flags and API fields override per run. The knobs that matter most:
@@ -93,7 +109,7 @@ Everything is `.env`-driven (see `.env.example`); CLI flags and API fields overr
 | `LOCATIONS` | `pune,hyderabad` | Default search locations |
 | `EXPERIENCE` / `DATE_FILTER` | `6` / `7` | Years of experience · posted within last N days |
 | `MAX_PAGES_PER_SEARCH` / `MAX_JOBS_TOTAL` | `3` / `60` | Politeness caps |
-| `ENRICH_DETAILS` | `true` | Visit each posting page for full text/skills |
+| `ENRICH_DETAILS` | `true` | Visit each posting page for full text (scrape runs only; skills scans read card chips) |
 | `EMAIL_DOMAINS` | 11 targets (cognizant, capgemini, ltm, …) | LinkedIn post-search domains for `collect-emails` |
 | `EMAIL_MAX_SCROLLS` / `EMAIL_DEFAULT_TARGET` | `40` / `10` | Max wheel-scroll rounds per domain · default unique-email target when CSV omits `:N` |
 | `EMAIL_DOMAIN_PAUSE_S` | `300` | Cooldown between domain searches (avoids LinkedIn's rolling search limit) |
@@ -148,12 +164,12 @@ GET  /api/health | /api/stats | /api/jobs… | /api/db/tables… | /api/logs…
 /mcp                → Streamable HTTP MCP (trailing slash required)
 ```
 
-Full contract: `docs/WEB_API.md` (kept alongside the code as the living spec).
+Full contract: `docs/WEB_API.md` (kept alongside the code as the living spec). Skills-scan DOM/pagination spec: `docs/SPEC-naukri-skills-scan.md`.
 
 ## Testing
 
 ```bash
-pytest   # 181 tests, 100% coverage gate — no browser or network needed (fakes included)
+pytest   # 336 tests, 100% coverage gate — no browser or network needed (fakes included)
 ```
 
 Live browser/network probes live in `scripts/` (practice suite, e-commerce spot checks) and are separate from the unit gate by design.

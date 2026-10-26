@@ -148,8 +148,10 @@ the pre-existing Java gate). Plumbed through `default_collect_runner` /
   the Java gate is already unconditional there; `is_relevant` (the .NET-only
   browser gate) is **removed** — it would silently drop Lane 1 AI postings on
   the fallback path.
-- Skills scans (`POST /api/skills` → `api_scan_skills`) pass
-  `exclude_unwanted: False` — exploratory keyword scans keep today's behaviour.
+- Skills scans (`POST /api/skills` → `api_scan_skills`) pin **both**
+  `exclude_unwanted: False` and `exclude_java: False` — exploratory keyword
+  scans keep the raw result pool (a Java posting returned for a .NET query
+  still contributes honest demand data).
 
 ## Code style
 

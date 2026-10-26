@@ -263,10 +263,13 @@ def api_scan_skills(params: dict, should_stop: StopHook,
     """Full skills report over the API (no browser): collect then aggregate.
 
     Exploratory by design: keyword scans answer "what skills does <query>
-    want?", so the lane-quality gates stay off here (``exclude_unwanted``
-    pinned ``False``) — the raw pool is the point of a skills scan.
+    want?", so both the lane-quality gates **and** the pure-Java gate stay
+    off here (``exclude_unwanted`` / ``exclude_java`` pinned ``False``).
+    The raw result pool is the point: a Java/Spring posting that Naukri
+    returned for a .NET query still contributes honest demand data.
     """
     by_company = company_mode(params)
-    jobs, _ = api_collect_jobs({**params, "exclude_unwanted": False},
+    jobs, _ = api_collect_jobs({**params, "exclude_unwanted": False,
+                                "exclude_java": False},
                                should_stop, on_progress)
     return build_skills_report(jobs, by_company=by_company)

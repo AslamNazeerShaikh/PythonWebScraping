@@ -559,17 +559,23 @@ def test_build_skills_report_empty():
 def test_run_skills_scan_full_flow(monkeypatch):
     _tune_skills(monkeypatch)
     page = FakePage()
-    page.listing_queue = [[raw_card("11111111")],
-                          [raw_card("22222222"), raw_card("11111111"),  # dup skipped
+    page.listing_queue = [[raw_card("11111111", skills=["C#"])],
+                          [raw_card("22222222", skills=["C#", "SQL"]),
+                           raw_card("11111111"),  # dup skipped
                            {"jobId": "1", "title": "AB", "url": "https://x"}]]  # invalid dropped
-    page.detail_result = _detail_skills("C#", "SQL")
+    monkeypatch.setattr(ns, "_click_next_page", lambda p: True)
     seen: list = []
     rep = ns.run_skills_scan(FakeContext(page), "asp.net core", "pune",
-                             6, 7, 2, 10, on_progress=seen.append)
+                             6, 7, 2, 10, by_company=False,
+                             on_progress=seen.append)
     assert rep["jobs_scanned"] == 2 and rep["unique_skills"] == 2
-    assert [s["stage"] for s in seen] == ["search", "search", "detail",
-                                          "detail", "done"]
-    assert len(page.goto_urls) == 2 + 2  # 2 searches + 2 details
+    assert [s["stage"] for s in seen] == ["search", "search", "done"]
+    # Page 1 is a direct URL; page 2 was the already-clicked Next view.
+    assert len(page.goto_urls) == 1
+    assert "-jobs-in-pune?" in page.goto_urls[0]
+    assert all("/job-listings-" not in u for u in page.goto_urls)
+    top = {t["skill"]: t["count"] for t in rep["top"]}
+    assert top == {"C#": 2, "SQL": 1}        # one vote per posting
 
 
 def test_run_skills_scan_cap_breaks_page_loop(monkeypatch):
@@ -587,18 +593,20 @@ def test_run_skills_scan_cap_breaks_page_loop(monkeypatch):
 def test_run_skills_scan_stop_mid_pass_keeps_partial(monkeypatch):
     _tune_skills(monkeypatch)
     page = FakePage()
-    page.listing_queue = [[raw_card("11111111")], [raw_card("22222222")]]
+    page.listing_queue = [[raw_card("11111111", skills=["C#"])],
+                          [raw_card("22222222", skills=["SQL"])]]
+    monkeypatch.setattr(ns, "_click_next_page", lambda p: True)
     calls = [0]
 
     def _stop():
         calls[0] += 1
-        return calls[0] > 3  # two pages pass; third page poll + enrich stop it
+        return calls[0] > 3  # stop after page 2 is read, before page 3
 
     seen: list = []
     rep = ns.run_skills_scan(FakeContext(page), "a", "pune", 6, 7, 3,
                              10, should_stop=_stop, on_progress=seen.append)
-    assert rep["jobs_scanned"] == 2  # both pages done, details skipped
-    assert [s["stage"] for s in seen] == ["search", "search", "search", "done"]
+    assert rep["jobs_scanned"] == 2  # both pages done; page 3 never clicked
+    assert [s["stage"] for s in seen] == ["search", "search", "done"]
 
 
 def test_run_skills_scan_stop_before_first_title(monkeypatch):
@@ -734,3 +742,79 @@ def test_pick_option_exact_substring_and_miss():
     page4 = FakePage()
     page4.query_counts = [0]
     assert ns._pick_option(page4, ["li"], "6 years") is False  # no nodes
+
+
+# -- SRP card key skills + native pagination (2026-10-26 fix) -----------------
+def test_listing_js_reads_card_key_skills_and_posted_date():
+    js = ns.LISTING_EXTRACT_JS
+    assert "ul.tags-gt li" in js and "li.tag-li" in js
+    assert ".keyskill > span" in js
+    assert "span.job-post-day" in js
+    assert "skills," in js                      # pushed with every card
+
+
+def test_build_slug_search_url_multi_location_uses_first_city_in_path():
+    url = ns.build_slug_search_url(
+        "C#, ASP.Net Core", "pune, hyderabad, bangalore", 6, 7, 2)
+    assert "-jobs-in-pune-2?" in url
+    assert "l=pune%2C+hyderabad%2C+bangalore" in url
+    assert "k=C%23%2C+ASP.Net+Core" in url
+    assert "experience=6" in url and "jobAge=7" in url
+
+
+def test_build_slug_search_url_empty_location_falls_back_to_india():
+    url = ns.build_slug_search_url("C#", "", 6, 7, 1)
+    assert "-jobs-in-india?" in url
+
+
+def test_click_next_page_waits_for_range_change(monkeypatch):
+    page = FakePage()
+    page.js_returns["/*next-page*/"] = True
+    states = iter([{"text": "1 - 20 of 442"},
+                   {"text": "21 - 40 of 442"}])
+    monkeypatch.setattr(ns, "_list_state", lambda p: next(states))
+    assert ns._click_next_page(page) is True
+    assert page.timeouts == [ns.NEXT_PAGE_POLL_MS]
+
+
+def test_click_next_page_returns_false_without_enabled_control():
+    page = FakePage()
+    page.js_returns["/*next-page*/"] = False
+    assert ns._click_next_page(page) is False
+    assert page.timeouts == []
+
+
+def test_click_next_page_and_list_state_survive_detached_dom():
+    class _Boom(FakePage):
+        def evaluate(self, js):  # type: ignore[override]
+            raise RuntimeError("execution context destroyed")
+
+    assert ns._list_state(_Boom()) == {}
+    assert ns._click_next_page(_Boom()) is False
+
+
+def test_click_next_page_times_out_when_range_never_changes(monkeypatch):
+    page = FakePage()
+    page.js_returns["/*next-page*/"] = True
+    monkeypatch.setattr(ns, "_list_state", lambda p: {"text": "same"})
+    assert ns._click_next_page(page, timeout_ms=1000) is False
+    assert len(page.timeouts) == 2      # 1000 / NEXT_PAGE_POLL_MS
+
+
+def test_run_skills_scan_stops_when_next_page_is_absent(monkeypatch):
+    _tune_skills(monkeypatch)
+    page = FakePage()
+    page.listing_queue = [[raw_card("11111111", skills=["C#"])]]
+    monkeypatch.setattr(ns, "_click_next_page", lambda p: False)
+    seen: list = []
+    rep = ns.run_skills_scan(FakeContext(page), "a", "pune", 6, 7, 2, 10,
+                             on_progress=seen.append)
+    assert rep["jobs_scanned"] == 1
+    assert [s["stage"] for s in seen] == ["search", "done"]
+
+
+def test_run_skills_scan_zero_pages_returns_empty_report():
+    page = FakePage()
+    rep = ns.run_skills_scan(FakeContext(page), "a", "pune", 6, 7, 0, 10)
+    assert rep["jobs_scanned"] == 0 and rep["top"] == []
+    assert page.goto_urls == []

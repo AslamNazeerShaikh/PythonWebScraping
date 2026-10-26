@@ -161,14 +161,33 @@ LISTING_EXTRACT_JS = """
       const loc = pick(['span[class*="loc"], div[class*="loc"] span, li[class*="location"]']);
       const exp = pick(['span[class*="exp"], li[class*="experience"], span[class*="experience"]']);
       const salary = pick(['span[class*="sal"], li[class*="salary"], span[class*="salary"]']);
-      const posted = pick(['span[class*="date"], span[class*="posted"], div[class*="posted"], li[class*="date"]']);
+      const posted = pick(['span.job-post-day', 'span[class*="job-post"], span[class*="date"], span[class*="posted"], div[class*="posted"], li[class*="date"]']);
       const snippet = pick(['div[class*="desc"], span[class*="desc"], div[class*="snippet"]']).slice(0, 600);
+
+      // Key Skills chips live in the card itself (verified live 2026-10-26):
+      // ul.tags-gt > li.tag-li on the standard SRP tuple, .keyskill spans on
+      // promoted cards. No detail-page visit is needed for a skills scan.
+      const skills = [];
+      const skillSeen = new Set();
+      if (card) {
+        const skillEls = card.querySelectorAll(
+          'ul.tags-gt li, li.tag-li, .keyskill > span, ' +
+          'div[class*="key-skill"] a, a[class*="skill"], span[class*="skill"]');
+        for (const el of skillEls) {
+          const t = visibleText(el);
+          const key = t.toLowerCase();
+          if (!t || skillSeen.has(key)) continue;
+          skillSeen.add(key);
+          skills.push(t);
+          if (skills.length >= 30) break;
+        }
+      }
 
       // Skip obvious trap cards (0x0 or hidden container)
       if (card && !isVisible(card)) continue;
       if (!title || title.length < 4) continue;
 
-      out.push({ jobId, title, company, location: loc, experience: exp, salary, posted, snippet, url: absUrl });
+      out.push({ jobId, title, company, location: loc, experience: exp, salary, posted, snippet, skills, url: absUrl });
     } catch (e) { /* skip one bad card */ }
   }
   // Dedupe by jobId, keep first
@@ -177,6 +196,78 @@ LISTING_EXTRACT_JS = """
   return deduped;
 }
 """
+
+LIST_STATE_JS = """
+() => {
+  /*list-state*/
+  const el = document.querySelector('#listContainer');
+  const first = document.querySelector('a[href*="/job-listings-"]');
+  return {
+    text: el ? (el.innerText || '').trim().slice(0, 60) : '',
+    first: first ? (first.getAttribute('href') || '') : '',
+  };
+}
+"""
+
+NEXT_PAGE_JS = """
+() => {
+  /*next-page*/
+  const nav = document.querySelector('nav[aria-label="Pagination"]') ||
+              document.querySelector('[class*="pagination"]');
+  if (!nav) return false;
+  const next = Array.from(nav.querySelectorAll('a, button')).find((el) => {
+    const t = (el.innerText || el.textContent || '').trim().toLowerCase();
+    if (t !== 'next' && !t.endsWith('next')) return false;
+    if (el.getAttribute('aria-disabled') === 'true') return false;
+    if (el.hasAttribute('disabled')) return false;
+    return true;
+  });
+  if (!next) return false;
+  next.click();
+  return true;
+}
+"""
+
+#: How long to wait for the SPA to swap in the next 20 cards (ms).
+NEXT_PAGE_WAIT_MS = 20000
+#: Poll interval while that swap is in flight (ms).
+NEXT_PAGE_POLL_MS = 500
+
+
+def _list_state(page: Page) -> dict:
+    """Return the visible result range + first card href (paging fingerprint)."""
+    try:
+        return page.evaluate(LIST_STATE_JS) or {}
+    except Exception:
+        return {}
+
+
+def _click_next_page(page: Page,
+                     timeout_ms: int = NEXT_PAGE_WAIT_MS) -> bool:
+    """Click the native **Next** pagination control; wait for cards to swap.
+
+    Naukri's SRP keeps ``experience``/``jobAge``/multi-city state in the SPA,
+    not in the paged URL. A direct ``...-2`` navigation therefore returns
+    filtered-out cards, while this click preserves the filters (verified live
+    2026-10-26: page 1 → 2 stayed ``21 - 40 of 442``). Returns ``False`` when
+    there is no enabled Next control (last page) or the range never changes.
+    """
+    before = _list_state(page)
+    try:
+        clicked = bool(page.evaluate(NEXT_PAGE_JS))
+    except Exception:
+        return False
+    if not clicked:
+        return False
+    waited = 0
+    while waited < timeout_ms:
+        page.wait_for_timeout(NEXT_PAGE_POLL_MS)
+        waited += NEXT_PAGE_POLL_MS
+        after = _list_state(page)
+        if after and after != before:
+            return True
+    return False
+
 
 DETAIL_EXTRACT_JS = """
 () => {
@@ -544,15 +635,23 @@ def build_slug_search_url(keywords: str, location: str, experience: int,
                           days: int, page: int = 1) -> str:
     """Skills-scan search URL mirroring a manual Naukri search exactly.
 
-    ``/<slug>-jobs-in-<loc>[-<n>]?k=&l=&experience=&jobAge=``: the
-    lordzohar-bot ``/{keyword}-jobs`` pattern plus the user-verified
-    ``jobAge`` freshness param. Pagination is PATH-based (``...-pune-2``):
-    verified live that ``?page=2`` on a slug URL reloads page 1 (same
-    first job id, deduped to nothing new), while the ``-2`` suffix
-    returns 20 fresh postings. The collector's legacy ``/jobs?k=&l=``
-    builder is untouched.
+    ``/<slug>-jobs-in-<first-city>[-<n>]?k=&l=&experience=&jobAge=``.
+    ``location`` may be several comma-separated cities: the full string goes
+    into ``l`` while the PATH uses only the first city, exactly like the
+    manual URL Naukri itself generates. Putting the whole comma list in the
+    path (the old behaviour) produced ``...-jobs-in-pune, hyderabad,
+    bangalore-2``; Naukri redirected that to page 1 and silently stripped
+    ``k/l/experience/jobAge``, which is why browser pagination appeared to
+    reload the same page.
+
+    Page 1 is safe to request directly. Later pages must be reached by
+    clicking the native **Next** pagination control: a direct ``-2`` load
+    keeps the path page but loses the SPA filter state (verified live), so
+    :func:`run_skills_scan` uses :func:`_click_next_page` for paging.
     """
-    base = f"{slugify_keywords(keywords)}-jobs-in-{location.lower()}"
+    first_city = (location or "").split(",")[0].strip() or "india"
+    base = (f"{slugify_keywords(keywords)}-jobs-in-"
+            f"{slugify_keywords(first_city)}")
     if page > 1:
         base = f"{base}-{page}"
     q = {"k": keywords, "l": location, "experience": str(experience),
@@ -856,15 +955,20 @@ def run_skills_scan(context: BrowserContext, keywords: str, location: str,
                     max_jobs: int, by_company: bool = True,
                     should_stop: StopHook | None = None,
                     on_progress: ProgressHook | None = None) -> dict:
-    """Scan detail pages for key skills: one search → enriched → report.
+    """Scan SRP cards for key skills: one URL → native Next paging → report.
 
-    The full comma-separated keyword string goes into a SINGLE search
-    (``?k=<all titles>``), exactly like Naukri's own search box — Naukri
-    matches across the titles itself. Same polite machinery as
-    :func:`run_scrape` (pauses, bot-wall handling, honeypot-safe
-    extraction) but WITHOUT the relevance filter. Analysis-only: nothing
-    is written to the DB; the report (plus a .txt written by the caller)
-    is the artifact.
+    The full comma-separated keyword string goes into a SINGLE Naukri search
+    (``k=<all titles>``), exactly like the site's own search box. Page 1 is
+    loaded from the slug URL (which carries ``experience``, ``jobAge`` and
+    the full multi-city ``l``); every later page is reached by clicking the
+    native **Next** control, because the SPA keeps those filters in memory.
+
+    Key skills come from each card's ``ul.tags-gt > li.tag-li`` chips, so no
+    detail-page visits are needed — 438 cards cost 22 page loads, not 438
+    job-page loads. Same polite machinery as :func:`run_scrape` (pauses,
+    bot-wall handling, honeypot-safe extraction) but WITHOUT the relevance
+    filter. Analysis-only: nothing is written to the DB; the report is the
+    artifact.
     """
     stopped = should_stop or (lambda: False)
 
@@ -879,23 +983,15 @@ def run_skills_scan(context: BrowserContext, keywords: str, location: str,
             break
         try:
             if pnum == 1:
-                # Human path first: drive the search bar (keywords + location
-                # + experience, like manual typing). Any failure falls back to
-                # the proven direct-URL navigation — the run never breaks here.
-                try:
-                    submit_searchbar(page, keywords, location, experience)
-                    raw_jobs = extract_listing_cards(page)
-                except Exception as e:
-                    log.warning("Search-bar submit failed (%s) — slug fallback", e)
-                    raw_jobs = scrape_search_page(
-                        page, build_slug_search_url(keywords, location,
-                                                    experience, days, pnum))
-            else:
-                # Path-based paging (slug-2, slug-3, ...): ?page= is ignored
-                # on slug URLs (reloads page 1 — deduped to nothing new).
+                # Direct page 1 URL carries all filters; the search-bar path
+                # could not apply jobAge/experience reliably.
                 raw_jobs = scrape_search_page(
                     page, build_slug_search_url(keywords, location,
-                                                experience, days, pnum))
+                                                experience, days, 1))
+            else:
+                # The previous iteration already clicked Next and waited for
+                # the fresh card range; just read it (never goto a -N URL).
+                raw_jobs = extract_listing_cards(page)
         except Exception as e:
             log.error("Search page failed: %s", e)
             human_pause()
@@ -909,17 +1005,15 @@ def run_skills_scan(context: BrowserContext, keywords: str, location: str,
                 break
         _report("search", location=location, page=pnum, found=len(found))
         human_pause()  # politeness between pages
+        if len(found) >= max_jobs or pnum >= pages or stopped():
+            break
+        if not _click_next_page(page):
+            log.info("Skills scan: no Next page after page %d — stopping", pnum)
+            break
 
     jobs_list = list(found.values())
-    log.info("Skills scan collected %d postings — enriching key skills", len(jobs_list))
-    for i, job in enumerate(jobs_list, 1):
-        if stopped():
-            log.info("Skills scan cancel requested — skipping remaining details")
-            break
-        jobs_list[i - 1] = enrich_job(page, job)
-        _report("detail", index=i, total=len(jobs_list))
-        human_pause(1.5, 3.5)  # extra polite on detail pages
-
+    log.info("Skills scan collected %d postings — aggregating card key skills",
+             len(jobs_list))
     try:
         page.close()
     except Exception:
