@@ -78,10 +78,10 @@
     "semantic_hash": "9e573a0e143098e537c65434c3d8603f"
   },
   "src/stealth_browser.py": {
-    "mtime": 1789760322.8236063,
-    "seen": 1789764660.6451688,
-    "ast_hash": "5befa4c52c0aac840bd6f92a613ee370",
-    "semantic_hash": "5befa4c52c0aac840bd6f92a613ee370"
+    "mtime": 1793025953.7652578,
+    "seen": 1793026093.444927,
+    "ast_hash": "b9b3449b1082e36472495d1c90d14d8e",
+    "semantic_hash": ""
   },
   "tests/__init__.py": {
     "mtime": 1789758501.8779092,
@@ -162,21 +162,21 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1793024886.8667145,
-    "seen": 1793025078.012846,
-    "ast_hash": "54035135a57259dfe84bb2519e45a4c2",
+    "mtime": 1793026002.778879,
+    "seen": 1793026093.445927,
+    "ast_hash": "2cfb73f3a2acaacd03f703faaf20f0e5",
     "semantic_hash": ""
   },
   "docs/BOT_DETECTION.md": {
-    "mtime": 1793024938.3010073,
-    "seen": 1793025078.012846,
-    "ast_hash": "74f3f57b43ec85e0dfa67d28eb185e34",
+    "mtime": 1793026058.5265155,
+    "seen": 1793026093.445927,
+    "ast_hash": "253357e6712b65d124e738206cf2902a",
     "semantic_hash": ""
   },
   "docs/CODE_EXPLANATION.md": {
-    "mtime": 1793024938.2977915,
-    "seen": 1793025078.0128472,
-    "ast_hash": "b1b98c5147e6e771ccf92f1150d8dea3",
+    "mtime": 1793025986.0548096,
+    "seen": 1793026093.4459279,
+    "ast_hash": "e41308f9827cd5cf7ae9c7fbc98fdda9",
     "semantic_hash": ""
   },
   "docs/GRAPHIFY.md": {
@@ -186,9 +186,9 @@
     "semantic_hash": ""
   },
   "docs/PROJECT.md": {
-    "mtime": 1793024964.807881,
-    "seen": 1793025078.012894,
-    "ast_hash": "44aa6b58f42b31dfafb6ef3f466e61e6",
+    "mtime": 1793025915.837048,
+    "seen": 1793026093.445976,
+    "ast_hash": "aed74be48d68b24f36115e34a193d1ae",
     "semantic_hash": ""
   },
   "docs/TESTING.md": {

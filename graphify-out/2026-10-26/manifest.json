@@ -162,21 +162,21 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1792933607.2992015,
-    "seen": 1793024323.044984,
-    "ast_hash": "e2a20635a9580b65f2e646efee63420a",
+    "mtime": 1793024886.8667145,
+    "seen": 1793025078.012846,
+    "ast_hash": "54035135a57259dfe84bb2519e45a4c2",
     "semantic_hash": ""
   },
   "docs/BOT_DETECTION.md": {
-    "mtime": 1789762953.1517413,
-    "seen": 1789811993.082047,
-    "ast_hash": "441518b18358185b15c0a12d4e80439c",
+    "mtime": 1793024938.3010073,
+    "seen": 1793025078.012846,
+    "ast_hash": "74f3f57b43ec85e0dfa67d28eb185e34",
     "semantic_hash": ""
   },
   "docs/CODE_EXPLANATION.md": {
-    "mtime": 1789813145.8834531,
-    "seen": 1789813163.6871748,
-    "ast_hash": "74d65a748b845ecbe97d557cfe88dd32",
+    "mtime": 1793024938.2977915,
+    "seen": 1793025078.0128472,
+    "ast_hash": "b1b98c5147e6e771ccf92f1150d8dea3",
     "semantic_hash": ""
   },
   "docs/GRAPHIFY.md": {
@@ -186,15 +186,15 @@
     "semantic_hash": ""
   },
   "docs/PROJECT.md": {
-    "mtime": 1792068245.631762,
-    "seen": 1792068252.994221,
-    "ast_hash": "54b4f83259fbaa541d2dff569372a37e",
+    "mtime": 1793024964.807881,
+    "seen": 1793025078.012894,
+    "ast_hash": "44aa6b58f42b31dfafb6ef3f466e61e6",
     "semantic_hash": ""
   },
   "docs/TESTING.md": {
-    "mtime": 1792745287.619772,
-    "seen": 1792745314.717637,
-    "ast_hash": "49cba352e799d776646553564f097fde",
+    "mtime": 1793025031.3808515,
+    "seen": 1793025078.012906,
+    "ast_hash": "6debeb79e8e22d71e2538b3b4e06747f",
     "semantic_hash": ""
   },
   "requirements.txt": {
@@ -246,15 +246,15 @@
     "semantic_hash": ""
   },
   "tests/test_web.py": {
-    "mtime": 1793023681.0285082,
-    "seen": 1793024323.0443761,
-    "ast_hash": "849fa0edada29d53023f7b64f92a75bf",
+    "mtime": 1793024749.1686656,
+    "seen": 1793025078.012216,
+    "ast_hash": "acd2d6e39c625e280c3253438127cb00",
     "semantic_hash": ""
   },
   "docs/WEB_API.md": {
-    "mtime": 1793024267.248462,
-    "seen": 1793024323.045068,
-    "ast_hash": "ab7f3021e8e096929f938f4f5009d16c",
+    "mtime": 1793025037.9423108,
+    "seen": 1793025078.012907,
+    "ast_hash": "ddbd4807d5003fb5c309dd55ed227829",
     "semantic_hash": ""
   },
   "src/web/templates/dashboard.html": {
@@ -552,21 +552,21 @@
     "semantic_hash": ""
   },
   "src/web/nkapi.py": {
-    "mtime": 1792592815.3281069,
-    "seen": 1792593529.055306,
-    "ast_hash": "2b541e38b82530641f14e49f612168ea",
+    "mtime": 1793024741.1715438,
+    "seen": 1793025078.012029,
+    "ast_hash": "317fc77e555c99f4a27e1dd0922a7919",
     "semantic_hash": ""
   },
   "docs/LANES_RUNBOOK.md": {
-    "mtime": 1792593527.8861141,
-    "seen": 1792593529.0559921,
-    "ast_hash": "403bfbfb2bf1c0786433e3d5df164767",
+    "mtime": 1793024972.8696258,
+    "seen": 1793025078.012873,
+    "ast_hash": "bb8ccaac4acfd95426954b6551c78f19",
     "semantic_hash": ""
   },
   "docs/SPEC-lane-job-quality-gates.md": {
-    "mtime": 1792591397.195878,
-    "seen": 1792593529.0560288,
-    "ast_hash": "6ac06a8c72943bfb5f82b61408f7a0a7",
+    "mtime": 1793024972.869306,
+    "seen": 1793025078.0128949,
+    "ast_hash": "676ed77b875c862d0d6fa77b2858887f",
     "semantic_hash": ""
   },
   "tasks/plan.md": {
@@ -741,6 +741,12 @@
     "mtime": 1792921213.6842856,
     "seen": 1793024323.045003,
     "ast_hash": "0b7e007d21dfc47f32516d441e8ffbcb",
+    "semantic_hash": ""
+  },
+  "docs/SPEC-naukri-skills-scan.md": {
+    "mtime": 1793024818.8285756,
+    "seen": 1793025078.012906,
+    "ast_hash": "28ea5f037b7b01d014dab3961d98e23b",
     "semantic_hash": ""
   }
 }
