@@ -329,7 +329,8 @@ def test_do_collect_role_emails_writes_checkpoint_and_final(monkeypatch,
 
     captured: dict = {}
 
-    def _run(ctx, domains, phrase, target, checkpoint, maximum, pause, on_domain=None):
+    def _run(ctx, domains, phrase, target, checkpoint, maximum, pause,
+             on_domain=None, **kwargs):
         contact = RoleEmailContact(email="a@ltm.com", company="LTIMindtree",
                                    company_domain="ltm.com", post_id="p1")
         captured.update({
@@ -407,3 +408,24 @@ def test_collect_role_emails_command_empty_phrase_uses_default(monkeypatch,
         "collect-role-emails", "--phrase", "", "--domains", "ltm.com"])
     assert res.exit_code == 0
     assert seen["args"][1] == main.DEFAULT_PHRASE
+
+
+def test_collect_role_emails_resume_requires_out(fresh_db):
+    res = runner.invoke(main.app, ["collect-role-emails", "--resume"])
+    assert res.exit_code == 2
+    assert "--resume requires --out" in res.output
+
+
+def test_collect_role_emails_resume_delegates(monkeypatch, fresh_db):
+    seen: dict = {}
+
+    def _do(*args):
+        seen["args"] = args
+        return 0
+
+    monkeypatch.setattr(main, "do_collect_role_emails", _do)
+    res = runner.invoke(main.app, [
+        "collect-role-emails", "--domains", "ltm.com",
+        "--resume", "--out", "existing.xlsx"])
+    assert res.exit_code == 0
+    assert seen["args"][-1] is True

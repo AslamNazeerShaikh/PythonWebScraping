@@ -47,6 +47,10 @@ python -m src.main collect-role-emails \
   --target 10 --checkpoint-posts 20 --max-posts 30 \
   --out output/linkedin_role_emails.xlsx
 
+# Continue a partial run (same --out file)
+python -m src.main collect-role-emails --domains ltm.com,tcs.com \
+  --out output/linkedin_role_emails.xlsx --resume
+
 # Gates
 pytest
 graphify update .
@@ -78,6 +82,9 @@ output/
 - **Exact URL shape** from the verified scrape:
   `keywords=<phrase>%20%40<domain>&origin=FACETED_SEARCH&sortBy=%5B%22date_posted%22%5D`.
 - **Pydantic row model** for the output, with email/domain validation.
+- **Per-domain checkpoint + resume.** The CLI rewrites the workbook after each
+  domain. `--resume --out <same.xlsx>` loads prior rows, replaces only the
+  domains being re-run, and keeps prior rows when a domain fails its rerun.
 - **Section guard.** Split on strong multi-role separators (`━━`, `══`, long
   rules) and require the phrase match and email match to be in the same
   section. This removes the Wipro BPO-email false positive without a manual
@@ -126,3 +133,5 @@ output/
 4. Hashtag-only `#ASPNETCore` posts are rejected.
 5. 20-post stop and 30-post extension are both covered by tests.
 6. Full suite passes at 100% coverage.
+7. `--resume --out <existing.xlsx>` keeps completed domains and replaces only
+   the rerun domain; a failed rerun keeps the prior rows.

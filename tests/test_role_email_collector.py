@@ -447,3 +447,72 @@ def test_collect_domain_zero_rounds_and_growth_resets_stalls(monkeypatch):
     contacts, posts, status = collect_domain(
         FakePage(), "X", "ltm.com", "asp.net core", target=1)
     assert len(contacts) == 2 and len(posts) == 2 and status == "ok"
+
+
+def test_read_role_workbook_absent_corrupt_and_roundtrip(tmp_path):
+    assert mod.read_role_workbook(tmp_path / "missing.xlsx") == ([], [], [])
+    bad = tmp_path / "bad.xlsx"
+    bad.write_text("not an excel file")
+    assert mod.read_role_workbook(bad) == ([], [], [])
+
+    contact = RoleEmailContact(
+        email="a@ltm.com", company="LTIMindtree", company_domain="ltm.com",
+        post_id="p1", post_reference="p1", post_rank=1)
+    posts = [{"company_domain": "ltm.com", "post_id": "p1",
+              "phrase_match": True, "qualified_emails": "a@ltm.com"}]
+    summary = [{"company_domain": "ltm.com", "unique_emails": 1}]
+    dest = write_role_workbook(tmp_path / "roundtrip.xlsx", [contact],
+                               posts, summary)
+    got_contacts, got_posts, got_summary = mod.read_role_workbook(dest)
+    assert [c.email for c in got_contacts] == ["a@ltm.com"]
+    assert got_posts[0]["post_id"] == "p1"
+    assert got_summary[0]["company_domain"] == "ltm.com"
+
+
+def test_read_role_workbook_skips_invalid_email_rows(tmp_path):
+    import pandas as pd
+    path = tmp_path / "invalid.xlsx"
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        pd.DataFrame([{"email": "bad", "company_domain": "ltm.com"},
+                      {"email": "good@ltm.com", "company_domain": "ltm.com"}]
+                     ).to_excel(writer, index=False, sheet_name="Emails")
+        pd.DataFrame(columns=["post_id"]).to_excel(
+            writer, index=False, sheet_name="Posts Scanned")
+        pd.DataFrame(columns=["company_domain"]).to_excel(
+            writer, index=False, sheet_name="Summary")
+    contacts, _posts, _summary = mod.read_role_workbook(path)
+    assert [c.email for c in contacts] == ["good@ltm.com"]
+
+
+def test_run_role_collect_resume_replaces_success_and_keeps_failed(monkeypatch):
+    monkeypatch.setattr(mod, "_open_feed", lambda page: True)
+    old = RoleEmailContact(email="old@ltm.com", company="LTIMindtree",
+                           company_domain="ltm.com", post_id="old")
+    new = RoleEmailContact(email="new@ltm.com", company="LTIMindtree",
+                           company_domain="ltm.com", post_id="new")
+    old_summary = [{"company_domain": "ltm.com", "unique_emails": 1,
+                    "company": "LTIMindtree", "status": "below_target"}]
+
+    def _ok(page, company, domain, phrase, target, checkpoint, maximum):
+        return [new], [{"post_id": "new", "text": VALID_TEXT}], "ok"
+
+    monkeypatch.setattr(mod, "collect_domain", _ok)
+    contacts, posts, summary = run_role_collect(
+        FakeContext(), ["ltm.com"], initial_contacts=[old],
+        initial_posts=[{"company_domain": "ltm.com", "post_id": "old"}],
+        initial_summary=old_summary)
+    assert [c.email for c in contacts] == ["new@ltm.com"]
+    assert posts[0]["post_id"] == "new"
+    assert summary[0]["unique_emails"] == 1
+
+    def _wall(page, company, domain, phrase, target, checkpoint, maximum):
+        return [], [], "wall"
+
+    monkeypatch.setattr(mod, "collect_domain", _wall)
+    contacts, posts, summary = run_role_collect(
+        FakeContext(), ["ltm.com"], initial_contacts=[old],
+        initial_posts=[{"company_domain": "ltm.com", "post_id": "old"}],
+        initial_summary=old_summary)
+    assert [c.email for c in contacts] == ["old@ltm.com"]
+    assert posts[0]["post_id"] == "old"
+    assert summary[0]["unique_emails"] == 1

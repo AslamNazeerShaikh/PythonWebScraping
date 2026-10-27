@@ -34,7 +34,8 @@ from .export import export_emails, export_jobs, load_email_frame
 from .linkedin_email_scraper import run_collect
 from .linkedin_role_email import (CHECKPOINT_POSTS, DEFAULT_PHRASE,
                                   MAX_POSTS, TARGET_EMAILS, parse_domains,
-                                  run_role_collect, write_role_workbook)
+                                  read_role_workbook, run_role_collect,
+                                  write_role_workbook)
 from .log import setup_logging
 from .models import Job
 from .naukri_scraper import run_scrape, save_results
@@ -153,7 +154,8 @@ def do_collect_emails(domains: list[str] | None,
 def do_collect_role_emails(domains: list[str], phrase: str,
                            target: int, checkpoint_posts: int,
                            max_posts: int, pause_s: int,
-                           out: str | None, headless: bool) -> int:
+                           out: str | None, headless: bool,
+                           resume: bool = False) -> int:
     """Run the role-targeted LinkedIn collector; return process exit code.
 
     This path is intentionally separate from :func:`do_collect_emails`: it
@@ -163,6 +165,8 @@ def do_collect_role_emails(domains: list[str], phrase: str,
     SETTINGS.headless = headless or SETTINGS.headless
     out_path = (Path(out) if out else SETTINGS.output_dir /
                 f"linkedin_role_emails_{datetime.now():%Y%m%d_%H%M%S}.xlsx")
+    initial_contacts, initial_posts, initial_summary = (
+        read_role_workbook(out_path) if resume else ([], [], []))
 
     def _checkpoint(rows, posts, summary) -> None:
         write_role_workbook(out_path, rows, posts, summary, phrase, target,
@@ -173,7 +177,10 @@ def do_collect_role_emails(domains: list[str], phrase: str,
         try:
             contacts, posts, summary = run_role_collect(
                 context, domains, phrase, target, checkpoint_posts, max_posts,
-                pause_s, on_domain=_checkpoint)
+                pause_s, on_domain=_checkpoint,
+                initial_contacts=initial_contacts,
+                initial_posts=initial_posts,
+                initial_summary=initial_summary)
         finally:
             context.close()
 
@@ -328,6 +335,8 @@ def collect_role_emails(
         15, min=0, help="Seconds between company searches"),
     out: Optional[str] = typer.Option(
         None, help="Output .xlsx path (default: output/linkedin_role_emails_<ts>.xlsx)"),
+    resume: bool = typer.Option(
+        False, "--resume", help="Merge into an existing --out workbook"),
     headless: bool = typer.Option(False, "--headless", help="Background run"),
 ) -> None:
     """Collect role-specific recruiter emails into a five-sheet Excel workbook.
@@ -340,6 +349,9 @@ def collect_role_emails(
     if checkpoint_posts > max_posts:
         console.print("[red]--checkpoint-posts cannot exceed --max-posts[/red]")
         raise typer.Exit(code=2)
+    if resume and not out:
+        console.print("[red]--resume requires --out[/red]")
+        raise typer.Exit(code=2)
     _ensure_env()
     phrase = (phrase or DEFAULT_PHRASE).strip()
     doms = parse_domains(domains)
@@ -350,7 +362,7 @@ def collect_role_emails(
     console.print("[dim]Personal use only — never auto-solves CAPTCHAs.[/dim]")
     raise typer.Exit(code=do_collect_role_emails(
         doms, phrase, target, checkpoint_posts, max_posts, pause, out,
-        SETTINGS.headless))
+        SETTINGS.headless, resume))
 
 
 @app.command("export-emails")

@@ -71,6 +71,8 @@ python -m src.main collect-role-emails                            # 15 saved tar
 python -m src.main collect-role-emails --domains ltm.com,tcs.com   # subset
 python -m src.main collect-role-emails --phrase "asp.net core" \
   --target 10 --checkpoint-posts 20 --max-posts 30 --pause 15
+python -m src.main collect-role-emails --domains ltm.com \
+  --out output/role_ltm.xlsx --resume                              # continue a partial run
 
 # targets.csv (one per line, or domain,target columns):
 #   @cognizant.com:5
@@ -154,7 +156,9 @@ non-hashtag phrase mention. It keeps only emails on the exact searched domain
 and uses a section guard so an email in one job section cannot be attributed
 to the .NET role in another section. Output is a five-sheet workbook
 (`Email List`, `Emails`, `Summary`, `Posts Scanned`, `Method`); it never writes
-SQLite and does not change `collect-emails`. Full spec:
+SQLite and does not change `collect-emails`. The workbook is checkpointed
+after every domain; `--resume --out <same.xlsx>` keeps completed domains and
+replaces only the domains re-run. Full spec:
 [`docs/SPEC-linkedin-role-email-collector.md`](docs/SPEC-linkedin-role-email-collector.md).
 
 ## Architecture

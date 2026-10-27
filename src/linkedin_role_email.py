@@ -5,7 +5,8 @@ searches LinkedIn content for ``"<phrase> @<company-domain>"``, reads the
 Latest feed, expands post bodies, and keeps only emails on the exact company
 domain in a post section that explicitly names the phrase.
 
-It deliberately does not write SQLite: the workbook is the artifact. The
+It deliberately does not write SQLite: the workbook is the artifact. The CLI
+checkpoints after every domain and can resume into the same workbook. The
 existing ``collect-emails`` command, its schema, and its dedupe rules are
 untouched.
 """
@@ -74,6 +75,7 @@ STALL_WAIT_MS = 4500
 MAX_STALLS = 3
 MAX_ROUNDS = 12
 DEFAULT_PAUSE_S = 15
+FAILED_STATUSES = frozenset({"nav_timeout", "wall", "login_wall"})
 
 HASHTAG_RE = re.compile(r"#\w+")
 SECTION_BREAK_RE = re.compile(r"\n\s*(?:[━═]{3,}|[-—]{5,})\s*\n")
@@ -543,33 +545,56 @@ def run_role_collect(
         pause_s: int = DEFAULT_PAUSE_S,
         on_domain: Callable[[list[RoleEmailContact], list[dict], list[dict]], None]
         | None = None,
+        initial_contacts: list[RoleEmailContact] | None = None,
+        initial_posts: list[dict] | None = None,
+        initial_summary: list[dict] | None = None,
 ) -> tuple[list[RoleEmailContact], list[dict], list[dict]]:
-    """Run the role collector across ``domains`` using one browser page."""
+    """Run the role collector across ``domains`` using one browser page.
+
+    ``initial_*`` rows make a run resumable: completed domains stay in the
+    workbook, a rerun replaces that domain's rows, and a failed rerun keeps the
+    previous rows rather than erasing good evidence.
+    """
     page = context.new_page()
     if not _open_feed(page):
-        return [], [], []
-    all_contacts: list[RoleEmailContact] = []
-    all_posts: list[dict] = []
-    summary: list[dict] = []
+        return list(initial_contacts or []), list(initial_posts or []), \
+            list(initial_summary or [])
+    all_contacts: list[RoleEmailContact] = list(initial_contacts or [])
+    all_posts: list[dict] = list(initial_posts or [])
+    summary: list[dict] = list(initial_summary or [])
     for index, domain in enumerate(domains):
         company = COMPANY_NAMES.get(domain, domain)
         contacts, posts, status = collect_domain(
             page, company, domain, phrase, target, checkpoint_posts, max_posts)
         post_rows = build_post_rows(posts, contacts, company, domain, phrase)
-        all_contacts.extend(contacts)
-        all_posts.extend(post_rows)
-        summary.append({
-            "company": company,
-            "company_domain": domain,
-            "posts_scanned": len(posts),
-            "phrase_posts": sum(1 for row in post_rows if row["phrase_match"]),
-            "qualified_posts": sum(
-                1 for row in post_rows if row["qualified_emails"]),
-            "unique_emails": len(contacts),
-            "target_met": len(contacts) >= target,
-            "status": status,
-            "search_url": build_search_url(phrase, domain),
-        })
+        has_previous = (
+            any(c.company_domain == domain for c in all_contacts)
+            or any(row.get("company_domain") == domain for row in summary))
+        if status in FAILED_STATUSES and has_previous:
+            log.warning("%s failed (%s); keeping previous checkpoint rows.",
+                        domain, status)
+        else:
+            all_contacts = [c for c in all_contacts
+                            if c.company_domain != domain]
+            all_posts = [row for row in all_posts
+                         if row.get("company_domain") != domain]
+            summary = [row for row in summary
+                       if row.get("company_domain") != domain]
+            all_contacts.extend(contacts)
+            all_posts.extend(post_rows)
+            summary.append({
+                "company": company,
+                "company_domain": domain,
+                "posts_scanned": len(posts),
+                "phrase_posts": sum(1 for row in post_rows
+                                    if row["phrase_match"]),
+                "qualified_posts": sum(
+                    1 for row in post_rows if row["qualified_emails"]),
+                "unique_emails": len(contacts),
+                "target_met": len(contacts) >= target,
+                "status": status,
+                "search_url": build_search_url(phrase, domain),
+            })
         if on_domain is not None:
             on_domain(all_contacts, all_posts, summary)
         if status in {"wall", "login_wall"}:
@@ -600,6 +625,32 @@ def _method_rows(phrase: str, target: int, checkpoint_posts: int,
         {"Item": "Post reference", "Detail": "Post URL when exposed, otherwise opaque post id"},
         {"Item": "No evasion", "Detail": "No CAPTCHA solving, proxy rotation, or fingerprint spoofing"},
     ]
+
+
+def read_role_workbook(path: Path | str
+                       ) -> tuple[list[RoleEmailContact], list[dict], list[dict]]:
+    """Read a prior role workbook for ``--resume``; empty when absent/corrupt."""
+    source = Path(path)
+    if not source.exists():
+        return [], [], []
+    try:
+        email_df = pd.read_excel(source, sheet_name="Emails")
+        post_df = pd.read_excel(source, sheet_name="Posts Scanned")
+        summary_df = pd.read_excel(source, sheet_name="Summary")
+    except Exception:
+        return [], [], []
+    contacts: list[RoleEmailContact] = []
+    email_df = email_df.astype(object).where(pd.notna(email_df), "")
+    for row in email_df.to_dict("records"):
+        data = {key: row.get(key, "")
+                for key in RoleEmailContact.model_fields}
+        try:
+            data["post_rank"] = int(float(data.get("post_rank") or 0))
+            contacts.append(RoleEmailContact(**data))
+        except Exception:
+            continue
+    clean = lambda df: df.astype(object).where(pd.notna(df), "").to_dict("records")
+    return contacts, clean(post_df), clean(summary_df)
 
 
 def write_role_workbook(path: Path | str, contacts: list[RoleEmailContact],
