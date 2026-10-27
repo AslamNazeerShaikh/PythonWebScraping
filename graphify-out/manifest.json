@@ -48,9 +48,9 @@
     "semantic_hash": ""
   },
   "src/main.py": {
-    "mtime": 1792933451.1449728,
-    "seen": 1793024323.044136,
-    "ast_hash": "9b9f35b825ae735350b24af75007aa9e",
+    "mtime": 1793110187.9551423,
+    "seen": 1793110213.434654,
+    "ast_hash": "8c191db0809e41fac8f4101314913ce2",
     "semantic_hash": ""
   },
   "src/models.py": {
@@ -120,9 +120,9 @@
     "semantic_hash": ""
   },
   "tests/test_main.py": {
-    "mtime": 1792933136.5651512,
-    "seen": 1793024323.0443468,
-    "ast_hash": "f6a269be7fc8fb20598714c8826cb64c",
+    "mtime": 1793109661.0681047,
+    "seen": 1793110143.603483,
+    "ast_hash": "26f5180178fa1c23609af3df9acf615f",
     "semantic_hash": ""
   },
   "tests/test_models.py": {
@@ -162,9 +162,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1793030896.88195,
-    "seen": 1793030900.531713,
-    "ast_hash": "05722b5ace850a7ecff891db99afe277",
+    "mtime": 1793110122.0649664,
+    "seen": 1793110143.604154,
+    "ast_hash": "03d5958f365636c09fc5d81383043837",
     "semantic_hash": ""
   },
   "docs/BOT_DETECTION.md": {
@@ -186,15 +186,15 @@
     "semantic_hash": ""
   },
   "docs/PROJECT.md": {
-    "mtime": 1793029675.8503032,
-    "seen": 1793029791.960186,
-    "ast_hash": "0b0e730107422c42b67ec7dca97e642c",
+    "mtime": 1793110129.0787814,
+    "seen": 1793110143.604237,
+    "ast_hash": "d0e9b13b6c12dbad6c87c7cd61c7459f",
     "semantic_hash": ""
   },
   "docs/TESTING.md": {
-    "mtime": 1793025031.3808515,
-    "seen": 1793025078.012906,
-    "ast_hash": "6debeb79e8e22d71e2538b3b4e06747f",
+    "mtime": 1793110183.5724645,
+    "seen": 1793110213.435831,
+    "ast_hash": "c2f80b0750d1e549726bfd05c0639d49",
     "semantic_hash": ""
   },
   "requirements.txt": {
@@ -204,9 +204,9 @@
     "semantic_hash": ""
   },
   "docs/LINKEDIN_RESEARCH.md": {
-    "mtime": 1792745298.7440767,
-    "seen": 1792745314.717605,
-    "ast_hash": "951b06581deb71111a0da0b991924901",
+    "mtime": 1793110183.5728116,
+    "seen": 1793110213.435764,
+    "ast_hash": "759ee90840cb25561ca4969ddc196b4b",
     "semantic_hash": ""
   },
   "docs/OPENCODE_SETUP.md": {
@@ -570,15 +570,15 @@
     "semantic_hash": ""
   },
   "tasks/plan.md": {
-    "mtime": 1792744570.4687452,
-    "seen": 1792745314.717671,
-    "ast_hash": "c7ed31c58dfa7aa26cc838934230c640",
+    "mtime": 1793110135.9783611,
+    "seen": 1793110143.6043048,
+    "ast_hash": "df513c884e0d6023c97da20f599c7d90",
     "semantic_hash": ""
   },
   "tasks/todo.md": {
-    "mtime": 1792847108.7827926,
-    "seen": 1792919228.8514051,
-    "ast_hash": "b9fcd38eafd832021b53e9b83003d7d4",
+    "mtime": 1793110135.9577482,
+    "seen": 1793110143.6043048,
+    "ast_hash": "6ea7df2966dfcc4a51ec641ddd97a4d4",
     "semantic_hash": ""
   },
   ".opencode/skills/security-audit/report-schema.json": {
@@ -714,9 +714,9 @@
     "semantic_hash": ""
   },
   "docs/SPEC-linkedin-email-collector.md": {
-    "mtime": 1792932666.043938,
-    "seen": 1793024323.045059,
-    "ast_hash": "6c961f0acb0577dab772b3afde8f9307",
+    "mtime": 1793110129.1206033,
+    "seen": 1793110143.604247,
+    "ast_hash": "3f695e6d15a6441af6924040c64675b1",
     "semantic_hash": ""
   },
   "scripts/probe_content_search.py": {
@@ -765,6 +765,24 @@
     "mtime": 1793030895.5548942,
     "seen": 1793030900.5317419,
     "ast_hash": "0f5ab83a56a4dbed8ec1da0209ce2676",
+    "semantic_hash": ""
+  },
+  "src/linkedin_role_email.py": {
+    "mtime": 1793109792.31753,
+    "seen": 1793110143.6031811,
+    "ast_hash": "aa5a7e514413ec855a5ac190e3e7d769",
+    "semantic_hash": ""
+  },
+  "tests/test_role_email_collector.py": {
+    "mtime": 1793109797.1537247,
+    "seen": 1793110143.603502,
+    "ast_hash": "658d6d67783549f31670daa3fef96d8d",
+    "semantic_hash": ""
+  },
+  "docs/SPEC-linkedin-role-email-collector.md": {
+    "mtime": 1793110129.099239,
+    "seen": 1793110143.604248,
+    "ast_hash": "7e833fda7e788a4e70ac9510e228b5dc",
     "semantic_hash": ""
   }
 }
