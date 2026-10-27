@@ -121,4 +121,5 @@ screenshotted and recorded, never retried.
 | Engine guard | non-chromium BROWSER rejected | `test_stealth.py` |
 | Export | csv/xlsx + location filter | `stats`/`export` cmds |
 | LinkedIn email collector | `test_email_collector.py` (FakePage cards, bot-wall, URL facet) | `collect-emails` live run |
+| LinkedIn role-targeted collector | `test_role_email_collector.py` (URL, phrase/hashtag, exact-domain, section guard, 20/30-post loop, workbook) | `collect-role-emails --domains ltm.com` live check |
 | E-commerce | Amazon.in + Flipkart 5+5 products | `practice_ecommerce.py` |

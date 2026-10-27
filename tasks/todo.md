@@ -35,3 +35,16 @@
   - Verify: pytest 242 passed, 100% branch coverage; graphify updated. LIVE RUN DEFERRED (user decision 2026-10-23): the persistent profile has no LinkedIn session; authwall detected + manual-login prompt shipped (`277be18`). First live run: `python -m src.main collect-emails` (headed) → log in in the opened window (the collector now WAITS passively for sign-in — it no longer reloads the login page) → reruns reuse the session. If 0 emails while signed in, run `scripts/probe_content_search.py "@ltm.com"` to re-census selectors.
   - Files: `graphify-out/`, `output/`
 - [ ] Checkpoint: Complete — spec success criteria met; commit + push
+
+---
+
+# Todo — LinkedIn Role-Targeted Email Collector (2026-10-27)
+
+- [x] Task 1: URL/text/email helpers + `RoleEmailContact`
+- [x] Task 2: `build_contacts` with section guard
+- [x] Task 3: `collect_domain` + `run_role_collect`
+- [x] Task 4: `write_role_workbook`
+- [x] Task 5: `collect-role-emails` CLI
+- [x] Task 6: tests at 100% coverage
+- [x] Task 7: docs + graphify
+- [x] Checkpoint: full suite green; existing commands unchanged

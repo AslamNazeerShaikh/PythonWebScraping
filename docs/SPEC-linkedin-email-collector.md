@@ -321,6 +321,13 @@ The workbook is derived from SQLite with these guarantees:
   `post_id`, author, date, URL, and snippet.
 * **Grouped and alphabetical** — output is ordered by `domain`, then `email`.
 
+## Related path (2026-10-27)
+
+`collect-role-emails` is a separate, analysis-only command for
+`"<phrase> @<domain>"` searches. It never writes `contact_emails` and does not
+change this collector. See
+[`SPEC-linkedin-role-email-collector.md`](SPEC-linkedin-role-email-collector.md).
+
 ## Open Questions
 
 1. **Scroll depth default** — proposal: `--max-scrolls 6` per domain

@@ -58,6 +58,9 @@ CLI (Typer) · output (Rich) · retries (tenacity, transient-only) · logging
    profile, later runs succeed.
 5. Skill scans are analysis-only: they aggregate Naukri's card key-skill
    chips and never write postings to SQLite.
+6. `collect-role-emails` is separate from `collect-emails`: it uses an exact
+   phrase + company-domain content search, writes a five-sheet Excel workbook,
+   and never writes SQLite. See `SPEC-linkedin-role-email-collector.md`.
 
 ## 2. Module reference
 
@@ -70,8 +73,9 @@ CLI (Typer) · output (Rich) · retries (tenacity, transient-only) · logging
 | `models.py` | Pydantic `Job` + ORM `JobRow`/`ScrapeRun` | `Job.skill_text`, `JobRow.from_job/to_job` |
 | `db.py` | Engine, sessions, upsert, audit | `init_db`, `upsert_jobs`, `record_run`, `fetch_all_jobs`, `count_jobs` |
 | `export.py` | Pandas CSV/Excel snapshots | `load_frame`, `export_jobs` |
+| `linkedin_role_email.py` | Role-targeted LinkedIn content search → five-sheet Excel (no SQLite) | `build_search_url`, `build_contacts`, `collect_domain`, `run_role_collect`, `write_role_workbook` |
 | `scheduler.py` | Daily cron triggers | `run_scheduled` |
-| `main.py` | Typer commands + Rich tables | `do_scrape`, `scrape/export/stats/parse/schedule` |
+| `main.py` | Typer commands + Rich tables | `do_scrape`, `scrape/export/stats/parse/schedule/collect-emails/collect-role-emails` |
 | `log.py` | Std-logging setup | `setup_logging` |
 
 ## 3. Configuration (`.env`, see `.env.example`)

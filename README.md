@@ -60,11 +60,17 @@ source .venv/bin/activate
 python -m src.main scrape --keywords "python backend api" --locations "remote" --days 7 --pages 3
 python -m src.main scrape --no-enrich --pages 2   # fast link sweep without detail visits
 
-# LinkedIn email collector: domain-matching emails from Latest/Past-month posts
+# LinkedIn email collector: broad @domain search (SQLite + Excel)
 python -m src.main collect-emails                                  # all 11 target domains
 python -m src.main collect-emails --domains cognizant.com,ltm.com  # subset
 python -m src.main collect-emails --input-csv targets.csv          # @domain:unique_target
 python -m src.main export-emails --format excel                    # re-export contact snapshot
+
+# Role-targeted search: "asp.net core @<domain>" -> five-sheet Excel, no SQLite
+python -m src.main collect-role-emails                            # 15 saved targets
+python -m src.main collect-role-emails --domains ltm.com,tcs.com   # subset
+python -m src.main collect-role-emails --phrase "asp.net core" \
+  --target 10 --checkpoint-posts 20 --max-posts 30 --pause 15
 
 # targets.csv (one per line, or domain,target columns):
 #   @cognizant.com:5
@@ -138,6 +144,18 @@ alphabetically by email. The checkpoint file is rewritten after every batch.
 
 `--input-csv` accepts `@domain:unique_email_target` per row (or a
 `domain,target` table). Example: `@cognizant.com:5`, `@capgemini.com:2`.
+
+### Role-targeted email search
+
+`collect-role-emails` is a separate, analysis-only path: it searches
+`"<phrase> @<company-domain>"` on LinkedIn content search, sorts Latest, reads
+at most 30 posts per domain, expands every post, and requires an explicit
+non-hashtag phrase mention. It keeps only emails on the exact searched domain
+and uses a section guard so an email in one job section cannot be attributed
+to the .NET role in another section. Output is a five-sheet workbook
+(`Email List`, `Emails`, `Summary`, `Posts Scanned`, `Method`); it never writes
+SQLite and does not change `collect-emails`. Full spec:
+[`docs/SPEC-linkedin-role-email-collector.md`](docs/SPEC-linkedin-role-email-collector.md).
 
 ## Architecture
 

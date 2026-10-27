@@ -258,3 +258,22 @@ bot-wall stop, politeness pauses), `EmailContact`/`EmailRow` in
 `src/models.py`, `upsert_emails` in `src/db.py`, `load_email_frame`/
 `export_emails` in `src/export.py`, CLI `collect-emails`/`export-emails`
 in `src/main.py`.
+
+## 12. Role-targeted email collector (2026-10-27)
+
+A second, analysis-only path was added after a live run of
+`"asp.net core @<company-domain>"` searches:
+
+- Exact content URL with `sortBy=["date_posted"]` (not the legacy scalar).
+- Latest feed, 20-post target when 10 emails are found, 30-post hard cap.
+- Explicit non-hashtag phrase gate; hashtag-only `#ASPNETCore` is rejected.
+- Exact searched-domain emails only, with `[at]`/spacing tolerance.
+- Section guard for multi-role posts: a company email in a BPO/procurement
+  section cannot be paired with an ASP.NET Core requirement in another
+  section (the Wipro failure case).
+- Five-sheet Excel artifact; no SQLite writes; existing `collect-emails`
+  remains unchanged.
+
+Spec: `docs/SPEC-linkedin-role-email-collector.md`.
+Implementation: `src/linkedin_role_email.py` + `collect-role-emails` in
+`src/main.py`.

@@ -8,6 +8,7 @@ Commands (``python -m src.main <cmd> --help`` for details)::
     parse           Offline re-parse of saved HTML (BS4+lxml, no browser needed).
     schedule        Daily runs at given hours (APScheduler, blocking).
     collect-emails  Harvest recruiter emails from LinkedIn posts → SQLite + Excel.
+    collect-role-emails  Role-specific @domain search → five-sheet Excel (no DB).
     export-emails   contact_emails → Excel/CSV snapshot.
 
 :func:`do_scrape` holds the shared pipeline so both the ``scrape`` command
@@ -16,6 +17,7 @@ and the scheduler execute identical logic.
 from __future__ import annotations
 
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -30,6 +32,9 @@ from .db import (count_emails, count_jobs, fetch_all_jobs, init_db,
 from .domain_targets import DomainTarget, parse_domain_targets
 from .export import export_emails, export_jobs, load_email_frame
 from .linkedin_email_scraper import run_collect
+from .linkedin_role_email import (CHECKPOINT_POSTS, DEFAULT_PHRASE,
+                                  MAX_POSTS, TARGET_EMAILS, parse_domains,
+                                  run_role_collect, write_role_workbook)
 from .log import setup_logging
 from .models import Job
 from .naukri_scraper import run_scrape, save_results
@@ -142,6 +147,45 @@ def do_collect_emails(domains: list[str] | None,
     console.print(f"[green]Done:[/green] {unique} unique emails "
                   f"({totals['new']} new) -> SQLite + {dest}")
     console.print(f"[dim]Checkpoints:[/dim] {partial}")
+    return 0
+
+
+def do_collect_role_emails(domains: list[str], phrase: str,
+                           target: int, checkpoint_posts: int,
+                           max_posts: int, pause_s: int,
+                           out: str | None, headless: bool) -> int:
+    """Run the role-targeted LinkedIn collector; return process exit code.
+
+    This path is intentionally separate from :func:`do_collect_emails`: it
+    writes a multi-sheet Excel artifact and never touches SQLite.
+    """
+    setup_logging(SETTINGS.log_level)
+    SETTINGS.headless = headless or SETTINGS.headless
+    out_path = (Path(out) if out else SETTINGS.output_dir /
+                f"linkedin_role_emails_{datetime.now():%Y%m%d_%H%M%S}.xlsx")
+
+    def _checkpoint(rows, posts, summary) -> None:
+        write_role_workbook(out_path, rows, posts, summary, phrase, target,
+                            checkpoint_posts, max_posts)
+
+    with sync_playwright() as p:
+        context = launch_context(p)
+        try:
+            contacts, posts, summary = run_role_collect(
+                context, domains, phrase, target, checkpoint_posts, max_posts,
+                pause_s, on_domain=_checkpoint)
+        finally:
+            context.close()
+
+    write_role_workbook(out_path, contacts, posts, summary, phrase, target,
+                        checkpoint_posts, max_posts)
+    if not contacts:
+        console.print("[yellow]No role emails found — check login state or "
+                      "widen the phrase/domains.[/yellow]")
+        return 0
+    hits = len({contact.company_domain for contact in contacts})
+    console.print(f"[green]Done:[/green] {len(contacts)} role emails across "
+                  f"{hits} domains -> {out_path}")
     return 0
 
 
@@ -266,6 +310,47 @@ def collect_emails(
                   f"| max-scrolls={max_scrolls or SETTINGS.email_max_scrolls}")
     console.print("[dim]Personal use only — never auto-solves CAPTCHAs.[/dim]")
     raise typer.Exit(code=do_collect_emails(doms, max_scrolls, targets))
+
+
+@app.command("collect-role-emails")
+def collect_role_emails(
+    phrase: str = typer.Option(DEFAULT_PHRASE, help="Role phrase, e.g. 'asp.net core'"),
+    domains: str = typer.Option(
+        "", help="Comma-separated domains (default: the 15 saved targets)"),
+    target: int = typer.Option(
+        TARGET_EMAILS, min=1, help="Unique emails to aim for per domain"),
+    checkpoint_posts: int = typer.Option(
+        CHECKPOINT_POSTS, min=1,
+        help="Stop after this many posts if the email target is met"),
+    max_posts: int = typer.Option(
+        MAX_POSTS, min=1, help="Hard cap on posts read per domain"),
+    pause: int = typer.Option(
+        15, min=0, help="Seconds between company searches"),
+    out: Optional[str] = typer.Option(
+        None, help="Output .xlsx path (default: output/linkedin_role_emails_<ts>.xlsx)"),
+    headless: bool = typer.Option(False, "--headless", help="Background run"),
+) -> None:
+    """Collect role-specific recruiter emails into a five-sheet Excel workbook.
+
+    Unlike ``collect-emails`` (broad ``@domain`` search + SQLite), this command
+    searches ``"<phrase> @<domain>"`` on the Latest content feed, requires an
+    explicit non-hashtag phrase mention, keeps only exact-domain emails, and
+    guards against multi-role section mis-association. It does not write SQLite.
+    """
+    if checkpoint_posts > max_posts:
+        console.print("[red]--checkpoint-posts cannot exceed --max-posts[/red]")
+        raise typer.Exit(code=2)
+    _ensure_env()
+    phrase = (phrase or DEFAULT_PHRASE).strip()
+    doms = parse_domains(domains)
+    SETTINGS.headless = headless or SETTINGS.headless
+    console.print(f"[bold]Collecting role emails[/bold] for '{phrase}' "
+                  f"across {len(doms)} domains | target={target} "
+                  f"| posts={checkpoint_posts}/{max_posts}")
+    console.print("[dim]Personal use only — never auto-solves CAPTCHAs.[/dim]")
+    raise typer.Exit(code=do_collect_role_emails(
+        doms, phrase, target, checkpoint_posts, max_posts, pause, out,
+        SETTINGS.headless))
 
 
 @app.command("export-emails")

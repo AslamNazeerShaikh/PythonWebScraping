@@ -93,3 +93,44 @@ job pipeline is untouched.
 
 - None blocking (spec Q1–Q3 resolved at approval: 6 scrolls, single
   `@domain` pass, company sweep deferred).
+
+---
+
+# Implementation Plan: LinkedIn Role-Targeted Email Collector
+
+Implements `docs/SPEC-linkedin-role-email-collector.md` (approved 2026-10-27).
+The existing `collect-emails` / SQLite flow is intentionally untouched.
+
+## Architecture
+
+- New `src/linkedin_role_email.py`:
+  - exact content-search URL builder (`sortBy=["date_posted"]`)
+  - text gates (phrase, hiring intent, role intent, hashtag masking)
+  - exact-domain email parsing with spacing/`[at]` tolerance
+  - section guard against multi-role email mis-association
+  - browser feed loop (20-post target, 30-post cap)
+  - five-sheet Excel writer
+- New `collect-role-emails` Typer command in `src/main.py`.
+- Reuse `launch_context`, `_open_feed`, `_expand_show_more`, `_wheel_feed`,
+  `_scroll_to_bottom`, `_check_bot_wall`, `_on_login_wall`; no edits to the
+  existing collector module.
+
+## Task List
+
+- [x] Task 1: Pure URL/text/email helpers + Pydantic row model
+- [x] Task 2: Card → contact builder with section guard
+- [x] Task 3: Browser feed loop (`collect_domain`, `run_role_collect`)
+- [x] Task 4: Workbook writer (five sheets)
+- [x] Task 5: CLI command + checkpoint callback
+- [x] Task 6: Offline tests at 100% coverage
+- [x] Task 7: Docs (README, spec status, project pointer) + graphify
+- [x] Checkpoint: full pytest green; existing `collect-emails` tests untouched
+
+## Risks
+
+| Risk | Mitigation |
+|---|---|
+| Multi-role posts mis-associate emails | Separator-based section guard + synthetic Wipro test |
+| Coverage gate | Small pure helpers, FakePage loop tests, CLI tests |
+| LinkedIn wall | Stop with partial workbook; never retry a security page |
+| Breaking existing collector | New module + new command only; no shared-function edits |

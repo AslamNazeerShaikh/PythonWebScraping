@@ -320,3 +320,90 @@ def test_collect_emails_csv_end_to_end_writes_clean_deduped_workbook(
     assert list(df["email"]) == ["a@tcs.com", "b@tcs.com", "c@wipro.com"]
     assert df[df.email == "a@tcs.com"].iloc[0]["post_id"] == "new"
     assert "outsider@gmail.com" not in set(df["email"])
+
+
+# -- collect-role-emails (targeted LinkedIn collector) -------------------------
+def test_do_collect_role_emails_writes_checkpoint_and_final(monkeypatch,
+                                                            fresh_db, tmp_path):
+    from src.linkedin_role_email import RoleEmailContact
+
+    captured: dict = {}
+
+    def _run(ctx, domains, phrase, target, checkpoint, maximum, pause, on_domain=None):
+        contact = RoleEmailContact(email="a@ltm.com", company="LTIMindtree",
+                                   company_domain="ltm.com", post_id="p1")
+        captured.update({
+            "domains": domains, "phrase": phrase, "target": target,
+            "checkpoint": checkpoint, "maximum": maximum, "pause": pause,
+        })
+        on_domain([contact], [{"post_id": "p1", "text": "ASP.NET Core"}],
+                  [{"company": "LTIMindtree", "company_domain": "ltm.com"}])
+        return [contact], [{"post_id": "p1", "text": "ASP.NET Core"}], [
+            {"company": "LTIMindtree", "company_domain": "ltm.com"}]
+
+    monkeypatch.setattr(main, "sync_playwright", lambda: _FakePW(object()))
+    monkeypatch.setattr(main, "launch_context", lambda p: FakeContext())
+    monkeypatch.setattr(main, "run_role_collect", _run)
+    monkeypatch.setattr(main.SETTINGS, "output_dir", tmp_path)
+    code = main.do_collect_role_emails(
+        ["ltm.com"], "asp.net core", 10, 20, 30, 0, None, False)
+    assert code == 0
+    assert captured["domains"] == ["ltm.com"]
+    assert list(tmp_path.glob("linkedin_role_emails_*.xlsx"))
+
+
+def test_do_collect_role_emails_explicit_out_and_empty(monkeypatch, fresh_db,
+                                                       tmp_path):
+    path = tmp_path / "chosen.xlsx"
+
+    def _run(*args, **kwargs):
+        return [], [], []
+
+    monkeypatch.setattr(main, "sync_playwright", lambda: _FakePW(object()))
+    monkeypatch.setattr(main, "launch_context", lambda p: FakeContext())
+    monkeypatch.setattr(main, "run_role_collect", _run)
+    code = main.do_collect_role_emails(
+        ["x.com"], "asp.net core", 10, 20, 30, 0, str(path), False)
+    assert code == 0 and path.exists()
+
+
+def test_collect_role_emails_command_delegates_and_validates(monkeypatch,
+                                                             fresh_db):
+    seen: dict = {}
+
+    def _do(*args):
+        seen["args"] = args
+        return 7
+
+    monkeypatch.setattr(main, "do_collect_role_emails", _do)
+    res = runner.invoke(main.app, [
+        "collect-role-emails", "--phrase", "asp.net core",
+        "--domains", "ltm.com,tcs.com", "--target", "3",
+        "--checkpoint-posts", "10", "--max-posts", "20", "--pause", "0",
+        "--out", "x.xlsx", "--headless"])
+    assert res.exit_code == 7
+    assert seen["args"][0] == ["ltm.com", "tcs.com"]
+    assert seen["args"][1] == "asp.net core"
+    assert seen["args"][2:6] == (3, 10, 20, 0)
+    assert seen["args"][6] == "x.xlsx"
+    assert main.SETTINGS.headless is True
+
+    bad = runner.invoke(main.app, [
+        "collect-role-emails", "--checkpoint-posts", "30", "--max-posts", "20"])
+    assert bad.exit_code == 2
+    assert "cannot exceed" in bad.output
+
+
+def test_collect_role_emails_command_empty_phrase_uses_default(monkeypatch,
+                                                               fresh_db):
+    seen: dict = {}
+
+    def _do(*args):
+        seen["args"] = args
+        return 0
+
+    monkeypatch.setattr(main, "do_collect_role_emails", _do)
+    res = runner.invoke(main.app, [
+        "collect-role-emails", "--phrase", "", "--domains", "ltm.com"])
+    assert res.exit_code == 0
+    assert seen["args"][1] == main.DEFAULT_PHRASE
